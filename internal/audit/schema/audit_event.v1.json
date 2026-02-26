@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "required": ["timestamp", "event_type", "trace_id"],
+  "additionalProperties": false,
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action_id": {
+      "type": "string"
+    },
+    "action_type": {
+      "type": "string"
+    },
+    "resource": {
+      "type": "string"
+    },
+    "principal": {
+      "type": "string"
+    },
+    "agent": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}

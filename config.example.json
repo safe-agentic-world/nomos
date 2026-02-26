@@ -1,0 +1,36 @@
+{
+  "gateway": {
+    "listen": ":8080",
+    "transport": "http"
+  },
+  "policy": {
+    "policy_bundle_path": ".\\policy-bundle.json"
+  },
+  "executor": {
+    "sandbox_enabled": true,
+    "sandbox_profile": "local"
+  },
+  "audit": {
+    "sink": "stdout"
+  },
+  "mcp": {
+    "enabled": false
+  },
+  "upstream": {
+    "routes": []
+  },
+  "approvals": {
+    "enabled": false
+  },
+  "identity": {
+    "principal": "system",
+    "agent": "janus",
+    "environment": "dev",
+    "api_keys": {
+      "dev-api-key": "system"
+    },
+    "agent_secrets": {
+      "janus": "dev-agent-secret"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "version": "v1",
+  "rules": [
+    {
+      "id": "allow-readme",
+      "action_type": "fs.read",
+      "resource": "file://workspace/README.md",
+      "decision": "ALLOW"
+    }
+  ]
+}

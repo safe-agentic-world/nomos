@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "required": ["decision", "reason_code", "matched_rule_ids", "policy_bundle_hash"],
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["ALLOW", "DENY", "REQUIRE_APPROVAL"]
+    },
+    "reason_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string"
+    },
+    "retry_hint": {
+      "type": "string"
+    },
+    "matched_rule_ids": {
+      "type": "array"
+    },
+    "suggested_params_patch": {
+      "type": "object"
+    },
+    "obligations": {
+      "type": "object"
+    },
+    "policy_bundle_hash": {
+      "type": "string"
+    }
+  }
+}
