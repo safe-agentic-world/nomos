@@ -3,7 +3,7 @@ package policy
 import (
 	"sort"
 
-	"github.com/ai-developer-project/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/normalize"
 )
 
 const (

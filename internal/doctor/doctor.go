@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ai-developer-project/janus/internal/gateway"
-	"github.com/ai-developer-project/janus/internal/normalize"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/version"
+	"github.com/safe-agentic-world/janus/internal/gateway"
+	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/version"
 )
 
 type Check struct {

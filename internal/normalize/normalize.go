@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/canonicaljson"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/canonicaljson"
 )
 
 type NormalizedAction struct {

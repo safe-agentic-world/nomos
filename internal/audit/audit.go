@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/canonicaljson"
-	"github.com/ai-developer-project/janus/internal/redact"
+	"github.com/safe-agentic-world/janus/internal/canonicaljson"
+	"github.com/safe-agentic-world/janus/internal/redact"
 
 	_ "modernc.org/sqlite"
 )

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ai-developer-project/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/identity"
 )
 
 func TestServeStdioBannerAndProtocolSeparation(t *testing.T) {

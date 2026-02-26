@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ai-developer-project/janus/internal/redact"
+	"github.com/safe-agentic-world/janus/internal/redact"
 )
 
 type RuntimeOptions struct {

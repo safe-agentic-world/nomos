@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/schema"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/schema"
 )
 
 const (

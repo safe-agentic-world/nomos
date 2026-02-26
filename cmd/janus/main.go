@@ -15,15 +15,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/doctor"
-	"github.com/ai-developer-project/janus/internal/gateway"
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/mcp"
-	"github.com/ai-developer-project/janus/internal/normalize"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/redact"
-	"github.com/ai-developer-project/janus/internal/version"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/doctor"
+	"github.com/safe-agentic-world/janus/internal/gateway"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/mcp"
+	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/janus/internal/version"
 )
 
 func main() {

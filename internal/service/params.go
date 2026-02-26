@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ai-developer-project/janus/internal/executor"
+	"github.com/safe-agentic-world/janus/internal/executor"
 )
 
 type writeParams struct {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ai-developer-project/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/normalize"
 )
 
 func TestPolicyAllowAndDeny(t *testing.T) {

@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/audit"
-	"github.com/ai-developer-project/janus/internal/normalize"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/redact"
-	"github.com/ai-developer-project/janus/internal/version"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/audit"
+	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/janus/internal/version"
 )
 
 const (

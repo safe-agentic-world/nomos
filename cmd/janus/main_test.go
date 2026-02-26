@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ai-developer-project/janus/internal/gateway"
+	"github.com/safe-agentic-world/janus/internal/gateway"
 )
 
 func TestResolveMCPInvocationFlagPrecedenceOverEnv(t *testing.T) {

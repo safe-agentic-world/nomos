@@ -3,7 +3,7 @@
 VERSION ?= v1.0.0
 COMMIT ?= $(shell git rev-parse --short HEAD)
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS := -X github.com/ai-developer-project/janus/internal/version.Version=$(VERSION) -X github.com/ai-developer-project/janus/internal/version.Commit=$(COMMIT) -X github.com/ai-developer-project/janus/internal/version.BuildDate=$(BUILD_DATE)
+LDFLAGS := -X github.com/safe-agentic-world/janus/internal/version.Version=$(VERSION) -X github.com/safe-agentic-world/janus/internal/version.Commit=$(COMMIT) -X github.com/safe-agentic-world/janus/internal/version.BuildDate=$(BUILD_DATE)
 
 build:
 	go build ./cmd/janus

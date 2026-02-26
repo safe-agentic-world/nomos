@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/audit"
+	"github.com/safe-agentic-world/janus/internal/audit"
 )
 
 func TestGatewayStartAndShutdown(t *testing.T) {

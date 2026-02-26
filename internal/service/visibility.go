@@ -4,9 +4,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ai-developer-project/janus/internal/normalize"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/sandbox"
+	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/sandbox"
 )
 
 func riskVisibility(normalized normalize.NormalizedAction) (string, []string) {

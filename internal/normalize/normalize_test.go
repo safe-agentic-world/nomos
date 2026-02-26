@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ai-developer-project/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/action"
 )
 
 func TestNormalizeFileTraversalRejected(t *testing.T) {

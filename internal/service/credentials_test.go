@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/credentials"
-	"github.com/ai-developer-project/janus/internal/executor"
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/redact"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/credentials"
+	"github.com/safe-agentic-world/janus/internal/executor"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/redact"
 )
 
 func TestCredentialBrokerLeaseAndExecInjectionNoLeak(t *testing.T) {

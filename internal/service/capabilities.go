@@ -5,10 +5,10 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/normalize"
-	"github.com/ai-developer-project/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/policy"
 )
 
 type CapabilityEnvelope struct {

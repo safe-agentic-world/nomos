@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/service"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/service"
 )
 
 func TestCapabilitiesDifferByIdentity(t *testing.T) {

@@ -114,7 +114,7 @@ go test ./...
 Release metadata build example:
 
 ```powershell
-go build -ldflags "-X github.com/ai-developer-project/janus/internal/version.Version=v1.0.0 -X github.com/ai-developer-project/janus/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/ai-developer-project/janus/internal/version.BuildDate=$(Get-Date -AsUTC -Format o)" -o .\bin\janus.exe .\cmd\janus
+go build -ldflags "-X github.com/safe-agentic-world/janus/internal/version.Version=v1.0.0 -X github.com/safe-agentic-world/janus/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/safe-agentic-world/janus/internal/version.BuildDate=$(Get-Date -AsUTC -Format o)" -o .\bin\janus.exe .\cmd\janus
 .\bin\janus.exe version
 ```
 

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/audit"
-	"github.com/ai-developer-project/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/audit"
+	"github.com/safe-agentic-world/janus/internal/identity"
 )
 
 func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
