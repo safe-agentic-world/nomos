@@ -268,10 +268,7 @@ jobs:
           COMMIT="${GITHUB_SHA::12}"
           BUILD_DATE="1970-01-01T00:00:00Z"
           for target in "linux amd64" "windows amd64 .exe" "darwin amd64"; do
-            set -- ${target}
-            GOOS_TARGET="$1"
-            GOARCH_TARGET="$2"
-            EXT="${3:-}"
+            read -r GOOS_TARGET GOARCH_TARGET EXT <<<"${target}"
             OUT="dist/nomos-${VERSION}-${GOOS_TARGET}-${GOARCH_TARGET}${EXT}"
             GOOS="${GOOS_TARGET}" GOARCH="${GOARCH_TARGET}" \
               go build -ldflags "-X github.com/safe-agentic-world/nomos/internal/version.Version=${VERSION} -X github.com/safe-agentic-world/nomos/internal/version.Commit=${COMMIT} -X github.com/safe-agentic-world/nomos/internal/version.BuildDate=${BUILD_DATE}" \
@@ -309,10 +306,7 @@ jobs:
           COMMIT="${GITHUB_SHA::12}"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           for target in "linux amd64" "windows amd64 .exe" "darwin amd64"; do
-            set -- ${target}
-            GOOS_TARGET="$1"
-            GOARCH_TARGET="$2"
-            EXT="${3:-}"
+            read -r GOOS_TARGET GOARCH_TARGET EXT <<<"${target}"
             OUT="dist/nomos-${VERSION}-${GOOS_TARGET}-${GOARCH_TARGET}${EXT}"
             GOOS="${GOOS_TARGET}" GOARCH="${GOARCH_TARGET}" \
               go build -ldflags "-X github.com/safe-agentic-world/nomos/internal/version.Version=${VERSION} -X github.com/safe-agentic-world/nomos/internal/version.Commit=${COMMIT} -X github.com/safe-agentic-world/nomos/internal/version.BuildDate=${BUILD_DATE}" \
