@@ -136,6 +136,61 @@ func TestGatewayEmitsTraceEvents(t *testing.T) {
 	}
 }
 
+func TestGatewayDerivesAndPropagatesAssuranceLevel(t *testing.T) {
+	recorder := &recordSink{}
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("ok"), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	cfg := Config{
+		Gateway:  GatewayConfig{Listen: "127.0.0.1:0", Transport: "http"},
+		Runtime:  RuntimeConfig{StrongGuarantee: true, DeploymentMode: "k8s"},
+		Audit:    AuditConfig{Sink: "stdout"},
+		Executor: ExecutorConfig{WorkspaceRoot: dir},
+		Identity: IdentityConfig{
+			Principal:   "system",
+			Agent:       "nomos",
+			Environment: "prod",
+			APIKeys: map[string]string{
+				"key1": "system",
+			},
+			AgentSecrets: map[string]string{
+				"nomos": "agent-secret",
+			},
+		},
+		Policy: PolicyConfig{BundlePath: bundlePath},
+	}
+	gw, err := NewWithRecorder(cfg, recorder, func() time.Time { return time.Unix(0, 0) })
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer key1")
+	req.Header.Set("X-Nomos-Agent-Id", "nomos")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	w := httptest.NewRecorder()
+	gw.handleAction(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if gw.assuranceLevel != "STRONG" {
+		t.Fatalf("expected gateway assurance STRONG, got %s", gw.assuranceLevel)
+	}
+	if len(recorder.events) == 0 {
+		t.Fatal("expected audit events")
+	}
+	for _, event := range recorder.events {
+		if event.AssuranceLevel != "STRONG" {
+			t.Fatalf("expected assurance STRONG on %s, got %q", event.EventType, event.AssuranceLevel)
+		}
+	}
+}
+
 func TestGatewayRunEndpointUsesActionHandler(t *testing.T) {
 	recorder := &recordSink{}
 	dir := t.TempDir()

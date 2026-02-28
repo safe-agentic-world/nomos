@@ -59,7 +59,29 @@ func Action(input action.Action) (NormalizedAction, error) {
 	}, nil
 }
 
+func NormalizeResource(raw string) (string, error) {
+	return normalizeResource(strings.TrimSpace(raw))
+}
+
+func NormalizeRedirectURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", fmt.Errorf("invalid redirect url: %w", err)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", errors.New("redirect scheme must be http or https")
+	}
+	if parsed.User != nil {
+		return "", errors.New("redirect userinfo is not allowed")
+	}
+	return normalizeNetworkLocation(parsed.Host, parsed.EscapedPath())
+}
+
 func normalizeResource(raw string) (string, error) {
+	if strings.HasPrefix(strings.ToLower(raw), "file://") {
+		raw = strings.ReplaceAll(raw, "\\", "/")
+	}
 	parsed, err := url.Parse(raw)
 	if err != nil {
 		return "", fmt.Errorf("invalid resource uri: %w", err)
@@ -87,10 +109,10 @@ func normalizeFileResource(parsed *url.URL) (string, error) {
 	if host != "workspace" {
 		return "", fmt.Errorf("unsupported file host %q", parsed.Host)
 	}
-	if hasTraversalSegments(parsed.Path) {
-		return "", errors.New("file path traversal detected")
+	cleaned, err := normalizeResourcePath(parsed.EscapedPath(), "file")
+	if err != nil {
+		return "", err
 	}
-	cleaned := cleanPath(parsed.Path)
 	if cleaned == "" {
 		return "", errors.New("file path is required")
 	}
@@ -110,25 +132,10 @@ func normalizeRepoResource(parsed *url.URL) (string, error) {
 }
 
 func normalizeURLResource(parsed *url.URL) (string, error) {
-	host := strings.ToLower(parsed.Host)
-	if host == "" {
-		return "", errors.New("url host is required")
+	if parsed.User != nil {
+		return "", errors.New("url userinfo is not allowed")
 	}
-	hostName, port, err := net.SplitHostPort(host)
-	if err == nil {
-		if port == "80" || port == "443" {
-			host = hostName
-		}
-	} else {
-		if strings.Contains(host, ":") && !strings.Contains(host, "]") {
-			return "", errors.New("invalid url host")
-		}
-	}
-	if hasTraversalSegments(parsed.Path) {
-		return "", errors.New("url path traversal detected")
-	}
-	cleaned := cleanPath(parsed.Path)
-	return "url://" + host + cleaned, nil
+	return normalizeNetworkLocation(parsed.Host, parsed.EscapedPath())
 }
 
 func normalizeSecretResource(parsed *url.URL) (string, error) {
@@ -141,6 +148,97 @@ func normalizeSecretResource(parsed *url.URL) (string, error) {
 		return "", errors.New("secret path must be single segment")
 	}
 	return "secret://" + host + "/" + secretPath, nil
+}
+
+func normalizeNetworkLocation(rawHost, rawPath string) (string, error) {
+	host, err := normalizeHostPort(rawHost)
+	if err != nil {
+		return "", err
+	}
+	cleaned, err := normalizeResourcePath(rawPath, "url")
+	if err != nil {
+		return "", err
+	}
+	return "url://" + host + cleaned, nil
+}
+
+func normalizeHostPort(rawHost string) (string, error) {
+	trimmed := strings.TrimSpace(rawHost)
+	if trimmed == "" {
+		return "", errors.New("url host is required")
+	}
+	if strings.Contains(trimmed, "%") {
+		return "", errors.New("invalid url host")
+	}
+	hostname := ""
+	port := ""
+	switch {
+	case strings.HasPrefix(trimmed, "["):
+		if strings.HasSuffix(trimmed, "]") {
+			hostname = strings.ToLower(trimmed)
+			break
+		}
+		parsedHost, parsedPort, err := net.SplitHostPort(trimmed)
+		if err != nil {
+			return "", errors.New("invalid url host")
+		}
+		if strings.Contains(parsedHost, ":") {
+			hostname = "[" + strings.ToLower(parsedHost) + "]"
+		} else {
+			hostname = strings.ToLower(parsedHost)
+		}
+		port = parsedPort
+	case strings.Count(trimmed, ":") > 1:
+		return "", errors.New("invalid url host")
+	case strings.Contains(trimmed, ":"):
+		parsedHost, parsedPort, err := net.SplitHostPort(trimmed)
+		if err != nil {
+			return "", errors.New("invalid url host")
+		}
+		hostname = strings.ToLower(parsedHost)
+		port = parsedPort
+	default:
+		hostname = strings.ToLower(trimmed)
+	}
+	if hostname == "" {
+		return "", errors.New("url host is required")
+	}
+	if port == "80" || port == "443" {
+		port = ""
+	}
+	if port != "" {
+		return hostname + ":" + port, nil
+	}
+	return hostname, nil
+}
+
+func normalizeResourcePath(rawPath, kind string) (string, error) {
+	decodedPath, err := url.PathUnescape(rawPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid %s path encoding", kind)
+	}
+	if containsEncodedSeparators(rawPath) {
+		return "", fmt.Errorf("%s path encoded separators are not allowed", kind)
+	}
+	if hasTraversalSegments(decodedPath) {
+		if kind == "file" {
+			return "", errors.New("file path traversal detected")
+		}
+		return "", errors.New("url path traversal detected")
+	}
+	cleaned := cleanPath(decodedPath)
+	if cleaned == "" {
+		if kind == "file" {
+			return "", errors.New("file path is required")
+		}
+		return "/", nil
+	}
+	return cleaned, nil
+}
+
+func containsEncodedSeparators(raw string) bool {
+	lower := strings.ToLower(raw)
+	return strings.Contains(lower, "%2f") || strings.Contains(lower, "%5c")
 }
 
 func cleanPath(raw string) string {

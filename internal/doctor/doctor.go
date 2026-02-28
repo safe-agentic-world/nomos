@@ -157,6 +157,23 @@ func Run(options Options) (Report, error) {
 	mark("fs.workspace_canonicalizes", workspaceCanon, "workspace root canonicalizes", "set executor.workspace_root to a valid canonicalizable path")
 	mark("fs.workspace_non_empty", workspaceNonEmpty, "workspace root is non-empty", "set executor.workspace_root explicitly or keep default working directory")
 
+	if cfgErr == nil && cfg.Runtime.StrongGuarantee {
+		containerSandbox := cfg.Executor.SandboxEnabled && strings.EqualFold(strings.TrimSpace(cfg.Executor.SandboxProfile), "container")
+		mark("strong.sandbox_container", containerSandbox, "container sandbox profile enforced", "set executor.sandbox_enabled=true and executor.sandbox_profile=container for strong-guarantee deployments")
+
+		mTLS := cfg.Gateway.TLS.Enabled && cfg.Gateway.TLS.RequireMTLS
+		mark("strong.gateway_mtls", mTLS, "gateway mTLS enforced", "enable gateway.tls.enabled=true and gateway.tls.require_mtls=true for strong-guarantee deployments")
+
+		workloadIdentity := cfg.Identity.OIDC.Enabled
+		mark("strong.workload_identity", workloadIdentity, "workload identity configured", "enable identity.oidc for strong-guarantee deployments so identity is asserted by the environment")
+
+		durableAudit := hasDurableAuditSink(cfg.Audit.Sink)
+		mark("strong.audit_durable", durableAudit, "durable audit sink configured", "use sqlite or webhook audit sinks for strong-guarantee deployments instead of stdout-only")
+
+		strictEnv := isStrongGuaranteeEnvironment(cfg.Identity.Environment)
+		mark("strong.environment_bound", strictEnv, "deployment-bound environment is set", "set identity.environment to ci, staging, or prod for strong-guarantee deployments")
+	}
+
 	report.Checks = stableChecks(report.Checks)
 	return report, nil
 }
@@ -184,6 +201,25 @@ func isRecognizedEnvironment(env string) bool {
 	default:
 		return false
 	}
+}
+
+func isStrongGuaranteeEnvironment(env string) bool {
+	switch strings.ToLower(strings.TrimSpace(env)) {
+	case "ci", "staging", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasDurableAuditSink(sink string) bool {
+	for _, part := range strings.Split(sink, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "sqlite:") || strings.HasPrefix(part, "sqlite://") || strings.HasPrefix(part, "webhook:") {
+			return true
+		}
+	}
+	return false
 }
 
 func stableChecks(in []Check) []Check {

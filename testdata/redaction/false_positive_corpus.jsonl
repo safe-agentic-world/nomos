@@ -1,0 +1,20 @@
+{"name":"false_positive_001","input":"Authorization guide for operators","expected":"Authorization guide for operators"}
+{"name":"false_positive_002","input":"Cookie Monster says hello","expected":"Cookie Monster says hello"}
+{"name":"false_positive_003","input":"set-cookie preferences are documented here","expected":"set-cookie preferences are documented here"}
+{"name":"false_positive_004","input":"X api key rotations happen monthly","expected":"X api key rotations happen monthly"}
+{"name":"false_positive_005","input":"basic geometry is still hard","expected":"basic geometry is still hard"}
+{"name":"false_positive_006","input":"AKIB is not an AWS key","expected":"AKIB is not an AWS key"}
+{"name":"false_positive_007","input":"eyJ is a prefix only","expected":"eyJ is a prefix only"}
+{"name":"false_positive_008","input":"-----BEGIN NOTES----- not a private key footer missing","expected":"-----BEGIN NOTES----- not a private key footer missing"}
+{"name":"false_positive_009","input":"Bearer market trends are improving","expected":"Bearer market trends are improving"}
+{"name":"false_positive_010","input":"Proxy settings are documented in the handbook","expected":"Proxy settings are documented in the handbook"}
+{"name":"false_positive_011","input":"Session cookies improve UX in this article","expected":"Session cookies improve UX in this article"}
+{"name":"false_positive_012","input":"AkiA lowercase mixed string is not matched","expected":"AkiA lowercase mixed string is not matched"}
+{"name":"false_positive_013","input":"x-auth-tokenization is a made-up word","expected":"x-auth-tokenization is a made-up word"}
+{"name":"false_positive_014","input":"This base64 text cHVibGljLWRhdGE= is public data","expected":"This base64 text cHVibGljLWRhdGE= is public data"}
+{"name":"false_positive_015","input":"Use the word secret in prose, not as a token header","expected":"Use the word secret in prose, not as a token header"}
+{"name":"false_positive_016","input":"BEGIN PRIVATE KEY is mentioned but not fenced","expected":"BEGIN PRIVATE KEY is mentioned but not fenced"}
+{"name":"false_positive_017","input":"JWT documentation sample payload.signature but no prefix","expected":"JWT documentation sample payload.signature but no prefix"}
+{"name":"false_positive_018","input":"Authorizationish is not a header line","expected":"Authorizationish is not a header line"}
+{"name":"false_positive_019","input":"CookieJar is a class name","expected":"CookieJar is a class name"}
+{"name":"false_positive_020","input":"X-Api usage notes only","expected":"X-Api usage notes only"}

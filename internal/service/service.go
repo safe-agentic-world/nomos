@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/safe-agentic-world/nomos/internal/action"
@@ -28,6 +29,7 @@ type Service struct {
 	approvals      ApprovalStore
 	credentials    CredentialBroker
 	sandboxProfile string
+	assuranceLevel string
 	now            func() time.Time
 }
 
@@ -57,8 +59,20 @@ func New(policyEngine *policy.Engine, fsReader *executor.FSReader, fsWriter *exe
 		approvals:      approvals,
 		credentials:    credentialBroker,
 		sandboxProfile: sandboxProfile,
+		assuranceLevel: "NONE",
 		now:            now,
 	}
+}
+
+func (s *Service) SetAssuranceLevel(level string) {
+	if s == nil {
+		return
+	}
+	level = strings.TrimSpace(level)
+	if level == "" {
+		level = "NONE"
+	}
+	s.assuranceLevel = level
 }
 
 func (s *Service) Process(actionInput action.Action) (action.Response, error) {
@@ -128,6 +142,7 @@ func (s *Service) Process(actionInput action.Action) (action.Response, error) {
 		SandboxMode:        auditCtx.sandboxMode,
 		NetworkMode:        auditCtx.networkMode,
 		CredentialLeaseIDs: auditCtx.credentialLeaseIDs,
+		AssuranceLevel:     s.assuranceLevel,
 		ActionSummary:      auditCtx.actionSummary,
 		Principal:          normalized.Principal,
 		Agent:              normalized.Agent,
@@ -165,15 +180,16 @@ func (s *Service) Process(actionInput action.Action) (action.Response, error) {
 				response.Reason = "allow_by_approval"
 				response.ApprovalID = rec.ApprovalID
 				_ = s.recorder.WriteEvent(audit.Event{
-					Timestamp:   s.now().UTC(),
-					EventType:   "approval.applied",
-					TraceID:     normalized.TraceID,
-					ActionID:    normalized.ActionID,
-					ApprovalID:  rec.ApprovalID,
-					Fingerprint: fingerprint,
-					Principal:   normalized.Principal,
-					Agent:       normalized.Agent,
-					Environment: normalized.Environment,
+					Timestamp:      s.now().UTC(),
+					EventType:      "approval.applied",
+					TraceID:        normalized.TraceID,
+					ActionID:       normalized.ActionID,
+					ApprovalID:     rec.ApprovalID,
+					Fingerprint:    fingerprint,
+					Principal:      normalized.Principal,
+					Agent:          normalized.Agent,
+					Environment:    normalized.Environment,
+					AssuranceLevel: s.assuranceLevel,
 				})
 			}
 		}
@@ -206,17 +222,18 @@ func (s *Service) Process(actionInput action.Action) (action.Response, error) {
 				response.ApprovalID = pending.ApprovalID
 				response.ApprovalExpiresAt = pending.ExpiresAt.Format(time.RFC3339Nano)
 				_ = s.recorder.WriteEvent(audit.Event{
-					Timestamp:   s.now().UTC(),
-					EventType:   "approval.requested",
-					TraceID:     normalized.TraceID,
-					ActionID:    normalized.ActionID,
-					ApprovalID:  pending.ApprovalID,
-					Fingerprint: fingerprint,
-					ActionType:  normalized.ActionType,
-					Resource:    normalized.Resource,
-					Principal:   normalized.Principal,
-					Agent:       normalized.Agent,
-					Environment: normalized.Environment,
+					Timestamp:      s.now().UTC(),
+					EventType:      "approval.requested",
+					TraceID:        normalized.TraceID,
+					ActionID:       normalized.ActionID,
+					ApprovalID:     pending.ApprovalID,
+					Fingerprint:    fingerprint,
+					ActionType:     normalized.ActionType,
+					Resource:       normalized.Resource,
+					Principal:      normalized.Principal,
+					Agent:          normalized.Agent,
+					Environment:    normalized.Environment,
+					AssuranceLevel: s.assuranceLevel,
 				})
 			}
 			auditCtx.resultSummary = summarizeResponse(s.redactor, response)
@@ -254,19 +271,17 @@ func (s *Service) Process(actionInput action.Action) (action.Response, error) {
 		return response, nil
 	}
 
-	resp, err := s.handleAllowedAction(normalized, actionInput, decision.Obligations, response)
+	resp, metadata, err := s.handleAllowedAction(normalized, actionInput, decision.Obligations, response)
 	if err != nil {
 		auditCtx.resultClass, auditCtx.retryable = classifyError(err)
 	} else {
+		if len(resp.CredentialLeaseIDs) > 0 {
+			auditCtx.credentialLeaseIDs = append([]string{}, resp.CredentialLeaseIDs...)
+		}
 		auditCtx.resultSummary = summarizeResponse(s.redactor, resp)
 		auditCtx.resultClass, auditCtx.retryable = classifyDecision(decision, resp)
-		switch normalized.ActionType {
-		case "fs.write", "repo.apply_patch":
-			auditCtx.executorMetadata = map[string]any{"bytes_written": resp.BytesWritten}
-		case "process.exec":
-			auditCtx.executorMetadata = map[string]any{"exit_code": resp.ExitCode, "truncated": resp.Truncated}
-		case "net.http_request":
-			auditCtx.executorMetadata = map[string]any{"status_code": resp.StatusCode, "truncated": resp.Truncated}
+		if metadata != nil {
+			auditCtx.executorMetadata = metadata
 		}
 	}
 	s.emitTraceEvent("trace.end", normalized.TraceID, normalized.ActionID)
@@ -275,10 +290,11 @@ func (s *Service) Process(actionInput action.Action) (action.Response, error) {
 
 func (s *Service) emitTraceEvent(eventType, traceID, actionID string) {
 	event := audit.Event{
-		Timestamp: s.now().UTC(),
-		EventType: eventType,
-		TraceID:   traceID,
-		ActionID:  actionID,
+		Timestamp:      s.now().UTC(),
+		EventType:      eventType,
+		TraceID:        traceID,
+		ActionID:       actionID,
+		AssuranceLevel: s.assuranceLevel,
 	}
 	_ = s.recorder.WriteEvent(event)
 }
@@ -288,134 +304,139 @@ func (s *Service) ensureSandbox(obligations map[string]any) error {
 	return err
 }
 
-func (s *Service) handleAllowedAction(normalized normalize.NormalizedAction, actionInput action.Action, obligations map[string]any, response action.Response) (action.Response, error) {
+func (s *Service) handleAllowedAction(normalized normalize.NormalizedAction, actionInput action.Action, obligations map[string]any, response action.Response) (action.Response, map[string]any, error) {
 	switch normalized.ActionType {
 	case "secrets.checkout":
 		params, err := decodeCheckoutParams(actionInput.Params)
 		if err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "invalid_params"
-			return response, nil
+			return response, nil, nil
 		}
 		if s.credentials == nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "credentials_unavailable"
-			return response, nil
+			return response, nil, nil
 		}
 		lease, err := s.credentials.Checkout(params.SecretID, normalized.Principal, normalized.Agent, normalized.Environment, normalized.TraceID)
 		if err != nil {
-			return response, err
+			return response, nil, err
 		}
 		response.CredentialLeaseID = lease.ID
-		return response, nil
+		return response, nil, nil
 	case "fs.write":
 		if err := s.ensureSandbox(obligations); err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "sandbox_required"
-			return response, nil
+			return response, nil, nil
 		}
 		params, err := decodeWriteParams(actionInput.Params)
 		if err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "invalid_params"
-			return response, nil
+			return response, nil, nil
 		}
 		writeResult, err := s.fsWriter.Write(normalized.Resource, []byte(params.Content))
 		if err != nil {
-			return response, err
+			return response, nil, err
 		}
 		response.BytesWritten = writeResult.BytesWritten
-		return response, nil
+		return response, map[string]any{"bytes_written": response.BytesWritten}, nil
 	case "repo.apply_patch":
 		if err := s.ensureSandbox(obligations); err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "sandbox_required"
-			return response, nil
+			return response, nil, nil
 		}
 		params, err := decodePatchParams(actionInput.Params)
 		if err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "invalid_params"
-			return response, nil
+			return response, nil, nil
 		}
 		patchResult, err := s.patcher.Apply(params.Path, []byte(params.Content))
 		if err != nil {
-			return response, err
+			return response, nil, err
 		}
 		response.BytesWritten = patchResult.BytesWritten
-		return response, nil
+		return response, map[string]any{"bytes_written": response.BytesWritten}, nil
 	case "process.exec":
 		if err := s.ensureSandbox(obligations); err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "sandbox_required"
-			return response, nil
+			return response, nil, nil
 		}
 		if !execAllowed(obligations, actionInput.Params) {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "exec_not_allowlisted"
-			return response, nil
+			return response, nil, nil
 		}
 		params, err := decodeExecParams(actionInput.Params)
 		if err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "invalid_params"
-			return response, nil
+			return response, nil, nil
 		}
 		if s.credentials != nil && len(params.CredentialLeaseIDs) > 0 {
 			injected, secretValues, err := s.credentials.MaterializeEnv(params.CredentialLeaseIDs, params.EnvAllowlistKeys, normalized.Principal, normalized.Agent, normalized.Environment, normalized.TraceID)
 			if err != nil {
-				return response, err
+				return response, nil, err
 			}
 			params.InjectedEnv = injected
 			response.CredentialLeaseIDs = append([]string{}, params.CredentialLeaseIDs...)
 			result, err := s.execRunner.Run(params)
 			if err != nil {
-				return response, err
+				return response, nil, err
 			}
 			response.Stdout = redactSecrets(s.redactor.RedactText(result.Stdout), secretValues)
 			response.Stderr = redactSecrets(s.redactor.RedactText(result.Stderr), secretValues)
 			response.ExitCode = result.ExitCode
 			response.Truncated = result.Truncated
-			return response, nil
+			return response, map[string]any{"exit_code": response.ExitCode, "truncated": response.Truncated}, nil
 		}
 		result, err := s.execRunner.Run(params)
 		if err != nil {
-			return response, err
+			return response, nil, err
 		}
 		response.Stdout = s.redactor.RedactText(result.Stdout)
 		response.Stderr = s.redactor.RedactText(result.Stderr)
 		response.ExitCode = result.ExitCode
 		response.Truncated = result.Truncated
-		return response, nil
+		return response, map[string]any{"exit_code": response.ExitCode, "truncated": response.Truncated}, nil
 	case "net.http_request":
 		host, urlString, err := parseURLFromResource(normalized.Resource)
 		if err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "invalid_resource"
-			return response, nil
+			return response, nil, nil
 		}
 		if !netAllowed(obligations, host) {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "net_not_allowlisted"
-			return response, nil
+			return response, nil, nil
 		}
 		params, err := decodeHTTPParams(actionInput.Params)
 		if err != nil {
 			response.Decision = policy.DecisionDeny
 			response.Reason = "invalid_params"
-			return response, nil
+			return response, nil, nil
 		}
-		result, err := s.httpRunner.Do(urlString, params)
+		result, err := s.httpRunner.DoWithPolicy(urlString, params, redirectPolicyFromObligations(obligations))
 		if err != nil {
-			return response, err
+			return response, nil, err
 		}
 		response.StatusCode = result.StatusCode
 		response.Output = s.redactor.RedactText(result.Body)
 		response.Truncated = result.Truncated
-		return response, nil
+		return response, map[string]any{
+			"status_code":    response.StatusCode,
+			"truncated":      response.Truncated,
+			"final_resource": result.FinalResource,
+			"redirect_hops":  result.RedirectHops,
+		}, nil
 	default:
 		response.Decision = policy.DecisionDeny
 		response.Reason = "unsupported_action"
-		return response, nil
+		return response, nil, nil
 	}
 }

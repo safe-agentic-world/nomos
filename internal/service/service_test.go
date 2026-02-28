@@ -317,6 +317,172 @@ func TestServiceSandboxRequired(t *testing.T) {
 	}
 }
 
+func TestServiceAuditIncludesAssuranceLevel(t *testing.T) {
+	dir := t.TempDir()
+	readmePath := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(readmePath, []byte("ok"), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	bundle := policy.Bundle{
+		Version: "v1",
+		Hash:    "test",
+		Rules: []policy.Rule{
+			{ID: "allow-readme", ActionType: "fs.read", Resource: "file://workspace/README.md", Decision: policy.DecisionAllow},
+		},
+	}
+	engine := policy.NewEngine(bundle)
+	recorder := &recordSink{}
+	svc := New(
+		engine,
+		executor.NewFSReader(dir, 32, 10),
+		executor.NewFSWriter(dir, 32),
+		executor.NewPatchApplier(dir, 32),
+		executor.NewExecRunner(dir, 32),
+		executor.NewHTTPRunner(32),
+		recorder,
+		redact.DefaultRedactor(),
+		nil,
+		nil,
+		"local",
+		func() time.Time { return time.Unix(0, 0) },
+	)
+	svc.SetAssuranceLevel("GUARDED")
+
+	act, err := action.ToAction(action.Request{
+		SchemaVersion: "v1",
+		ActionID:      "act6",
+		ActionType:    "fs.read",
+		Resource:      "file://workspace/README.md",
+		Params:        []byte(`{}`),
+		TraceID:       "trace6",
+		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
+	}, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	})
+	if err != nil {
+		t.Fatalf("to action: %v", err)
+	}
+	if _, err := svc.Process(act); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	foundDecision := false
+	foundCompleted := false
+	for _, event := range recorder.events {
+		if event.AssuranceLevel != "GUARDED" {
+			t.Fatalf("expected assurance level on event %s, got %q", event.EventType, event.AssuranceLevel)
+		}
+		if event.EventType == "action.decision" {
+			foundDecision = true
+		}
+		if event.EventType == "action.completed" {
+			foundCompleted = true
+		}
+	}
+	if !foundDecision || !foundCompleted {
+		t.Fatalf("expected decision and completed events, got %+v", recorder.events)
+	}
+}
+
+func TestServiceAuditRecordsFinalRedirectResource(t *testing.T) {
+	dir := t.TempDir()
+	bundle := policy.Bundle{
+		Version: "v1",
+		Hash:    "test",
+		Rules: []policy.Rule{
+			{
+				ID:           "allow-http",
+				ActionType:   "net.http_request",
+				Resource:     "url://example.com/**",
+				Decision:     policy.DecisionAllow,
+				Principals:   []string{"system"},
+				Agents:       []string{"nomos"},
+				Environments: []string{"dev"},
+				Obligations: map[string]any{
+					"net_allowlist":           []any{"example.com"},
+					"http_redirects":          true,
+					"http_redirect_hop_limit": 2,
+				},
+			},
+		},
+	}
+	engine := policy.NewEngine(bundle)
+	recorder := &recordSink{}
+	httpRunner := executor.NewHTTPRunner(32)
+	httpRunner.SetClient(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			switch req.URL.Path {
+			case "/start":
+				return &http.Response{
+					StatusCode: http.StatusFound,
+					Header:     http.Header{"Location": []string{"https://example.com/final?token=secret"}},
+					Body:       io.NopCloser(strings.NewReader("")),
+					Request:    req,
+				}, nil
+			default:
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("ok")),
+					Header:     make(http.Header),
+					Request:    req,
+				}, nil
+			}
+		}),
+		CheckRedirect: nil,
+	})
+	svc := New(
+		engine,
+		executor.NewFSReader(dir, 32, 10),
+		executor.NewFSWriter(dir, 32),
+		executor.NewPatchApplier(dir, 32),
+		executor.NewExecRunner(dir, 32),
+		httpRunner,
+		recorder,
+		redact.DefaultRedactor(),
+		nil,
+		nil,
+		"local",
+		func() time.Time { return time.Unix(0, 0) },
+	)
+
+	act, err := action.ToAction(action.Request{
+		SchemaVersion: "v1",
+		ActionID:      "act7",
+		ActionType:    "net.http_request",
+		Resource:      "url://example.com/start",
+		Params:        []byte(`{"method":"GET"}`),
+		TraceID:       "trace7",
+		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
+	}, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	})
+	if err != nil {
+		t.Fatalf("to action: %v", err)
+	}
+	if _, err := svc.Process(act); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	found := false
+	for _, event := range recorder.events {
+		if event.EventType != "action.completed" {
+			continue
+		}
+		found = true
+		if event.ExecutorMetadata["final_resource"] != "url://example.com/final" {
+			t.Fatalf("expected final_resource in executor metadata, got %+v", event.ExecutorMetadata)
+		}
+		if event.ExecutorMetadata["redirect_hops"] != 1 {
+			t.Fatalf("expected redirect_hops=1, got %+v", event.ExecutorMetadata)
+		}
+	}
+	if !found {
+		t.Fatal("expected action.completed audit event")
+	}
+}
+
 func newTestHTTPClient(body string) *http.Client {
 	return &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {

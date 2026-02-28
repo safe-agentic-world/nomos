@@ -1,0 +1,24 @@
+{"resource":"file://workspace/../secret.txt","name":"bypass_file_parent","error_contains":"traversal"}
+{"resource":"file://workspace/%2e%2e/secret.txt","name":"bypass_file_encoded_parent","error_contains":"traversal"}
+{"resource":"file://workspace/%2E%2E/secret.txt","name":"bypass_file_double_encoded_parent","error_contains":"traversal"}
+{"resource":"file://workspace/dir%2fsecret.txt","name":"bypass_file_encoded_slash","error_contains":"encoded separators"}
+{"resource":"file://workspace/dir%5csecret.txt","name":"bypass_file_encoded_backslash","error_contains":"encoded separators"}
+{"resource":"url://example.com/a/../b","name":"bypass_url_parent","error_contains":"traversal"}
+{"resource":"url://example.com/%2e%2e/admin","name":"bypass_url_encoded_parent","error_contains":"traversal"}
+{"resource":"url://example.com/a%2fb","name":"bypass_url_encoded_slash","error_contains":"encoded separators"}
+{"resource":"url://user@example.com/secret","name":"bypass_url_userinfo","error_contains":"userinfo"}
+{"resource":"url://2001:db8::1/path","name":"bypass_url_bad_ipv6","error_contains":"invalid url host"}
+{"resource":"url://[fe80::1%25eth0]/path","name":"bypass_url_zone","error_contains":"invalid url host"}
+{"resource":"ftp://example.com/file","name":"bypass_bad_scheme","error_contains":"unsupported resource scheme"}
+{"resource":"repo://org/repo/extra","name":"bypass_repo_extra_segment","error_contains":"single segment"}
+{"resource":"repo://org/","name":"bypass_repo_missing","error_contains":"single segment"}
+{"resource":"secret://vault/team/key","name":"bypass_secret_extra_segment","error_contains":"single segment"}
+{"resource":"file://tmp/secret.txt","name":"bypass_file_wrong_host","error_contains":"unsupported file host"}
+{"resource":"file://workspace/%zz.txt","name":"bypass_file_bad_encoding","error_contains":"invalid url escape"}
+{"resource":"url://example.com/%zz","name":"bypass_url_bad_encoding","error_contains":"invalid url escape"}
+{"resource":"url:///path","name":"bypass_url_empty_host","error_contains":"host is required"}
+{"resource":"secret:///token","name":"bypass_secret_missing_host","error_contains":"host is required"}
+{"resource":"repo:///service","name":"bypass_repo_missing_host","error_contains":"host is required"}
+{"resource":"file://workspace/..","name":"bypass_file_only_parent","error_contains":"traversal"}
+{"resource":"url://example.com/..","name":"bypass_url_only_parent","error_contains":"traversal"}
+{"resource":"file://workspace/a\\\\..\\\\secret.txt","name":"bypass_file_safe_separator_mix","error_contains":"traversal"}

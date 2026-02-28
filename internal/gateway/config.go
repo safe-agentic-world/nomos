@@ -44,14 +44,17 @@ type TLSConfig struct {
 }
 
 type RuntimeConfig struct {
-	StatelessMode bool `json:"stateless_mode"`
+	StatelessMode   bool   `json:"stateless_mode"`
+	StrongGuarantee bool   `json:"strong_guarantee"`
+	DeploymentMode  string `json:"deployment_mode"`
 }
 
 type PolicyConfig struct {
-	BundlePath       string `json:"policy_bundle_path"`
-	VerifySignatures bool   `json:"verify_signatures"`
-	SignaturePath    string `json:"signature_path"`
-	PublicKeyPath    string `json:"public_key_path"`
+	BundlePath         string `json:"policy_bundle_path"`
+	VerifySignatures   bool   `json:"verify_signatures"`
+	SignaturePath      string `json:"signature_path"`
+	PublicKeyPath      string `json:"public_key_path"`
+	ExplainSuggestions *bool  `json:"explain_suggestions,omitempty"`
 }
 
 type ExecutorConfig struct {
@@ -181,6 +184,13 @@ func (c *Config) SetDefaults() error {
 	if c.Executor.MaxOutputLines == 0 {
 		c.Executor.MaxOutputLines = 200
 	}
+	if c.Policy.ExplainSuggestions == nil {
+		enabled := true
+		c.Policy.ExplainSuggestions = &enabled
+	}
+	if strings.TrimSpace(c.Runtime.DeploymentMode) == "" {
+		c.Runtime.DeploymentMode = "unmanaged"
+	}
 	if c.Executor.SandboxProfile == "" {
 		if c.Executor.SandboxEnabled {
 			c.Executor.SandboxProfile = "local"
@@ -264,6 +274,13 @@ func (c Config) Validate() error {
 			return errors.New("sqlite audit sink is not allowed in runtime.stateless_mode")
 		}
 	}
+	switch strings.TrimSpace(c.Runtime.DeploymentMode) {
+	case "ci", "k8s", "remote_dev", "unmanaged":
+	case "":
+		return errors.New("runtime.deployment_mode is required")
+	default:
+		return errors.New("runtime.deployment_mode must be one of ci, k8s, remote_dev, unmanaged")
+	}
 	if c.Credentials.Enabled {
 		if len(c.Credentials.Secrets) == 0 {
 			return errors.New("credentials.secrets is required when credentials.enabled is true")
@@ -337,6 +354,14 @@ func ApplyEnvOverrides(cfg *Config, getenv func(string) string) {
 			cfg.Runtime.StatelessMode = parsed
 		}
 	}
+	if v := getenv("NOMOS_RUNTIME_STRONG_GUARANTEE"); v != "" {
+		if parsed, ok := parseBool(v); ok {
+			cfg.Runtime.StrongGuarantee = parsed
+		}
+	}
+	if v := getenv("NOMOS_RUNTIME_DEPLOYMENT_MODE"); v != "" {
+		cfg.Runtime.DeploymentMode = v
+	}
 	if v := getenv("NOMOS_POLICY_BUNDLE_PATH"); v != "" {
 		cfg.Policy.BundlePath = v
 	}
@@ -350,6 +375,11 @@ func ApplyEnvOverrides(cfg *Config, getenv func(string) string) {
 	}
 	if v := getenv("NOMOS_POLICY_PUBLIC_KEY_PATH"); v != "" {
 		cfg.Policy.PublicKeyPath = v
+	}
+	if v := getenv("NOMOS_POLICY_EXPLAIN_SUGGESTIONS"); v != "" {
+		if parsed, ok := parseBool(v); ok {
+			cfg.Policy.ExplainSuggestions = &parsed
+		}
 	}
 	if v := getenv("NOMOS_EXECUTOR_SANDBOX_ENABLED"); v != "" {
 		if parsed, ok := parseBool(v); ok {

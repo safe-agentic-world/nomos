@@ -12,11 +12,14 @@ type Redactor struct {
 func DefaultRedactor() *Redactor {
 	return &Redactor{
 		patterns: []*regexp.Regexp{
-			regexp.MustCompile(`(?i)authorization:\s*[^\r\n]+`),
 			regexp.MustCompile(`(?i)proxy-authorization:\s*[^\r\n]+`),
-			regexp.MustCompile(`(?i)cookie:\s*[^\r\n]+`),
+			regexp.MustCompile(`(?i)authorization:\s*[^\r\n]+`),
 			regexp.MustCompile(`(?i)set-cookie:\s*[^\r\n]+`),
-			regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9\-\._~\+\/]+=*`),
+			regexp.MustCompile(`(?i)cookie:\s*[^\r\n]+`),
+			regexp.MustCompile(`(?i)x-api-key:\s*[^\r\n]+`),
+			regexp.MustCompile(`(?i)x-auth-token:\s*[^\r\n]+`),
+			regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9\-\._~\+\/]{12,}=*`),
+			regexp.MustCompile(`(?i)basic\s+[A-Za-z0-9\+\/=]{12,}`),
 			regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
 			regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`),
 			regexp.MustCompile(`(?s)-----BEGIN [A-Z ]+-----.*-----END [A-Z ]+-----`),

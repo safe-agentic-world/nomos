@@ -11,11 +11,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/assurance"
 	"github.com/safe-agentic-world/nomos/internal/doctor"
 	"github.com/safe-agentic-world/nomos/internal/gateway"
 	"github.com/safe-agentic-world/nomos/internal/identity"
@@ -187,7 +189,7 @@ func runPolicyTest(args []string) {
 }
 
 func runPolicyExplain(args []string) {
-	actionPath, bundlePath := parsePolicyFlags("explain", args)
+	actionPath, bundlePath, configPath := parsePolicyExplainFlags(args)
 	actionData, err := os.ReadFile(actionPath)
 	if err != nil {
 		log.Fatalf("read action: %v", err)
@@ -205,17 +207,177 @@ func runPolicyExplain(args []string) {
 	if err != nil {
 		log.Fatalf("normalize action: %v", err)
 	}
-	decision := engine.Evaluate(normalized)
-	payload := map[string]any{
-		"decision":           decision.Decision,
-		"reason_code":        decision.ReasonCode,
-		"matched_rule_ids":   decision.MatchedRuleIDs,
-		"policy_bundle_hash": decision.PolicyBundleHash,
-		"engine_version":     version.Current().Version,
+	explanation := engine.Explain(normalized)
+	settings, err := deriveExplainSettings(configPath, bundlePath, os.Getenv)
+	if err != nil {
+		log.Fatalf("derive explain settings: %v", err)
 	}
+	payload := buildPolicyExplainPayload(explanation, normalized, settings)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(payload)
+}
+
+type explainSettings struct {
+	AssuranceLevel     string
+	SuggestRemediation bool
+}
+
+func buildPolicyExplainPayload(explanation policy.ExplainDetails, normalized normalize.NormalizedAction, settings explainSettings) map[string]any {
+	payload := map[string]any{
+		"decision":            explanation.Decision.Decision,
+		"reason_code":         explanation.Decision.ReasonCode,
+		"matched_rule_ids":    explanation.Decision.MatchedRuleIDs,
+		"policy_bundle_hash":  explanation.Decision.PolicyBundleHash,
+		"engine_version":      version.Current().Version,
+		"assurance_level":     settings.AssuranceLevel,
+		"obligations_preview": explanation.ObligationsPreview,
+	}
+	if explanation.Decision.Decision != policy.DecisionAllow {
+		whyDenied := map[string]any{
+			"reason_code":        explanation.Decision.ReasonCode,
+			"deny_rules":         buildDeniedRulePayload(explanation.DenyRules),
+			"matched_conditions": buildOverallMatchedConditions(explanation),
+			"remediation_hint":   remediationHint(explanation, normalized),
+		}
+		payload["why_denied"] = whyDenied
+		if settings.SuggestRemediation {
+			payload["minimal_allowing_change"] = remediationSuggestion(explanation, normalized)
+		}
+	}
+	return payload
+}
+
+func parsePolicyExplainFlags(args []string) (string, string, string) {
+	fs := flag.NewFlagSet("policy explain", flag.ExitOnError)
+	actionPath := fs.String("action", "", "path to action json")
+	bundlePath := fs.String("bundle", "", "path to policy bundle")
+	configPath := fs.String("config", "", "path to config json")
+	fs.Parse(args)
+	if *actionPath == "" || *bundlePath == "" {
+		log.Fatal("both --action and --bundle are required")
+	}
+	return *actionPath, *bundlePath, *configPath
+}
+
+func deriveExplainSettings(configPath, bundlePath string, getenv func(string) string) (explainSettings, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if strings.TrimSpace(configPath) != "" {
+		cfg, err := gateway.LoadConfig(configPath, getenv, bundlePath)
+		if err != nil {
+			return explainSettings{}, err
+		}
+		return explainSettings{
+			AssuranceLevel:     assurance.Derive(cfg.Runtime.DeploymentMode, cfg.Runtime.StrongGuarantee),
+			SuggestRemediation: cfg.Policy.ExplainSuggestions == nil || *cfg.Policy.ExplainSuggestions,
+		}, nil
+	}
+	deploymentMode := strings.TrimSpace(getenv("NOMOS_RUNTIME_DEPLOYMENT_MODE"))
+	if deploymentMode == "" {
+		deploymentMode = "unmanaged"
+	}
+	suggestRemediation := true
+	if value := strings.TrimSpace(getenv("NOMOS_POLICY_EXPLAIN_SUGGESTIONS")); value != "" {
+		suggestRemediation = parseBoolEnv(value)
+	}
+	return explainSettings{
+		AssuranceLevel:     assurance.Derive(deploymentMode, parseBoolEnv(getenv("NOMOS_RUNTIME_STRONG_GUARANTEE"))),
+		SuggestRemediation: suggestRemediation,
+	}, nil
+}
+
+func deriveExplainAssurance(configPath, bundlePath string, getenv func(string) string) (string, error) {
+	settings, err := deriveExplainSettings(configPath, bundlePath, getenv)
+	if err != nil {
+		return "", err
+	}
+	return settings.AssuranceLevel, nil
+}
+
+func buildDeniedRulePayload(rules []policy.DeniedRuleExplanation) []map[string]any {
+	out := make([]map[string]any, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, map[string]any{
+			"rule_id":            rule.RuleID,
+			"reason_code":        rule.ReasonCode,
+			"matched_conditions": rule.MatchedConditions,
+		})
+	}
+	return out
+}
+
+func buildOverallMatchedConditions(explanation policy.ExplainDetails) map[string]bool {
+	if len(explanation.DenyRules) > 0 {
+		return map[string]bool{
+			"deny_rule_match": true,
+		}
+	}
+	if len(explanation.RequireApprovalRuleIDs) > 0 {
+		return map[string]bool{
+			"approval_rule_match": true,
+		}
+	}
+	return map[string]bool{
+		"matching_allow_rule": false,
+	}
+}
+
+func remediationHint(explanation policy.ExplainDetails, normalized normalize.NormalizedAction) string {
+	switch explanation.Decision.ReasonCode {
+	case "require_approval_by_rule":
+		return "This action requires approval before it can proceed."
+	case "deny_by_rule":
+		return "A deny rule matched this action."
+	default:
+		switch normalized.ActionType {
+		case "net.http_request":
+			return "This network destination is not currently allowed."
+		case "process.exec":
+			return "This command is not currently allowed."
+		case "fs.write", "repo.apply_patch":
+			return "This write target is not currently allowed."
+		default:
+			return "No matching allow rule was found for this action."
+		}
+	}
+}
+
+func remediationSuggestion(explanation policy.ExplainDetails, normalized normalize.NormalizedAction) string {
+	switch normalized.ActionType {
+	case "net.http_request":
+		host := hostFromNormalizedResource(normalized.Resource)
+		if host != "" {
+			return "This host is not currently allowed; use an allowlisted host, request approval, or update the network allowlist for " + host + "."
+		}
+		return "This host is not currently allowed; use an allowlisted host or request approval."
+	case "process.exec":
+		return "Exec is restricted; use an allowlisted command or request approval."
+	case "fs.write", "repo.apply_patch":
+		return "Write access is restricted for this resource; use an allowed path or request approval."
+	default:
+		if explanation.Decision.ReasonCode == "require_approval_by_rule" {
+			return "Request approval for this action."
+		}
+		return "Adjust the requested action to match an allowlisted resource or request approval."
+	}
+}
+
+func hostFromNormalizedResource(resource string) string {
+	if !strings.HasPrefix(resource, "url://") {
+		return ""
+	}
+	trimmed := strings.TrimPrefix(resource, "url://")
+	if idx := strings.Index(trimmed, "/"); idx >= 0 {
+		return trimmed[:idx]
+	}
+	return trimmed
+}
+
+func parseBoolEnv(value string) bool {
+	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+	return err == nil && parsed
 }
 
 func parsePolicyFlags(name string, args []string) (string, string) {

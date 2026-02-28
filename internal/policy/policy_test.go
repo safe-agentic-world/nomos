@@ -125,3 +125,34 @@ func TestPolicyBundleHashIncluded(t *testing.T) {
 		t.Fatal("expected policy bundle hash")
 	}
 }
+
+func TestPolicyExplainDenyWinsReportsOnlyDenyRules(t *testing.T) {
+	bundle := Bundle{
+		Version: "v1",
+		Hash:    "bundle-hash",
+		Rules: []Rule{
+			{ID: "allow-net", ActionType: "net.http_request", Resource: "url://example.com/**", Decision: DecisionAllow},
+			{ID: "deny-a", ActionType: "net.http_request", Resource: "url://example.com/**", Decision: DecisionDeny},
+			{ID: "deny-b", ActionType: "net.http_request", Resource: "url://example.com/**", Decision: DecisionDeny},
+		},
+	}
+	explanation := NewEngine(bundle).Explain(normalize.NormalizedAction{
+		ActionType:  "net.http_request",
+		Resource:    "url://example.com/path",
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	})
+	if explanation.Decision.Decision != DecisionDeny {
+		t.Fatalf("expected deny, got %s", explanation.Decision.Decision)
+	}
+	if len(explanation.DenyRules) != 2 {
+		t.Fatalf("expected 2 deny rules, got %+v", explanation.DenyRules)
+	}
+	if explanation.DenyRules[0].RuleID != "deny-a" || explanation.DenyRules[1].RuleID != "deny-b" {
+		t.Fatalf("expected sorted deny rules, got %+v", explanation.DenyRules)
+	}
+	if len(explanation.AllowRuleIDs) != 1 || explanation.AllowRuleIDs[0] != "allow-net" {
+		t.Fatalf("expected allow rule ids retained for preview only, got %+v", explanation.AllowRuleIDs)
+	}
+}

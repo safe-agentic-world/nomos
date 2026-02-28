@@ -51,6 +51,7 @@ type Event struct {
 	SandboxMode           string         `json:"sandbox_mode,omitempty"`
 	NetworkMode           string         `json:"network_mode,omitempty"`
 	CredentialLeaseIDs    []string       `json:"credential_lease_ids,omitempty"`
+	AssuranceLevel        string         `json:"assurance_level,omitempty"`
 	ActionSummary         string         `json:"action_summary,omitempty"`
 	PrevEventHash         string         `json:"prev_event_hash,omitempty"`
 	EventHash             string         `json:"event_hash,omitempty"`

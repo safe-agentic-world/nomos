@@ -14,6 +14,7 @@ import (
 
 	"github.com/safe-agentic-world/nomos/internal/action"
 	"github.com/safe-agentic-world/nomos/internal/approval"
+	"github.com/safe-agentic-world/nomos/internal/assurance"
 	"github.com/safe-agentic-world/nomos/internal/audit"
 	"github.com/safe-agentic-world/nomos/internal/executor"
 	"github.com/safe-agentic-world/nomos/internal/identity"
@@ -24,18 +25,19 @@ import (
 )
 
 type Gateway struct {
-	cfg          Config
-	server       *http.Server
-	listener     net.Listener
-	writer       audit.Recorder
-	policy       *policy.Engine
-	service      *service.Service
-	approvals    *approval.Store
-	auth         *identity.Authenticator
-	actionTokens chan struct{}
-	rateLimiter  *principalLimiter
-	breaker      *principalBreaker
-	now          func() time.Time
+	cfg            Config
+	server         *http.Server
+	listener       net.Listener
+	writer         audit.Recorder
+	policy         *policy.Engine
+	service        *service.Service
+	approvals      *approval.Store
+	auth           *identity.Authenticator
+	actionTokens   chan struct{}
+	rateLimiter    *principalLimiter
+	breaker        *principalBreaker
+	assuranceLevel string
+	now            func() time.Time
 }
 
 func New(cfg Config) (*Gateway, error) {
@@ -89,6 +91,8 @@ func New(cfg Config) (*Gateway, error) {
 	execRunner := executor.NewExecRunner(cfg.Executor.WorkspaceRoot, cfg.Executor.MaxOutputBytes)
 	httpRunner := executor.NewHTTPRunner(cfg.Executor.MaxOutputBytes)
 	svc := service.New(engine, exec, writerExec, patcher, execRunner, httpRunner, writer, redactor, approvalStore, credentialBroker, cfg.Executor.SandboxProfile, time.Now)
+	assuranceLevel := assurance.Derive(cfg.Runtime.DeploymentMode, cfg.Runtime.StrongGuarantee)
+	svc.SetAssuranceLevel(assuranceLevel)
 	authenticator, err := identity.NewAuthenticator(identity.AuthConfig{
 		APIKeys:           cfg.Identity.APIKeys,
 		ServiceSecrets:    cfg.Identity.ServiceSecrets,
@@ -103,16 +107,17 @@ func New(cfg Config) (*Gateway, error) {
 		return nil, err
 	}
 	gw := &Gateway{
-		cfg:          cfg,
-		writer:       writer,
-		policy:       engine,
-		service:      svc,
-		approvals:    approvalStore,
-		auth:         authenticator,
-		actionTokens: make(chan struct{}, limit),
-		rateLimiter:  newPrincipalLimiter(rateLimit, time.Now),
-		breaker:      newPrincipalBreaker(breakerFailures, time.Duration(breakerCooldown)*time.Second, time.Now),
-		now:          time.Now,
+		cfg:            cfg,
+		writer:         writer,
+		policy:         engine,
+		service:        svc,
+		approvals:      approvalStore,
+		auth:           authenticator,
+		actionTokens:   make(chan struct{}, limit),
+		rateLimiter:    newPrincipalLimiter(rateLimit, time.Now),
+		breaker:        newPrincipalBreaker(breakerFailures, time.Duration(breakerCooldown)*time.Second, time.Now),
+		assuranceLevel: assuranceLevel,
+		now:            time.Now,
 	}
 	return gw, nil
 }
@@ -170,6 +175,8 @@ func NewWithRecorder(cfg Config, recorder audit.Recorder, now func() time.Time) 
 	execRunner := executor.NewExecRunner(cfg.Executor.WorkspaceRoot, cfg.Executor.MaxOutputBytes)
 	httpRunner := executor.NewHTTPRunner(cfg.Executor.MaxOutputBytes)
 	svc := service.New(engine, exec, writerExec, patcher, execRunner, httpRunner, recorder, redactor, approvalStore, credentialBroker, cfg.Executor.SandboxProfile, now)
+	assuranceLevel := assurance.Derive(cfg.Runtime.DeploymentMode, cfg.Runtime.StrongGuarantee)
+	svc.SetAssuranceLevel(assuranceLevel)
 	authenticator, err := identity.NewAuthenticator(identity.AuthConfig{
 		APIKeys:           cfg.Identity.APIKeys,
 		ServiceSecrets:    cfg.Identity.ServiceSecrets,
@@ -184,16 +191,17 @@ func NewWithRecorder(cfg Config, recorder audit.Recorder, now func() time.Time) 
 		return nil, err
 	}
 	gw := &Gateway{
-		cfg:          cfg,
-		writer:       recorder,
-		policy:       engine,
-		service:      svc,
-		approvals:    approvalStore,
-		auth:         authenticator,
-		actionTokens: make(chan struct{}, limit),
-		rateLimiter:  newPrincipalLimiter(rateLimit, now),
-		breaker:      newPrincipalBreaker(breakerFailures, time.Duration(breakerCooldown)*time.Second, now),
-		now:          now,
+		cfg:            cfg,
+		writer:         recorder,
+		policy:         engine,
+		service:        svc,
+		approvals:      approvalStore,
+		auth:           authenticator,
+		actionTokens:   make(chan struct{}, limit),
+		rateLimiter:    newPrincipalLimiter(rateLimit, now),
+		breaker:        newPrincipalBreaker(breakerFailures, time.Duration(breakerCooldown)*time.Second, now),
+		assuranceLevel: assuranceLevel,
+		now:            now,
 	}
 	return gw, nil
 }
@@ -368,10 +376,11 @@ func (g *Gateway) respondError(w http.ResponseWriter, status int, code string, m
 
 func (g *Gateway) emitTraceEvent(eventType, traceID, actionID string) {
 	event := audit.Event{
-		Timestamp: g.now().UTC(),
-		EventType: eventType,
-		TraceID:   traceID,
-		ActionID:  actionID,
+		Timestamp:      g.now().UTC(),
+		EventType:      eventType,
+		TraceID:        traceID,
+		ActionID:       actionID,
+		AssuranceLevel: g.assuranceLevel,
 	}
 	_ = g.writer.WriteEvent(event)
 }

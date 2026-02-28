@@ -87,6 +87,7 @@ func (s *Service) emitCompletedAudit(ctx auditContext, started time.Time) {
 	e.SandboxMode = ctx.sandboxMode
 	e.NetworkMode = ctx.networkMode
 	e.CredentialLeaseIDs = ctx.credentialLeaseIDs
+	e.AssuranceLevel = s.assuranceLevel
 	e.ActionSummary = ctx.actionSummary
 	e.ParamsRedactedSummary = ctx.paramsSummary
 	e.ResultRedactedSummary = ctx.resultSummary
@@ -131,6 +132,10 @@ func classifyError(err error) (string, bool) {
 	}
 	msg := strings.ToLower(err.Error())
 	switch {
+	case strings.Contains(msg, "path escape") || strings.Contains(msg, "cwd escape"):
+		return resultSandbox, false
+	case strings.Contains(msg, "redirect") && (strings.Contains(msg, "allowlisted") || strings.Contains(msg, "not allowed") || strings.Contains(msg, "hop limit")):
+		return resultDeniedPolicy, false
 	case strings.Contains(msg, "timeout"):
 		return resultExecTimeout, true
 	case strings.Contains(msg, "normalize"):

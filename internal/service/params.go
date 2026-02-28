@@ -65,6 +65,19 @@ func decodeHTTPParams(raw []byte) (executor.HTTPParams, error) {
 	return params, nil
 }
 
+func redirectPolicyFromObligations(obligations map[string]any) executor.RedirectPolicy {
+	policy := executor.RedirectPolicy{
+		AllowHosts: netAllowlistHosts(obligations),
+	}
+	if enabled, ok := obligations["http_redirects"].(bool); ok {
+		policy.Enabled = enabled
+	}
+	if limit, ok := intObligation(obligations["http_redirect_hop_limit"]); ok {
+		policy.HopLimit = limit
+	}
+	return policy
+}
+
 func decodeCheckoutParams(raw []byte) (checkoutParams, error) {
 	var params checkoutParams
 	if err := decodeStrict(raw, &params); err != nil {
@@ -139,20 +152,46 @@ func matchArgvPrefix(argv []string, prefix []any) bool {
 }
 
 func netAllowed(obligations map[string]any, host string) bool {
-	list, ok := obligations["net_allowlist"]
-	if !ok {
-		return false
-	}
-	items, ok := list.([]any)
-	if !ok {
-		return false
-	}
-	for _, entry := range items {
-		if value, ok := entry.(string); ok && value == host {
+	for _, value := range netAllowlistHosts(obligations) {
+		if value == host {
 			return true
 		}
 	}
 	return false
+}
+
+func netAllowlistHosts(obligations map[string]any) []string {
+	list, ok := obligations["net_allowlist"]
+	if !ok {
+		return nil
+	}
+	items, ok := list.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, entry := range items {
+		if value, ok := entry.(string); ok {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func intObligation(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		if typed != float64(int(typed)) {
+			return 0, false
+		}
+		return int(typed), true
+	default:
+		return 0, false
+	}
 }
 
 func redactSecrets(text string, secrets []string) string {

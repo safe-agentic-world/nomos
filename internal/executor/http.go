@@ -1,10 +1,13 @@
 package executor
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/safe-agentic-world/nomos/internal/normalize"
 )
 
 type HTTPParams struct {
@@ -14,15 +17,30 @@ type HTTPParams struct {
 }
 
 type HTTPResult struct {
-	StatusCode int
-	Body       string
-	Truncated  bool
+	StatusCode    int
+	Body          string
+	Truncated     bool
+	FinalResource string
+	RedirectHops  int
+}
+
+type RedirectPolicy struct {
+	Enabled    bool
+	HopLimit   int
+	AllowHosts []string
 }
 
 type HTTPRunner struct {
 	client   *http.Client
 	maxBytes int
 }
+
+var (
+	ErrRedirectDenied         = errors.New("http redirects are not allowed")
+	ErrRedirectHopLimit       = errors.New("http redirect hop limit exceeded")
+	ErrRedirectDisallowedHost = errors.New("http redirect destination is not allowlisted")
+	ErrRedirectInvalidTarget  = errors.New("http redirect target is invalid")
+)
 
 func NewHTTPRunner(maxBytes int) *HTTPRunner {
 	if maxBytes <= 0 {
@@ -35,6 +53,10 @@ func NewHTTPRunner(maxBytes int) *HTTPRunner {
 }
 
 func (r *HTTPRunner) Do(url string, params HTTPParams) (HTTPResult, error) {
+	return r.DoWithPolicy(url, params, RedirectPolicy{})
+}
+
+func (r *HTTPRunner) DoWithPolicy(url string, params HTTPParams, policy RedirectPolicy) (HTTPResult, error) {
 	if params.Method == "" {
 		params.Method = http.MethodGet
 	}
@@ -46,7 +68,30 @@ func (r *HTTPRunner) Do(url string, params HTTPParams) (HTTPResult, error) {
 	for key, value := range params.Header {
 		req.Header.Set(key, value)
 	}
-	resp, err := r.client.Do(req)
+	client := *r.client
+	redirectHops := 0
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		redirectHops = len(via)
+		if !policy.Enabled {
+			return ErrRedirectDenied
+		}
+		limit := policy.HopLimit
+		if limit <= 0 {
+			limit = 3
+		}
+		if len(via) > limit {
+			return ErrRedirectHopLimit
+		}
+		normalized, err := normalize.NormalizeRedirectURL(next.URL.String())
+		if err != nil {
+			return ErrRedirectInvalidTarget
+		}
+		if !hostAllowlisted(policy.AllowHosts, hostFromNormalizedURL(normalized)) {
+			return ErrRedirectDisallowedHost
+		}
+		return nil
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return HTTPResult{}, err
 	}
@@ -61,10 +106,20 @@ func (r *HTTPRunner) Do(url string, params HTTPParams) (HTTPResult, error) {
 	if truncated {
 		body = body[:r.maxBytes]
 	}
+	finalURL := req.URL.String()
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
+	finalResource, err := normalize.NormalizeRedirectURL(finalURL)
+	if err != nil {
+		return HTTPResult{}, ErrRedirectInvalidTarget
+	}
 	return HTTPResult{
-		StatusCode: resp.StatusCode,
-		Body:       string(body),
-		Truncated:  truncated,
+		StatusCode:    resp.StatusCode,
+		Body:          string(body),
+		Truncated:     truncated,
+		FinalResource: finalResource,
+		RedirectHops:  redirectHops,
 	}, nil
 }
 
@@ -76,4 +131,22 @@ func (r *HTTPRunner) SetClient(client *http.Client) {
 	if client != nil {
 		r.client = client
 	}
+}
+
+func hostAllowlisted(allowHosts []string, host string) bool {
+	for _, allowed := range allowHosts {
+		if strings.TrimSpace(allowed) == host {
+			return true
+		}
+	}
+	return false
+}
+
+func hostFromNormalizedURL(resource string) string {
+	trimmed := strings.TrimPrefix(resource, "url://")
+	idx := strings.Index(trimmed, "/")
+	if idx == -1 {
+		return trimmed
+	}
+	return trimmed[:idx]
 }

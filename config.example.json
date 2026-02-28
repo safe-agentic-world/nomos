@@ -15,13 +15,16 @@
     }
   },
   "runtime": {
-    "stateless_mode": false
+    "stateless_mode": false,
+    "strong_guarantee": false,
+    "deployment_mode": "unmanaged"
   },
   "policy": {
     "policy_bundle_path": ".\\policy-bundle.json",
     "verify_signatures": false,
     "signature_path": "",
-    "public_key_path": ""
+    "public_key_path": "",
+    "explain_suggestions": true
   },
   "executor": {
     "sandbox_enabled": true,

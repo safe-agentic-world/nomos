@@ -8,7 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/safe-agentic-world/nomos/internal/assurance"
 	"github.com/safe-agentic-world/nomos/internal/gateway"
+	"github.com/safe-agentic-world/nomos/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/version"
 )
 
 func TestResolveMCPInvocationFlagPrecedenceOverEnv(t *testing.T) {
@@ -186,6 +190,236 @@ func TestWriteRedactedLine(t *testing.T) {
 	}
 	if !strings.Contains(got, "[REDACTED]") {
 		t.Fatalf("expected redaction marker, got: %q", got)
+	}
+}
+
+func TestDeriveExplainAssuranceFromConfigAndPayload(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["prod"]}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	oidcKeyPath := filepath.Join(dir, "oidc.pub.pem")
+	if err := os.WriteFile(oidcKeyPath, []byte("placeholder"), 0o600); err != nil {
+		t.Fatalf("write oidc key: %v", err)
+	}
+	certPath := filepath.Join(dir, "tls.crt")
+	keyPath := filepath.Join(dir, "tls.key")
+	clientCAPath := filepath.Join(dir, "client-ca.pem")
+	for _, p := range []string{certPath, keyPath, clientCAPath} {
+		if err := os.WriteFile(p, []byte("placeholder"), 0o600); err != nil {
+			t.Fatalf("write tls placeholder: %v", err)
+		}
+	}
+	configPath := filepath.Join(dir, "config.json")
+	cfg := map[string]any{
+		"gateway": map[string]any{
+			"listen":    ":8080",
+			"transport": "http",
+			"tls": map[string]any{
+				"enabled":        true,
+				"cert_file":      certPath,
+				"key_file":       keyPath,
+				"client_ca_file": clientCAPath,
+				"require_mtls":   true,
+			},
+		},
+		"runtime": map[string]any{
+			"stateless_mode":   false,
+			"strong_guarantee": true,
+			"deployment_mode":  "k8s",
+		},
+		"policy": map[string]any{"policy_bundle_path": bundlePath},
+		"executor": map[string]any{
+			"sandbox_enabled": true,
+			"sandbox_profile": "container",
+			"workspace_root":  dir,
+		},
+		"credentials": map[string]any{"enabled": false, "secrets": []any{}},
+		"audit":       map[string]any{"sink": "stdout"},
+		"mcp":         map[string]any{"enabled": true},
+		"upstream":    map[string]any{"routes": []any{}},
+		"approvals":   map[string]any{"enabled": false},
+		"identity": map[string]any{
+			"principal":       "system",
+			"agent":           "nomos",
+			"environment":     "prod",
+			"api_keys":        map[string]any{"prod-api-key": "system"},
+			"service_secrets": map[string]any{},
+			"agent_secrets":   map[string]any{"nomos": "prod-agent-secret"},
+			"oidc": map[string]any{
+				"enabled":         true,
+				"issuer":          "https://issuer.example",
+				"audience":        "nomos",
+				"public_key_path": oidcKeyPath,
+			},
+		},
+		"redaction": map[string]any{"patterns": []any{}},
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	level, err := deriveExplainAssurance(configPath, bundlePath, func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("derive assurance: %v", err)
+	}
+	if level != assurance.LevelStrong {
+		t.Fatalf("expected STRONG, got %s", level)
+	}
+	payload := buildPolicyExplainPayload(policy.ExplainDetails{
+		Decision: policy.Decision{
+			Decision:         policy.DecisionAllow,
+			ReasonCode:       "allow_by_rule",
+			MatchedRuleIDs:   []string{"r1"},
+			PolicyBundleHash: "hash",
+		},
+		ObligationsPreview: map[string]any{},
+	}, normalize.NormalizedAction{
+		ActionType: "fs.read",
+		Resource:   "file://workspace/README.md",
+	}, explainSettings{
+		AssuranceLevel:     level,
+		SuggestRemediation: true,
+	})
+	if payload["assurance_level"] != assurance.LevelStrong {
+		t.Fatalf("expected assurance_level in payload, got %+v", payload)
+	}
+}
+
+func TestDeriveExplainAssuranceDefaultsToUnmanagedWithoutConfig(t *testing.T) {
+	level, err := deriveExplainAssurance("", "", func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("derive assurance: %v", err)
+	}
+	if level != assurance.LevelBestEffort {
+		t.Fatalf("expected BEST_EFFORT, got %s", level)
+	}
+}
+
+func TestPolicyExplainGoldenStability(t *testing.T) {
+	payload := buildPolicyExplainPayload(policy.ExplainDetails{
+		Decision: policy.Decision{
+			Decision:         policy.DecisionDeny,
+			ReasonCode:       "deny_by_default",
+			MatchedRuleIDs:   []string{},
+			PolicyBundleHash: "bundle-hash",
+		},
+		DenyRules:              []policy.DeniedRuleExplanation{},
+		AllowRuleIDs:           []string{},
+		RequireApprovalRuleIDs: []string{},
+		ObligationsPreview:     map[string]any{},
+	}, normalize.NormalizedAction{
+		ActionType: "net.http_request",
+		Resource:   "url://example.com/path",
+	}, explainSettings{
+		AssuranceLevel:     assurance.LevelGuarded,
+		SuggestRemediation: true,
+	})
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	expected := "{\n  \"assurance_level\": \"GUARDED\",\n  \"decision\": \"DENY\",\n  \"engine_version\": \"" + version.Current().Version + "\",\n  \"matched_rule_ids\": [],\n  \"minimal_allowing_change\": \"This host is not currently allowed; use an allowlisted host, request approval, or update the network allowlist for example.com.\",\n  \"obligations_preview\": {},\n  \"policy_bundle_hash\": \"bundle-hash\",\n  \"reason_code\": \"deny_by_default\",\n  \"why_denied\": {\n    \"deny_rules\": [],\n    \"matched_conditions\": {\n      \"matching_allow_rule\": false\n    },\n    \"reason_code\": \"deny_by_default\",\n    \"remediation_hint\": \"This network destination is not currently allowed.\"\n  }\n}"
+	if string(data) != expected {
+		t.Fatalf("unexpected explain payload\nexpected:\n%s\n\ngot:\n%s", expected, string(data))
+	}
+}
+
+func TestPolicyExplainNoSecretLeakInOutput(t *testing.T) {
+	payload := buildPolicyExplainPayload(policy.ExplainDetails{
+		Decision: policy.Decision{
+			Decision:         policy.DecisionDeny,
+			ReasonCode:       "deny_by_default",
+			MatchedRuleIDs:   []string{},
+			PolicyBundleHash: "bundle-hash",
+		},
+		ObligationsPreview: map[string]any{},
+	}, normalize.NormalizedAction{
+		ActionType: "net.http_request",
+		Resource:   "url://example.com/path",
+		Params:     []byte(`{"headers":{"Authorization":"Bearer secret-value-123"}}`),
+	}, explainSettings{
+		AssuranceLevel:     assurance.LevelBestEffort,
+		SuggestRemediation: true,
+	})
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	text := string(data)
+	if strings.Contains(text, "secret-value-123") || strings.Contains(strings.ToLower(text), "authorization") {
+		t.Fatalf("explain output leaked sensitive header data: %s", text)
+	}
+}
+
+func TestDeriveExplainSettingsCanDisableSuggestion(t *testing.T) {
+	settings, err := deriveExplainSettings("", "", func(key string) string {
+		switch key {
+		case "NOMOS_POLICY_EXPLAIN_SUGGESTIONS":
+			return "false"
+		default:
+			return ""
+		}
+	})
+	if err != nil {
+		t.Fatalf("derive settings: %v", err)
+	}
+	if settings.SuggestRemediation {
+		t.Fatal("expected remediation suggestions disabled")
+	}
+}
+
+func TestDeriveExplainSettingsRespectsConfigDisable(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	configPath := filepath.Join(dir, "config.json")
+	cfg := map[string]any{
+		"gateway": map[string]any{"listen": ":8080", "transport": "http"},
+		"runtime": map[string]any{"stateless_mode": false},
+		"policy": map[string]any{
+			"policy_bundle_path":  bundlePath,
+			"explain_suggestions": false,
+		},
+		"executor": map[string]any{
+			"sandbox_enabled": false,
+			"workspace_root":  dir,
+		},
+		"credentials": map[string]any{"enabled": false, "secrets": []any{}},
+		"audit":       map[string]any{"sink": "stdout"},
+		"mcp":         map[string]any{"enabled": false},
+		"upstream":    map[string]any{"routes": []any{}},
+		"approvals":   map[string]any{"enabled": false},
+		"identity": map[string]any{
+			"principal":       "system",
+			"agent":           "nomos",
+			"environment":     "dev",
+			"api_keys":        map[string]any{"dev-api-key": "system"},
+			"service_secrets": map[string]any{},
+			"agent_secrets":   map[string]any{"nomos": "dev-agent-secret"},
+			"oidc":            map[string]any{"enabled": false, "issuer": "", "audience": "", "public_key_path": ""},
+		},
+		"redaction": map[string]any{"patterns": []any{}},
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	settings, err := deriveExplainSettings(configPath, bundlePath, func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("derive settings: %v", err)
+	}
+	if settings.SuggestRemediation {
+		t.Fatal("expected remediation suggestions disabled by config")
 	}
 }
 
