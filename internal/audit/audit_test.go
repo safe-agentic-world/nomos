@@ -185,3 +185,16 @@ func TestChainHashGoldenVector(t *testing.T) {
 		t.Fatalf("golden mismatch: got %s want %s", got.EventHash, expected)
 	}
 }
+
+func TestWithChainHashRejectsOversizedInput(t *testing.T) {
+	event := Event{
+		SchemaVersion: "v1",
+		Timestamp:     time.Date(2026, 2, 26, 12, 0, 0, 0, time.UTC),
+		EventType:     "action.completed",
+		TraceID:       "trace-oversize",
+	}
+	prevHash := strings.Repeat("a", maxChainHashInputBytes+1)
+	if _, err := withChainHash(event, prevHash); err == nil {
+		t.Fatal("expected oversized chain hash input to be rejected")
+	}
+}

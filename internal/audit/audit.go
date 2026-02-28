@@ -19,6 +19,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const maxChainHashInputBytes = 64 << 20
+
 type Event struct {
 	SchemaVersion         string         `json:"schema_version,omitempty"`
 	Timestamp             time.Time      `json:"timestamp"`
@@ -271,11 +273,21 @@ func withChainHash(event Event, prevHash string) (Event, error) {
 	if err != nil {
 		return Event{}, err
 	}
+	if len(payload) > maxChainHashInputBytes {
+		return Event{}, errors.New("audit event payload exceeds limit")
+	}
 	canonical, err := canonicaljson.Canonicalize(payload)
 	if err != nil {
 		return Event{}, err
 	}
-	data := make([]byte, 0, len(canonical)+len(prevHash))
+	if len(canonical) > maxChainHashInputBytes || len(prevHash) > maxChainHashInputBytes {
+		return Event{}, errors.New("audit chain hash input exceeds limit")
+	}
+	totalLen := int64(len(canonical)) + int64(len(prevHash))
+	if totalLen > maxChainHashInputBytes {
+		return Event{}, errors.New("audit chain hash input exceeds limit")
+	}
+	data := make([]byte, 0, int(totalLen))
 	data = append(data, canonical...)
 	data = append(data, []byte(prevHash)...)
 	event.EventHash = canonicaljson.HashSHA256(data)
