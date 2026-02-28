@@ -60,6 +60,30 @@ jobs:
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
 
+  workflow-lint:
+    name: Workflow Lint
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@latest
+
+      - name: Lint workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$(go env GOPATH)/bin/actionlint"
+
   lint-and-static:
     name: Lint And Static Analysis
     if: github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
@@ -219,6 +243,41 @@ jobs:
           tags: nomos:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release-dry-run:
+    name: Release Dry Run
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Dry-run release build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          VERSION="v0.0.0-dry-run"
+          COMMIT="${GITHUB_SHA::12}"
+          BUILD_DATE="1970-01-01T00:00:00Z"
+          for target in "linux amd64" "windows amd64 .exe" "darwin amd64"; do
+            set -- ${target}
+            GOOS_TARGET="$1"
+            GOARCH_TARGET="$2"
+            EXT="${3:-}"
+            OUT="dist/nomos-${VERSION}-${GOOS_TARGET}-${GOARCH_TARGET}${EXT}"
+            GOOS="${GOOS_TARGET}" GOARCH="${GOARCH_TARGET}" \
+              go build -ldflags "-X github.com/safe-agentic-world/nomos/internal/version.Version=${VERSION} -X github.com/safe-agentic-world/nomos/internal/version.Commit=${COMMIT} -X github.com/safe-agentic-world/nomos/internal/version.BuildDate=${BUILD_DATE}" \
+              -o "${OUT}" ./cmd/nomos
+            sha256sum "${OUT}" > "${OUT}.sha256"
+          done
 
   release-binaries:
     name: Release Binaries

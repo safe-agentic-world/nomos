@@ -93,79 +93,116 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Create tag from successful main workflow
-        shell: bash
-        run: |
-          set -euo pipefail
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const headSha = context.payload.workflow_run.head_sha;
 
-          if git tag --points-at HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -q .; then
-            echo "HEAD already has a semantic version tag; skipping."
-            exit 0
-          fi
+            function determineBump(message) {
+              const [subject, ...rest] = message.split("\n");
+              const body = rest.join("\n");
+              const header = subject.includes(":") ? subject.slice(0, subject.indexOf(":")) : subject;
+              const type = header.includes("(") ? header.slice(0, header.indexOf("(")).replace(/!$/, "") : header.replace(/!$/, "");
 
-          subject="$(git log -1 --pretty=%s)"
-          body="$(git log -1 --pretty=%B)"
-          bump=""
-          header="${subject%%:*}"
-          type="${header%%(*}"
-          type="${type%!}"
+              if (body.includes("BREAKING CHANGE:") || header.endsWith("!")) {
+                return { bump: "major", subject };
+              }
+              if (type === "feat") {
+                return { bump: "minor", subject };
+              }
+              if (type === "fix") {
+                return { bump: "patch", subject };
+              }
+              return { bump: "", subject };
+            }
 
-          if grep -q 'BREAKING CHANGE:' <<<"${body}" || [[ "${header}" == *"!" ]]; then
-            bump="major"
-          else
-            case "${type}" in
-              feat)
-                bump="minor"
-                ;;
-              fix)
-                bump="patch"
-                ;;
-            esac
-          fi
+            function compareVersions(a, b) {
+              for (let i = 0; i < 3; i += 1) {
+                if (a[i] !== b[i]) {
+                  return a[i] - b[i];
+                }
+              }
+              return 0;
+            }
 
-          if [[ -z "${bump}" ]]; then
-            echo "Commit does not request a semantic release tag; skipping."
-            echo "Latest commit: ${subject}"
-            exit 0
-          fi
+            const commitResponse = await github.rest.repos.getCommit({
+              owner,
+              repo,
+              ref: headSha,
+            });
+            const commitMessage = commitResponse.data.commit.message;
+            const { bump, subject } = determineBump(commitMessage);
 
-          latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n1)"
-          if [[ -z "${latest_tag}" ]]; then
-            latest_tag="v0.0.0"
-          fi
+            if (!bump) {
+              core.info(`Commit does not request a semantic release tag; skipping. Latest commit: ${subject}`);
+              return;
+            }
 
-          version="${latest_tag#v}"
-          IFS='.' read -r major minor patch <<<"${version}"
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner,
+              repo,
+              ref: "tags/v",
+            });
 
-          case "${bump}" in
-            major)
-              major=$((major + 1))
-              minor=0
-              patch=0
-              ;;
-            minor)
-              minor=$((minor + 1))
-              patch=0
-              ;;
-            patch)
-              patch=$((patch + 1))
-              ;;
-          esac
+            for (const ref of refs) {
+              if (!/^refs\/tags\/v\d+\.\d+\.\d+$/.test(ref.ref)) {
+                continue;
+              }
+              if (ref.object.type === "commit" && ref.object.sha === headSha) {
+                core.info("HEAD already has a semantic version tag; skipping.");
+                return;
+              }
+              if (ref.object.type === "tag") {
+                const tagObject = await github.rest.git.getTag({
+                  owner,
+                  repo,
+                  tag_sha: ref.object.sha,
+                });
+                if (tagObject.data.object.type === "commit" && tagObject.data.object.sha === headSha) {
+                  core.info("HEAD already has a semantic version tag; skipping.");
+                  return;
+                }
+              }
+            }
 
-          next_tag="v${major}.${minor}.${patch}"
-          echo "Computed release tag ${next_tag} from commit: ${subject}"
+            let latest = [0, 0, 0];
+            for (const ref of refs) {
+              const match = ref.ref.match(/^refs\/tags\/v(\d+)\.(\d+)\.(\d+)$/);
+              if (!match) {
+                continue;
+              }
+              const version = match.slice(1).map((value) => Number.parseInt(value, 10));
+              if (compareVersions(version, latest) > 0) {
+                latest = version;
+              }
+            }
 
-          echo "Creating ${next_tag}"
-          git tag -a "${next_tag}" -m "${next_tag}"
-          git push origin "${next_tag}"
+            if (bump === "major") {
+              latest = [latest[0] + 1, 0, 0];
+            } else if (bump === "minor") {
+              latest = [latest[0], latest[1] + 1, 0];
+            } else {
+              latest = [latest[0], latest[1], latest[2] + 1];
+            }
+
+            const nextTag = `v${latest[0]}.${latest[1]}.${latest[2]}`;
+            core.info(`Computed release tag ${nextTag} from commit: ${subject}`);
+
+            const tagObject = await github.rest.git.createTag({
+              owner,
+              repo,
+              tag: nextTag,
+              message: nextTag,
+              object: headSha,
+              type: "commit",
+            });
+
+            await github.rest.git.createRef({
+              owner,
+              repo,
+              ref: `refs/tags/${nextTag}`,
+              sha: tagObject.data.sha,
+            });
