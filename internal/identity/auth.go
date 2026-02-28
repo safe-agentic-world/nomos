@@ -82,8 +82,8 @@ func (a *Authenticator) verifyAPIKey(req *http.Request) (string, bool) {
 }
 
 func (a *Authenticator) verifyServiceSignature(req *http.Request, body []byte) (string, bool) {
-	serviceID := strings.TrimSpace(req.Header.Get("X-Janus-Service-Id"))
-	signature := strings.TrimSpace(req.Header.Get("X-Janus-Service-Signature"))
+	serviceID := strings.TrimSpace(req.Header.Get("X-Nomos-Service-Id"))
+	signature := strings.TrimSpace(req.Header.Get("X-Nomos-Service-Signature"))
 	if serviceID == "" || signature == "" {
 		return "", false
 	}
@@ -146,8 +146,8 @@ func audienceContains(audiences []string, wanted string) bool {
 }
 
 func (a *Authenticator) verifyAgent(req *http.Request, body []byte) (string, error) {
-	agentID := strings.TrimSpace(req.Header.Get("X-Janus-Agent-Id"))
-	signature := strings.TrimSpace(req.Header.Get("X-Janus-Agent-Signature"))
+	agentID := strings.TrimSpace(req.Header.Get("X-Nomos-Agent-Id"))
+	signature := strings.TrimSpace(req.Header.Get("X-Nomos-Agent-Signature"))
 	if agentID == "" || signature == "" {
 		return "", errors.New("agent authentication failed")
 	}

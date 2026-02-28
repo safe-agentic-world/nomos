@@ -11,13 +11,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/audit"
-	"github.com/safe-agentic-world/janus/internal/executor"
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/service"
-	"github.com/safe-agentic-world/janus/internal/version"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/audit"
+	"github.com/safe-agentic-world/nomos/internal/executor"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/service"
+	"github.com/safe-agentic-world/nomos/internal/version"
 )
 
 type Server struct {
@@ -219,7 +219,7 @@ func (s *Server) handleRPCPayload(payload []byte) *rpcResponse {
 					"tools": map[string]any{},
 				},
 				"serverInfo": map[string]any{
-					"name":    "janus",
+					"name":    "nomos",
 					"version": version.Current().Version,
 				},
 			},
@@ -299,12 +299,12 @@ func (s *Server) handleToolsCall(req rpcRequest) (string, error) {
 
 func (s *Server) toolsList() []map[string]any {
 	return []map[string]any{
-		{"name": "janus.capabilities", "description": "Return policy-derived capability envelope", "inputSchema": map[string]any{"type": "object", "additionalProperties": false}},
-		{"name": "janus.fs_read", "description": "Read a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}}, "required": []string{"resource"}, "additionalProperties": false}},
-		{"name": "janus.fs_write", "description": "Write a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"resource", "content"}, "additionalProperties": false}},
-		{"name": "janus.apply_patch", "description": "Apply deterministic patch payload", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}, "additionalProperties": false}},
-		{"name": "janus.exec", "description": "Run a bounded process action", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"argv": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "cwd": map[string]any{"type": "string"}, "env_allowlist_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"argv"}, "additionalProperties": false}},
-		{"name": "janus.http_request", "description": "Run a policy-gated HTTP request", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "method": map[string]any{"type": "string"}, "body": map[string]any{"type": "string"}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}}, "required": []string{"resource"}, "additionalProperties": false}},
+		{"name": "nomos.capabilities", "description": "Return policy-derived capability envelope", "inputSchema": map[string]any{"type": "object", "additionalProperties": false}},
+		{"name": "nomos.fs_read", "description": "Read a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}}, "required": []string{"resource"}, "additionalProperties": false}},
+		{"name": "nomos.fs_write", "description": "Write a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"resource", "content"}, "additionalProperties": false}},
+		{"name": "nomos.apply_patch", "description": "Apply deterministic patch payload", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}, "additionalProperties": false}},
+		{"name": "nomos.exec", "description": "Run a bounded process action", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"argv": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "cwd": map[string]any{"type": "string"}, "env_allowlist_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"argv"}, "additionalProperties": false}},
+		{"name": "nomos.http_request", "description": "Run a policy-gated HTTP request", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "method": map[string]any{"type": "string"}, "body": map[string]any{"type": "string"}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}}, "required": []string{"resource"}, "additionalProperties": false}},
 		{"name": "repo.validate_change_set", "description": "Validate changed repo paths against policy", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"paths": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"paths"}, "additionalProperties": false}},
 	}
 }
@@ -381,17 +381,17 @@ func parseRPCID(raw json.RawMessage) interface{} {
 }
 
 func (s *Server) handleRequest(req Request) Response {
-	if req.Method != "janus.fs_read" {
+	if req.Method != "nomos.fs_read" {
 		switch req.Method {
-		case "janus.capabilities":
+		case "nomos.capabilities":
 			return s.handleCapabilities(req)
-		case "janus.fs_write":
+		case "nomos.fs_write":
 			return s.handleFSWrite(req)
-		case "janus.apply_patch":
+		case "nomos.apply_patch":
 			return s.handleApplyPatch(req)
-		case "janus.exec":
+		case "nomos.exec":
 			return s.handleExec(req)
-		case "janus.http_request":
+		case "nomos.http_request":
 			return s.handleHTTPRequest(req)
 		case "repo.validate_change_set":
 			return s.handleValidateChangeSet(req)
@@ -426,7 +426,7 @@ func (s *Server) handleRequest(req Request) Response {
 }
 
 func (s *Server) handleFSWrite(req Request) Response {
-	if !s.toolEnabled("janus.fs_write") {
+	if !s.toolEnabled("nomos.fs_write") {
 		return Response{ID: req.ID, Error: "denied_policy"}
 	}
 	var params fsWriteParams
@@ -456,7 +456,7 @@ func (s *Server) handleFSWrite(req Request) Response {
 }
 
 func (s *Server) handleApplyPatch(req Request) Response {
-	if !s.toolEnabled("janus.apply_patch") {
+	if !s.toolEnabled("nomos.apply_patch") {
 		return Response{ID: req.ID, Error: "denied_policy"}
 	}
 	var params patchParams
@@ -486,7 +486,7 @@ func (s *Server) handleApplyPatch(req Request) Response {
 }
 
 func (s *Server) handleExec(req Request) Response {
-	if !s.toolEnabled("janus.exec") {
+	if !s.toolEnabled("nomos.exec") {
 		return Response{ID: req.ID, Error: "denied_policy"}
 	}
 	var params execParams
@@ -516,7 +516,7 @@ func (s *Server) handleExec(req Request) Response {
 }
 
 func (s *Server) handleHTTPRequest(req Request) Response {
-	if !s.toolEnabled("janus.http_request") {
+	if !s.toolEnabled("nomos.http_request") {
 		return Response{ID: req.ID, Error: "denied_policy"}
 	}
 	var params httpParams
@@ -549,7 +549,7 @@ func (s *Server) handleCapabilities(req Request) Response {
 	tools := s.service.EnabledTools(s.identity)
 	networkMode := "deny"
 	for _, tool := range tools {
-		if tool == "janus.http_request" {
+		if tool == "nomos.http_request" {
 			networkMode = "allowlist"
 			break
 		}

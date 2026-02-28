@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/action"
 )
 
 func TestNormalizeFileTraversalRejected(t *testing.T) {
@@ -17,7 +17,7 @@ func TestNormalizeFileTraversalRejected(t *testing.T) {
 		Resource:      "file://workspace/dir/../secret.txt",
 		Params:        []byte(`{}`),
 		Principal:     "system",
-		Agent:         "janus",
+		Agent:         "nomos",
 		Environment:   "dev",
 		TraceID:       "trace1",
 		Context:       action.Context{},
@@ -35,7 +35,7 @@ func TestNormalizeRejectsSymlinkEscapeLikeTraversal(t *testing.T) {
 		Resource:      "file://workspace/link/../outside",
 		Params:        []byte(`{}`),
 		Principal:     "system",
-		Agent:         "janus",
+		Agent:         "nomos",
 		Environment:   "dev",
 		TraceID:       "trace1",
 		Context:       action.Context{},
@@ -53,7 +53,7 @@ func TestNormalizeEquivalentURIs(t *testing.T) {
 		Resource:      "file://workspace//a/b",
 		Params:        []byte(`{}`),
 		Principal:     "system",
-		Agent:         "janus",
+		Agent:         "nomos",
 		Environment:   "dev",
 		TraceID:       "trace1",
 		Context:       action.Context{},
@@ -74,7 +74,7 @@ func TestNormalizeURLHostLowercase(t *testing.T) {
 		Resource:      "url://Example.COM:80/path",
 		Params:        []byte(`{}`),
 		Principal:     "system",
-		Agent:         "janus",
+		Agent:         "nomos",
 		Environment:   "dev",
 		TraceID:       "trace1",
 		Context:       action.Context{},
@@ -95,7 +95,7 @@ func TestNormalizeRepoLowercase(t *testing.T) {
 		Resource:      "repo://Org/Service",
 		Params:        []byte(`{}`),
 		Principal:     "system",
-		Agent:         "janus",
+		Agent:         "nomos",
 		Environment:   "dev",
 		TraceID:       "trace1",
 		Context:       action.Context{},

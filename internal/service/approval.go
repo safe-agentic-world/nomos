@@ -8,9 +8,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/canonicaljson"
-	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/canonicaljson"
+	"github.com/safe-agentic-world/nomos/internal/normalize"
 )
 
 type approvalContext struct {

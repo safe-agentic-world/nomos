@@ -15,15 +15,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/doctor"
-	"github.com/safe-agentic-world/janus/internal/gateway"
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/mcp"
-	"github.com/safe-agentic-world/janus/internal/normalize"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/redact"
-	"github.com/safe-agentic-world/janus/internal/version"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/doctor"
+	"github.com/safe-agentic-world/nomos/internal/gateway"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/mcp"
+	"github.com/safe-agentic-world/nomos/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/version"
 )
 
 func main() {
@@ -78,7 +78,7 @@ func runServe(args []string) {
 		log.Fatalf("init gateway: %v", err)
 	}
 
-	log.Printf("janus gateway listening on %s (%s)", cfg.Gateway.Listen, cfg.Gateway.Transport)
+	log.Printf("nomos gateway listening on %s (%s)", cfg.Gateway.Listen, cfg.Gateway.Transport)
 	if err := gw.Start(); err != nil {
 		log.Fatalf("gateway start: %v", err)
 	}
@@ -130,7 +130,7 @@ func runMCP(args []string) {
 		log.Fatalf("load config: %v", err)
 	}
 	if strings.EqualFold(resolved.LogLevelSource, "env") && strings.EqualFold(resolved.LogLevel, "debug") {
-		log.Printf("mcp log-level resolved from env JANUS_LOG_LEVEL")
+		log.Printf("mcp log-level resolved from env NOMOS_LOG_LEVEL")
 	}
 	id := identity.VerifiedIdentity{
 		Principal:   cfg.Identity.Principal,
@@ -256,12 +256,12 @@ func runDoctorCommand(args []string, stdout io.Writer, stderr io.Writer, getenv 
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	configResolved, _, err := resolvePathOption(configPath, getenv("JANUS_CONFIG"), "--config/-c", "JANUS_CONFIG", true)
+	configResolved, _, err := resolvePathOption(configPath, getenv("NOMOS_CONFIG"), "--config/-c", "NOMOS_CONFIG", true)
 	if err != nil {
 		writeRedactedLine(stderr, err.Error())
 		return 1
 	}
-	bundleResolved, _, err := resolvePathOption(policyBundle, getenv("JANUS_POLICY_BUNDLE"), "--policy-bundle/-p", "JANUS_POLICY_BUNDLE", false)
+	bundleResolved, _, err := resolvePathOption(policyBundle, getenv("NOMOS_POLICY_BUNDLE"), "--policy-bundle/-p", "NOMOS_POLICY_BUNDLE", false)
 	if err != nil {
 		writeRedactedLine(stderr, err.Error())
 		return 1
@@ -310,11 +310,11 @@ type resolvedMCPInvocation struct {
 }
 
 func resolveServeInvocation(configFlag, policyFlag string, getenv func(string) string) (resolvedServeInvocation, error) {
-	configRaw, _, err := resolvePathOption(configFlag, getenv("JANUS_CONFIG"), "--config/-c", "JANUS_CONFIG", true)
+	configRaw, _, err := resolvePathOption(configFlag, getenv("NOMOS_CONFIG"), "--config/-c", "NOMOS_CONFIG", true)
 	if err != nil {
 		return resolvedServeInvocation{}, err
 	}
-	bundleRaw, _, err := resolvePathOption(policyFlag, getenv("JANUS_POLICY_BUNDLE"), "--policy-bundle/-p", "JANUS_POLICY_BUNDLE", false)
+	bundleRaw, _, err := resolvePathOption(policyFlag, getenv("NOMOS_POLICY_BUNDLE"), "--policy-bundle/-p", "NOMOS_POLICY_BUNDLE", false)
 	if err != nil {
 		return resolvedServeInvocation{}, err
 	}
@@ -325,15 +325,15 @@ func resolveServeInvocation(configFlag, policyFlag string, getenv func(string) s
 }
 
 func resolveMCPInvocation(configFlag, policyFlag, logLevelFlag string, quiet bool, getenv func(string) string) (resolvedMCPInvocation, error) {
-	configRaw, _, err := resolvePathOption(configFlag, getenv("JANUS_CONFIG"), "--config/-c", "JANUS_CONFIG", true)
+	configRaw, _, err := resolvePathOption(configFlag, getenv("NOMOS_CONFIG"), "--config/-c", "NOMOS_CONFIG", true)
 	if err != nil {
 		return resolvedMCPInvocation{}, err
 	}
-	bundleRaw, _, err := resolvePathOption(policyFlag, getenv("JANUS_POLICY_BUNDLE"), "--policy-bundle/-p", "JANUS_POLICY_BUNDLE", false)
+	bundleRaw, _, err := resolvePathOption(policyFlag, getenv("NOMOS_POLICY_BUNDLE"), "--policy-bundle/-p", "NOMOS_POLICY_BUNDLE", false)
 	if err != nil {
 		return resolvedMCPInvocation{}, err
 	}
-	level, source := resolveValue(logLevelFlag, getenv("JANUS_LOG_LEVEL"))
+	level, source := resolveValue(logLevelFlag, getenv("NOMOS_LOG_LEVEL"))
 	if level == "" {
 		level = "info"
 		source = "default"
@@ -386,42 +386,42 @@ func resolveAbsolutePath(path string) (string, error) {
 }
 
 func rootHelpText() string {
-	return "janus commands:\n" +
+	return "nomos commands:\n" +
 		"  version    print build metadata\n" +
 		"  serve      start gateway server\n" +
 		"  mcp        start MCP stdio server\n" +
 		"  policy     policy test/explain\n" +
 		"  doctor     deterministic preflight checks\n\n" +
 		"example:\n" +
-		"  janus mcp -c config.example.json -p policies/m1_5_minimal.json\n"
+		"  nomos mcp -c config.example.json -p policies/m1_5_minimal.json\n"
 }
 
 func serveHelpText() string {
-	return "usage: janus serve [flags]\n" +
-		"  -c, --config <path>          config json path (or JANUS_CONFIG)\n" +
-		"  -p, --policy-bundle <path>   policy bundle path (or JANUS_POLICY_BUNDLE)\n\n" +
+	return "usage: nomos serve [flags]\n" +
+		"  -c, --config <path>          config json path (or NOMOS_CONFIG)\n" +
+		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n\n" +
 		"example:\n" +
-		"  janus serve -c config.example.json -p policies/m1_5_minimal.json\n"
+		"  nomos serve -c config.example.json -p policies/m1_5_minimal.json\n"
 }
 
 func mcpHelpText() string {
-	return "usage: janus mcp [flags]\n" +
-		"  -c, --config <path>          config json path (or JANUS_CONFIG)\n" +
-		"  -p, --policy-bundle <path>   policy bundle path (or JANUS_POLICY_BUNDLE)\n" +
-		"  -l, --log-level <level>      error|warn|info|debug (or JANUS_LOG_LEVEL)\n" +
+	return "usage: nomos mcp [flags]\n" +
+		"  -c, --config <path>          config json path (or NOMOS_CONFIG)\n" +
+		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n" +
+		"  -l, --log-level <level>      error|warn|info|debug (or NOMOS_LOG_LEVEL)\n" +
 		"  -q, --quiet                  suppress banner and non-error logs\n" +
 		"      --log-format <format>    text|json\n\n" +
 		"example:\n" +
-		"  janus mcp -c config.example.json -p policies/m1_5_minimal.json\n"
+		"  nomos mcp -c config.example.json -p policies/m1_5_minimal.json\n"
 }
 
 func doctorHelpText() string {
-	return "usage: janus doctor [flags]\n" +
-		"  -c, --config <path>          config json path (or JANUS_CONFIG)\n" +
-		"  -p, --policy-bundle <path>   policy bundle path (or JANUS_POLICY_BUNDLE)\n" +
+	return "usage: nomos doctor [flags]\n" +
+		"  -c, --config <path>          config json path (or NOMOS_CONFIG)\n" +
+		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n" +
 		"      --format <format>        text|json\n\n" +
 		"example:\n" +
-		"  janus doctor -c config.example.json --format json\n"
+		"  nomos doctor -c config.example.json --format json\n"
 }
 
 func writeRedactedLine(w io.Writer, value string) {

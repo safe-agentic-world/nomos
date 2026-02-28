@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Janus is pre-`v1.0.0`. Security fixes are applied to the latest `main` branch state.
+Nomos is pre-`v1.0.0`. Security fixes are applied to the latest `main` branch state.
 
 ## Reporting a Vulnerability
 

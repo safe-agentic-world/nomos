@@ -25,8 +25,8 @@ func TestAuthenticatorAPIKeyAndAgent(t *testing.T) {
 	body := []byte(`{"schema_version":"v1","action_id":"act1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/action", nil)
 	req.Header.Set("Authorization", "Bearer key1")
-	req.Header.Set("X-Janus-Agent-Id", "agent1")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("secret1", body))
+	req.Header.Set("X-Nomos-Agent-Id", "agent1")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("secret1", body))
 
 	id, err := auth.Verify(req, body)
 	if err != nil {
@@ -52,10 +52,10 @@ func TestAuthenticatorServiceSignature(t *testing.T) {
 	}
 	body := []byte(`{"schema_version":"v1","action_id":"act1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/action", nil)
-	req.Header.Set("X-Janus-Service-Id", "service1")
-	req.Header.Set("X-Janus-Service-Signature", hmacHex("svc-secret", body))
-	req.Header.Set("X-Janus-Agent-Id", "agent1")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", body))
+	req.Header.Set("X-Nomos-Service-Id", "service1")
+	req.Header.Set("X-Nomos-Service-Signature", hmacHex("svc-secret", body))
+	req.Header.Set("X-Nomos-Agent-Id", "agent1")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", body))
 
 	id, err := auth.Verify(req, body)
 	if err != nil {

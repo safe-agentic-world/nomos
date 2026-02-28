@@ -1,13 +1,13 @@
 # Integration Kit (M11)
 
-This guide covers agent integration for Janus using MCP stdio mode.
+This guide covers agent integration for Nomos using MCP stdio mode.
 
 ## Codex Setup
 
-1. Build Janus:
+1. Build Nomos:
 
 ```powershell
-& "C:\Program Files\Go\bin\go.exe" build -o .\bin\janus.exe .\cmd\janus
+& "C:\Program Files\Go\bin\go.exe" build -o .\bin\nomos.exe .\cmd\nomos
 ```
 
 2. Prepare config and bundle:
@@ -17,7 +17,7 @@ This guide covers agent integration for Janus using MCP stdio mode.
 3. Start MCP server:
 
 ```powershell
-.\bin\janus.exe mcp --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe mcp --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
 ```
 
 4. Configure Codex MCP client to launch the command above over stdio.
@@ -26,13 +26,13 @@ This guide covers agent integration for Janus using MCP stdio mode.
 
 OpenClaw uses the same MCP stdio contract.
 
-1. Start Janus with:
+1. Start Nomos with:
 
 ```powershell
-.\bin\janus.exe mcp --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe mcp --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
 ```
 
-2. Register Janus in OpenClaw MCP server config with command `.\bin\janus.exe` and args:
+2. Register Nomos in OpenClaw MCP server config with command `.\bin\nomos.exe` and args:
 - `mcp`
 - `--config`
 - `.\config.example.json`
@@ -55,7 +55,7 @@ Default MCP runtime output behavior:
 
 ## CLI Ergonomics (M15)
 
-`janus mcp` now supports short aliases and env fallbacks with deterministic precedence.
+`nomos mcp` now supports short aliases and env fallbacks with deterministic precedence.
 
 Short flags:
 - `-c` for `--config`
@@ -64,9 +64,9 @@ Short flags:
 - `-q` for `--quiet`
 
 Env fallbacks:
-- `JANUS_CONFIG`
-- `JANUS_POLICY_BUNDLE`
-- `JANUS_LOG_LEVEL`
+- `NOMOS_CONFIG`
+- `NOMOS_POLICY_BUNDLE`
+- `NOMOS_LOG_LEVEL`
 
 Precedence:
 1. explicit CLI flag
@@ -76,18 +76,18 @@ Precedence:
 Example:
 
 ```powershell
-janus mcp -c .\config.example.json -p .\policies\m1_5_minimal.json -l info
+nomos mcp -c .\config.example.json -p .\policies\m1_5_minimal.json -l info
 ```
 
 ## Doctor Preflight (M16)
 
-Use `janus doctor` before connecting MCP clients to validate configuration and runtime readiness.
+Use `nomos doctor` before connecting MCP clients to validate configuration and runtime readiness.
 
 Examples:
 
 ```powershell
-janus doctor -c .\config.example.json
-janus doctor -c .\config.example.json --format json
+nomos doctor -c .\config.example.json
+nomos doctor -c .\config.example.json --format json
 ```
 
 Exit codes:
@@ -102,8 +102,8 @@ Exit codes:
 ```json
 {
   "mcpServers": {
-    "janus": {
-      "command": ".\\bin\\janus.exe",
+    "nomos": {
+      "command": ".\\bin\\nomos.exe",
       "args": [
         "mcp",
         "--config",
@@ -122,7 +122,7 @@ Exit codes:
 {
   "approvals": {
     "enabled": true,
-    "store_path": ".\\janus-approvals.db",
+    "store_path": ".\\nomos-approvals.db",
     "ttl_seconds": 900,
     "webhook_token": "replace-me"
   }
@@ -131,10 +131,10 @@ Exit codes:
 
 ## Capabilities Explanation
 
-Use `janus.capabilities` to discover what tools are currently available for a principal/agent/environment under loaded policy.
+Use `nomos.capabilities` to discover what tools are currently available for a principal/agent/environment under loaded policy.
 
 Response fields:
-- `enabled_tools`: policy-allowed tools (for example `janus.fs_read`, `janus.exec`).
+- `enabled_tools`: policy-allowed tools (for example `nomos.fs_read`, `nomos.exec`).
 - `sandbox_modes`: available sandbox mode envelope (`none` or `sandboxed` in current implementation).
 - `network_mode`: `deny` or `allowlist` depending on policy-derived capability.
 - `output_max_bytes`, `output_max_lines`: output caps returned to the client.
@@ -144,7 +144,7 @@ The capability envelope is advisory; final authorization is still performed per 
 
 ## Unmanaged Laptop Limitations And Safe Workflows
 
-In unmanaged developer laptops, mediation is best-effort. Janus cannot guarantee that all side effects are forced through the gateway.
+In unmanaged developer laptops, mediation is best-effort. Nomos cannot guarantee that all side effects are forced through the gateway.
 
 Safe workflow recommendations:
 1. Keep policy deny-by-default and only allow required actions.

@@ -49,7 +49,7 @@
   },
   "approvals": {
     "enabled": false,
-    "store_path": ".\\janus-approvals.db",
+    "store_path": ".\\nomos-approvals.db",
     "ttl_seconds": 900,
     "webhook_token": "",
     "slack_token": "",
@@ -57,13 +57,13 @@
   },
   "identity": {
     "principal": "system",
-    "agent": "janus",
+    "agent": "nomos",
     "environment": "dev",
     "api_keys": {
       "dev-api-key": "system"
     },
     "agent_secrets": {
-      "janus": "dev-agent-secret"
+      "nomos": "dev-agent-secret"
     },
     "oidc": {
       "enabled": false,

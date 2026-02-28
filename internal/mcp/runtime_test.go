@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/identity"
 )
 
 func TestServeStdioBannerAndProtocolSeparation(t *testing.T) {
@@ -17,14 +17,14 @@ func TestServeStdioBannerAndProtocolSeparation(t *testing.T) {
 		t.Fatalf("write readme: %v", err)
 	}
 	bundlePath := filepath.Join(dir, "bundle.json")
-	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`
+	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(bundle), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	var stderr bytes.Buffer
 	server, err := NewServerWithRuntimeOptions(bundlePath, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	}, dir, 1024, 10, false, false, "local", RuntimeOptions{
 		LogLevel:  "info",
@@ -35,7 +35,7 @@ func TestServeStdioBannerAndProtocolSeparation(t *testing.T) {
 		t.Fatalf("new server: %v", err)
 	}
 	var stdout bytes.Buffer
-	req := `{"id":"1","method":"janus.fs_read","params":{"resource":"file://workspace/README.md"}}` + "\n"
+	req := `{"id":"1","method":"nomos.fs_read","params":{"resource":"file://workspace/README.md"}}` + "\n"
 	if err := server.ServeStdio(strings.NewReader(req), &stdout); err != nil {
 		t.Fatalf("serve stdio: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestServeStdioBannerAndProtocolSeparation(t *testing.T) {
 		t.Fatalf("expected hash and engine in banner: %q", lines[0])
 	}
 
-	if strings.Contains(stdout.String(), "[Janus]") {
+	if strings.Contains(stdout.String(), "[Nomos]") {
 		t.Fatalf("stdout contains non-protocol text: %q", stdout.String())
 	}
 	var resp Response
@@ -66,14 +66,14 @@ func TestServeStdioBannerAndProtocolSeparation(t *testing.T) {
 func TestServeStdioQuietSuppressesBanner(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`
+	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(bundle), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	var stderr bytes.Buffer
 	server, err := NewServerWithRuntimeOptions(bundlePath, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	}, dir, 1024, 10, false, false, "local", RuntimeOptions{
 		Quiet:     true,

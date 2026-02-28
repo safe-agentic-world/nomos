@@ -3,7 +3,7 @@ package gateway
 import (
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/credentials"
+	"github.com/safe-agentic-world/nomos/internal/credentials"
 )
 
 func buildCredentialBroker(cfg Config, now func() time.Time) (*credentials.Broker, error) {

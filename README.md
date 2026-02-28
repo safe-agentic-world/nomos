@@ -1,12 +1,12 @@
-# Janus
+# Nomos
 
 **Ship agentic workflows without giving agents root trust.**
 
-Janus is a zero-trust gateway that sits between AI agents and real side effects (files, shell, network, credentials).
+Nomos is a zero-trust gateway that sits between AI agents and real side effects (files, shell, network, credentials).
 
 It enforces deterministic policy before execution, then redacts and audits results.
 
-If you use Codex, OpenClaw, or custom agents, Janus gives you guardrails without killing speed.
+If you use Codex, OpenClaw, or custom agents, Nomos gives you guardrails without killing speed.
 
 ---
 
@@ -14,19 +14,19 @@ If you use Codex, OpenClaw, or custom agents, Janus gives you guardrails without
 
 Most agent setups are still "tool access by prompt."
 
-Janus adds an actual policy boundary:
+Nomos adds an actual policy boundary:
 
 - Deny-by-default, deny-wins authorization
 - Deterministic evaluation and normalization
 - Approval gates for risky actions
-- Redaction before outputs leave Janus
+- Redaction before outputs leave Nomos
 - Replayable audit trail with trace linkage
 
 ---
 
 ## What You Get
 
-- **Fast wedge:** works in minutes with MCP (`janus.fs_read` demo)
+- **Fast wedge:** works in minutes with MCP (`nomos.fs_read` demo)
 - **Real control:** policy-gated `fs`, `exec`, `http`, patch/write paths
 - **Safer ops:** rate limits, circuit breakers, TLS/mTLS options
 - **Auditability:** bundle hash, risk metadata, tamper-evident chain support
@@ -39,13 +39,13 @@ Janus adds an actual policy boundary:
 ### 1) Build
 
 ```powershell
-go build -o .\bin\janus.exe .\cmd\janus
+go build -o .\bin\nomos.exe .\cmd\nomos
 ```
 
-### 2) Start Janus in MCP mode
+### 2) Start Nomos in MCP mode
 
 ```powershell
-.\bin\janus.exe mcp `
+.\bin\nomos.exe mcp `
   --config .\config.example.json `
   --policy-bundle .\policies\m1_5_minimal.json
 ```
@@ -53,8 +53,8 @@ go build -o .\bin\janus.exe .\cmd\janus
 ### 3) Register in Codex
 
 ```powershell
-codex mcp add janus -- `
-  .\bin\janus.exe mcp `
+codex mcp add nomos -- `
+  .\bin\nomos.exe mcp `
   --config .\config.example.json `
   --policy-bundle .\policies\m1_5_minimal.json
 ```
@@ -63,8 +63,8 @@ codex mcp add janus -- `
 
 In Codex, run:
 
-- Allowed: `Use janus.fs_read to read README.md`
-- Denied: `Use janus.fs_read to read .env`
+- Allowed: `Use nomos.fs_read to read README.md`
+- Denied: `Use nomos.fs_read to read .env`
 
 You should see:
 
@@ -78,8 +78,8 @@ You should see:
 ## Architecture In One Screen
 
 1. Agent sends action request.
-2. Janus validates shape and identity.
-3. Janus normalizes resource/params deterministically.
+2. Nomos validates shape and identity.
+3. Nomos normalizes resource/params deterministically.
 4. Policy engine returns `ALLOW` / `DENY` / `REQUIRE_APPROVAL`.
 5. Executor runs only if authorized.
 6. Output is redacted and audited.
@@ -105,17 +105,17 @@ Tracked status: `TASKS.md` (`M0-M13` complete, with scoped `M6` caveat).
 
 ```powershell
 go test ./...
-.\bin\janus.exe version
-.\bin\janus.exe policy test --action .\action.json --bundle .\policies\m1_5_minimal.json
-.\bin\janus.exe policy explain --action .\action.json --bundle .\policies\m1_5_minimal.json
-.\bin\janus.exe serve --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe version
+.\bin\nomos.exe policy test --action .\action.json --bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe policy explain --action .\action.json --bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe serve --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
 ```
 
 Release metadata build example:
 
 ```powershell
-go build -ldflags "-X github.com/safe-agentic-world/janus/internal/version.Version=v1.0.0 -X github.com/safe-agentic-world/janus/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/safe-agentic-world/janus/internal/version.BuildDate=$(Get-Date -AsUTC -Format o)" -o .\bin\janus.exe .\cmd\janus
-.\bin\janus.exe version
+go build -ldflags "-X github.com/safe-agentic-world/nomos/internal/version.Version=v1.0.0 -X github.com/safe-agentic-world/nomos/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/safe-agentic-world/nomos/internal/version.BuildDate=$(Get-Date -AsUTC -Format o)" -o .\bin\nomos.exe .\cmd\nomos
+.\bin\nomos.exe version
 ```
 
 HTTP endpoints in `serve` mode:

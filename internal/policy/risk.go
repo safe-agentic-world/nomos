@@ -1,6 +1,6 @@
 package policy
 
-import "github.com/safe-agentic-world/janus/internal/normalize"
+import "github.com/safe-agentic-world/nomos/internal/normalize"
 
 type RiskFlags map[string]bool
 

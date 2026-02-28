@@ -8,7 +8,7 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ### Added
 
-- `janus doctor` deterministic preflight command (M16)
+- `nomos doctor` deterministic preflight command (M16)
 - MCP runtime logging controls and stderr-safe readiness banner (M14)
 - CLI short flags and env fallback ergonomics (M15)
 

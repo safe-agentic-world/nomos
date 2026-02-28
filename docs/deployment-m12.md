@@ -27,7 +27,7 @@ Example:
 
 ## HTTP Run API
 
-Janus exposes an HTTP run endpoint:
+Nomos exposes an HTTP run endpoint:
 - `POST /run`
 
 `/run` uses the same request schema and auth model as `POST /action`.
@@ -42,18 +42,18 @@ A production-oriented container build is provided via `Dockerfile`:
 Build:
 
 ```powershell
-docker build -t janus:local .
+docker build -t nomos:local .
 ```
 
 Run:
 
 ```powershell
-docker run --rm -p 8080:8080 -v ${PWD}:/workspace janus:local serve --config /workspace/config.example.json --policy-bundle /workspace/policies/m1_5_minimal.json
+docker run --rm -p 8080:8080 -v ${PWD}:/workspace nomos:local serve --config /workspace/config.example.json --policy-bundle /workspace/policies/m1_5_minimal.json
 ```
 
 ## Graceful Shutdown
 
-`janus serve` now waits for `SIGINT`/`SIGTERM` and performs graceful HTTP shutdown with a bounded timeout.
+`nomos serve` now waits for `SIGINT`/`SIGTERM` and performs graceful HTTP shutdown with a bounded timeout.
 
 ## Concurrency Limits
 

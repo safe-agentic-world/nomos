@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/identity"
 )
 
 func TestDecodeActionRequestRejectsUnknownFields(t *testing.T) {
@@ -76,7 +76,7 @@ func TestActionSchemaValidation(t *testing.T) {
 	}
 	act, err := ToAction(req, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if err != nil {

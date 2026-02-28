@@ -5,15 +5,15 @@ import (
 	"errors"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/approval"
-	"github.com/safe-agentic-world/janus/internal/audit"
-	"github.com/safe-agentic-world/janus/internal/credentials"
-	"github.com/safe-agentic-world/janus/internal/executor"
-	"github.com/safe-agentic-world/janus/internal/normalize"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/redact"
-	"github.com/safe-agentic-world/janus/internal/sandbox"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/approval"
+	"github.com/safe-agentic-world/nomos/internal/audit"
+	"github.com/safe-agentic-world/nomos/internal/credentials"
+	"github.com/safe-agentic-world/nomos/internal/executor"
+	"github.com/safe-agentic-world/nomos/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/sandbox"
 )
 
 type Service struct {

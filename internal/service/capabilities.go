@@ -5,10 +5,10 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/normalize"
-	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/policy"
 )
 
 type CapabilityEnvelope struct {
@@ -22,11 +22,11 @@ type CapabilityEnvelope struct {
 
 func (s *Service) EnabledTools(id identity.VerifiedIdentity) []string {
 	tools := []string{
-		"janus.fs_read",
-		"janus.fs_write",
-		"janus.apply_patch",
-		"janus.exec",
-		"janus.http_request",
+		"nomos.fs_read",
+		"nomos.fs_write",
+		"nomos.apply_patch",
+		"nomos.exec",
+		"nomos.http_request",
 		"repo.validate_change_set",
 	}
 	enabled := make([]string, 0)
@@ -80,19 +80,19 @@ func toolAction(tool string, id identity.VerifiedIdentity) (action.Action, error
 	actionType := ""
 	resource := ""
 	switch tool {
-	case "janus.fs_read":
+	case "nomos.fs_read":
 		actionType = "fs.read"
 		resource = "file://workspace/README.md"
-	case "janus.fs_write":
+	case "nomos.fs_write":
 		actionType = "fs.write"
 		resource = "file://workspace/README.md"
-	case "janus.apply_patch":
+	case "nomos.apply_patch":
 		actionType = "repo.apply_patch"
 		resource = "repo://local/workspace"
-	case "janus.exec":
+	case "nomos.exec":
 		actionType = "process.exec"
 		resource = "file://workspace/"
-	case "janus.http_request":
+	case "nomos.http_request":
 		actionType = "net.http_request"
 		resource = "url://example.com/"
 	case "repo.validate_change_set":

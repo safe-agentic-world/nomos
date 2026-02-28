@@ -12,15 +12,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/approval"
-	"github.com/safe-agentic-world/janus/internal/audit"
-	"github.com/safe-agentic-world/janus/internal/executor"
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/redact"
-	"github.com/safe-agentic-world/janus/internal/service"
-	"github.com/safe-agentic-world/janus/internal/version"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/approval"
+	"github.com/safe-agentic-world/nomos/internal/audit"
+	"github.com/safe-agentic-world/nomos/internal/executor"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/service"
+	"github.com/safe-agentic-world/nomos/internal/version"
 )
 
 type Gateway struct {

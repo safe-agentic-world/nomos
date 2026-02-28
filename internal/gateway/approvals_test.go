@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/audit"
-	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/audit"
+	"github.com/safe-agentic-world/nomos/internal/identity"
 )
 
 func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
@@ -42,11 +42,11 @@ func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
 		},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys:     map[string]string{"k": "system"},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 	}, recorder, now)
@@ -114,11 +114,11 @@ func TestApprovalWebhookToken(t *testing.T) {
 		},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys:     map[string]string{"k": "system"},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 	}, recorder, now)
@@ -138,7 +138,7 @@ func TestApprovalWebhookToken(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/webhooks/approvals", strings.NewReader(payload))
-	req.Header.Set("X-Janus-Webhook-Token", "token-1")
+	req.Header.Set("X-Nomos-Webhook-Token", "token-1")
 	gw.handleApprovalDecisionWebhook(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -172,11 +172,11 @@ func TestSlackApprovalWebhook(t *testing.T) {
 		},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys:     map[string]string{"k": "system"},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 	}, recorder, now)
@@ -196,7 +196,7 @@ func TestSlackApprovalWebhook(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/webhooks/slack/approvals", strings.NewReader(payload))
-	req.Header.Set("X-Janus-Slack-Token", "slack-token-1")
+	req.Header.Set("X-Nomos-Slack-Token", "slack-token-1")
 	gw.handleSlackApprovalWebhook(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -241,11 +241,11 @@ func TestTeamsApprovalWebhookStrictSchema(t *testing.T) {
 		},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys:     map[string]string{"k": "system"},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 	}, recorder, now)
@@ -258,7 +258,7 @@ func TestTeamsApprovalWebhookStrictSchema(t *testing.T) {
 	w := httptest.NewRecorder()
 	payload := `{"approval_id":"` + approvalID + `","decision":"APPROVE","user_aad_id":"A1","conversation_id":"T1","extra":1}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/teams/approvals", strings.NewReader(payload))
-	req.Header.Set("X-Janus-Teams-Token", "teams-token-1")
+	req.Header.Set("X-Nomos-Teams-Token", "teams-token-1")
 	gw.handleTeamsApprovalWebhook(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for unknown field, got %d", w.Code)
@@ -267,7 +267,7 @@ func TestTeamsApprovalWebhookStrictSchema(t *testing.T) {
 	w = httptest.NewRecorder()
 	payload = `{"approval_id":"` + approvalID + `","decision":"APPROVE","user_aad_id":"A1","conversation_id":"T1"}`
 	req = httptest.NewRequest(http.MethodPost, "/webhooks/teams/approvals", strings.NewReader(payload))
-	req.Header.Set("X-Janus-Teams-Token", "teams-token-1")
+	req.Header.Set("X-Nomos-Teams-Token", "teams-token-1")
 	gw.handleTeamsApprovalWebhook(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -284,7 +284,7 @@ func createPendingApproval(t *testing.T, gw *Gateway) string {
 		Params:        []byte(`{"content":"hello"}`),
 		TraceID:       "trace1",
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
-	}, identity.VerifiedIdentity{Principal: "system", Agent: "janus", Environment: "dev"})
+	}, identity.VerifiedIdentity{Principal: "system", Agent: "nomos", Environment: "dev"})
 	if err != nil {
 		t.Fatalf("to action: %v", err)
 	}

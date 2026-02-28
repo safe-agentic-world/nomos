@@ -20,7 +20,7 @@ M13 hardening scope covers:
 
 ## Trusted Computing Base (TCB)
 
-- Janus gateway binaries and loaded configuration.
+- Nomos gateway binaries and loaded configuration.
 - Host TLS stack and kernel networking.
 - Signature verification keys provisioned by operators.
 - Identity provider key material configured for OIDC verification.

@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/executor"
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/executor"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
 func TestM8CompletedAuditEventFields(t *testing.T) {
@@ -43,7 +43,7 @@ func TestM8CompletedAuditEventFields(t *testing.T) {
 		Params:        []byte(`{"note":"Authorization: secret-token"}`),
 		TraceID:       "trace-m8-1",
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
-	}, identity.VerifiedIdentity{Principal: "system", Agent: "janus", Environment: "dev"})
+	}, identity.VerifiedIdentity{Principal: "system", Agent: "nomos", Environment: "dev"})
 	if err != nil {
 		t.Fatalf("to action: %v", err)
 	}

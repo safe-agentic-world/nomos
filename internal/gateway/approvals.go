@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/approval"
-	"github.com/safe-agentic-world/janus/internal/audit"
-	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/approval"
+	"github.com/safe-agentic-world/nomos/internal/audit"
+	"github.com/safe-agentic-world/nomos/internal/policy"
 )
 
 type approvalDecisionRequest struct {
@@ -59,7 +59,7 @@ func (g *Gateway) handleApprovalDecision(w http.ResponseWriter, r *http.Request)
 
 func (g *Gateway) handleApprovalDecisionWebhook(w http.ResponseWriter, r *http.Request) {
 	if g.cfg.Approvals.WebhookToken != "" {
-		token := strings.TrimSpace(r.Header.Get("X-Janus-Webhook-Token"))
+		token := strings.TrimSpace(r.Header.Get("X-Nomos-Webhook-Token"))
 		if token == "" || token != g.cfg.Approvals.WebhookToken {
 			g.respondError(w, http.StatusUnauthorized, "auth_error", "invalid webhook token")
 			return
@@ -78,7 +78,7 @@ func (g *Gateway) handleSlackApprovalWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if g.cfg.Approvals.SlackToken != "" {
-		token := strings.TrimSpace(r.Header.Get("X-Janus-Slack-Token"))
+		token := strings.TrimSpace(r.Header.Get("X-Nomos-Slack-Token"))
 		if token == "" || token != g.cfg.Approvals.SlackToken {
 			g.respondError(w, http.StatusUnauthorized, "auth_error", "invalid slack token")
 			return
@@ -107,7 +107,7 @@ func (g *Gateway) handleTeamsApprovalWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if g.cfg.Approvals.TeamsToken != "" {
-		token := strings.TrimSpace(r.Header.Get("X-Janus-Teams-Token"))
+		token := strings.TrimSpace(r.Header.Get("X-Nomos-Teams-Token"))
 		if token == "" || token != g.cfg.Approvals.TeamsToken {
 			g.respondError(w, http.StatusUnauthorized, "auth_error", "invalid teams token")
 			return

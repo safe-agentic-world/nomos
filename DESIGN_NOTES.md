@@ -25,5 +25,5 @@
 - M13 OIDC verification uses statically configured RSA public keys (no discovery) as the safest deterministic default for offline/controlled deployments; key rotation automation is deferred.
 - DoD closeout adds an in-memory credential broker with lease TTL and strict `(principal, agent, environment, trace_id)` binding; only lease IDs are returned to agents.
 - M14 keeps MCP stdout protocol-pure by routing operator UX output (ready banner/logs/errors) to stderr and using a non-emitting in-process audit recorder for MCP runtime handling.
-- M15 resolves `--config/-c` and `--policy-bundle/-p` to absolute paths at parse time and applies precedence `flag > env > fail` (`JANUS_CONFIG`, `JANUS_POLICY_BUNDLE`, `JANUS_LOG_LEVEL`) to reduce invocation ambiguity while preserving fail-closed startup.
+- M15 resolves `--config/-c` and `--policy-bundle/-p` to absolute paths at parse time and applies precedence `flag > env > fail` (`NOMOS_CONFIG`, `NOMOS_POLICY_BUNDLE`, `NOMOS_LOG_LEVEL`) to reduce invocation ambiguity while preserving fail-closed startup.
 - M16 treats "recognized environment" as a strict deterministic allowlist (`dev`, `staging`, `prod`, `ci`, `local`, `test`) for doctor preflight reporting; this affects readiness diagnostics only and does not change runtime policy semantics.

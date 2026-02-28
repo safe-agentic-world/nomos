@@ -1,2 +1,2 @@
-// Package sdk contains client stubs for Janus.
+// Package sdk contains client stubs for Nomos.
 package sdk

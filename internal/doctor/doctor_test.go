@@ -10,7 +10,7 @@ import (
 func TestRunReady(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`), 0o600); err != nil {
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	configPath := filepath.Join(dir, "config.json")
@@ -63,7 +63,7 @@ func TestRunMalformedBundleNotReady(t *testing.T) {
 func TestReportJSONDeterministic(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`), 0o600); err != nil {
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	configPath := filepath.Join(dir, "config.json")
@@ -112,11 +112,11 @@ func writeConfig(t *testing.T, path, bundlePath string, mcpEnabled bool, workspa
 		"approvals":   map[string]any{"enabled": false},
 		"identity": map[string]any{
 			"principal":       "system",
-			"agent":           "janus",
+			"agent":           "nomos",
 			"environment":     "dev",
 			"api_keys":        map[string]any{"dev-api-key": "system"},
 			"service_secrets": map[string]any{},
-			"agent_secrets":   map[string]any{"janus": "dev-agent-secret"},
+			"agent_secrets":   map[string]any{"nomos": "dev-agent-secret"},
 			"oidc":            map[string]any{"enabled": false, "issuer": "", "audience": "", "public_key_path": ""},
 		},
 		"redaction": map[string]any{"patterns": []any{}},

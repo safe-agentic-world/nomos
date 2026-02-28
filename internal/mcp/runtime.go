@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
 type RuntimeOptions struct {
@@ -117,7 +117,7 @@ func (l *runtimeLogger) ReadyBanner(environment, policyBundleHash, engineVersion
 	if l.banner {
 		return
 	}
-	line := fmt.Sprintf("[Janus] MCP server ready (env=%s, policy_bundle_hash=%s, engine=%s, pid=%d)", environment, policyBundleHash, engineVersion, pid)
+	line := fmt.Sprintf("[Nomos] MCP server ready (env=%s, policy_bundle_hash=%s, engine=%s, pid=%d)", environment, policyBundleHash, engineVersion, pid)
 	l.writeLocked(line)
 	l.banner = true
 }
@@ -130,7 +130,7 @@ func (l *runtimeLogger) write(level logLevel, label, message string) {
 	defer l.mu.Unlock()
 	if l.format == "json" {
 		payload := map[string]string{
-			"component": "janus.mcp",
+			"component": "nomos.mcp",
 			"level":     label,
 			"message":   message,
 		}
@@ -141,7 +141,7 @@ func (l *runtimeLogger) write(level logLevel, label, message string) {
 		l.writeLocked(string(data))
 		return
 	}
-	l.writeLocked("[Janus] " + strings.ToUpper(label) + " " + message)
+	l.writeLocked("[Nomos] " + strings.ToUpper(label) + " " + message)
 }
 
 func (l *runtimeLogger) writeLocked(line string) {

@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/normalize"
 )
 
 func TestPolicyAllowAndDeny(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	data := `{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]},{"id":"deny-secret","action_type":"fs.read","resource":"file://workspace/**/secret.txt","decision":"DENY","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`
+	data := `{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]},{"id":"deny-secret","action_type":"fs.read","resource":"file://workspace/**/secret.txt","decision":"DENY","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestPolicyAllowAndDeny(t *testing.T) {
 		ActionType:  "fs.read",
 		Resource:    "file://workspace/README.md",
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if allowDecision.Decision != DecisionAllow {
@@ -34,7 +34,7 @@ func TestPolicyAllowAndDeny(t *testing.T) {
 		ActionType:  "fs.read",
 		Resource:    "file://workspace/foo/secret.txt",
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if denyDecision.Decision != DecisionDeny {
@@ -45,7 +45,7 @@ func TestPolicyAllowAndDeny(t *testing.T) {
 func TestPolicyRequireApproval(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	data := `{"version":"v1","rules":[{"id":"approve-net","action_type":"net.http_request","resource":"url://example.com/**","decision":"REQUIRE_APPROVAL","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`
+	data := `{"version":"v1","rules":[{"id":"approve-net","action_type":"net.http_request","resource":"url://example.com/**","decision":"REQUIRE_APPROVAL","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestPolicyRequireApproval(t *testing.T) {
 		ActionType:  "net.http_request",
 		Resource:    "url://example.com/path",
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if decision.Decision != DecisionRequireApproval {
@@ -69,7 +69,7 @@ func TestPolicyRequireApproval(t *testing.T) {
 func TestPolicyMatchesPrincipalsAndRiskFlags(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	data := `{"version":"v1","rules":[{"id":"allow-net","action_type":"net.http_request","resource":"url://example.com/**","decision":"ALLOW","principals":["svc1"],"agents":["janus"],"environments":["prod"],"risk_flags":["risk.net"]}]}`
+	data := `{"version":"v1","rules":[{"id":"allow-net","action_type":"net.http_request","resource":"url://example.com/**","decision":"ALLOW","principals":["svc1"],"agents":["nomos"],"environments":["prod"],"risk_flags":["risk.net"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestPolicyMatchesPrincipalsAndRiskFlags(t *testing.T) {
 		ActionType:  "net.http_request",
 		Resource:    "url://example.com/path",
 		Principal:   "svc1",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "prod",
 		Params:      []byte(`{}`),
 	})
@@ -93,7 +93,7 @@ func TestPolicyMatchesPrincipalsAndRiskFlags(t *testing.T) {
 		ActionType:  "net.http_request",
 		Resource:    "url://example.com/path",
 		Principal:   "svc2",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "prod",
 		Params:      []byte(`{}`),
 	})
@@ -105,7 +105,7 @@ func TestPolicyMatchesPrincipalsAndRiskFlags(t *testing.T) {
 func TestPolicyBundleHashIncluded(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	data := `{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`
+	data := `{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestPolicyBundleHashIncluded(t *testing.T) {
 		ActionType:  "fs.read",
 		Resource:    "file://workspace/README.md",
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if decision.PolicyBundleHash == "" {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/safe-agentic-world/janus/internal/gateway"
+	"github.com/safe-agentic-world/nomos/internal/gateway"
 )
 
 func TestResolveMCPInvocationFlagPrecedenceOverEnv(t *testing.T) {
@@ -35,9 +35,9 @@ func TestResolveMCPInvocationFlagPrecedenceOverEnv(t *testing.T) {
 func TestResolveMCPInvocationEnvFallback(t *testing.T) {
 	dir := t.TempDir()
 	env := map[string]string{
-		"JANUS_CONFIG":        filepath.Join(dir, "env-config.json"),
-		"JANUS_POLICY_BUNDLE": filepath.Join(dir, "env-bundle.json"),
-		"JANUS_LOG_LEVEL":     "debug",
+		"NOMOS_CONFIG":        filepath.Join(dir, "env-config.json"),
+		"NOMOS_POLICY_BUNDLE": filepath.Join(dir, "env-bundle.json"),
+		"NOMOS_LOG_LEVEL":     "debug",
 	}
 	got, err := resolveMCPInvocation("", "", "", false, func(key string) string {
 		return env[key]
@@ -78,11 +78,11 @@ func TestLoadConfigFailsClosedWithoutBundle(t *testing.T) {
   "approvals":{"enabled":false},
   "identity":{
     "principal":"system",
-    "agent":"janus",
+    "agent":"nomos",
     "environment":"dev",
     "api_keys":{"dev-api-key":"system"},
     "service_secrets":{},
-    "agent_secrets":{"janus":"dev-agent-secret"},
+    "agent_secrets":{"nomos":"dev-agent-secret"},
     "oidc":{"enabled":false,"issuer":"","audience":"","public_key_path":""}
   },
   "redaction":{"patterns":[]}
@@ -102,7 +102,7 @@ func TestLoadConfigFailsClosedWithoutBundle(t *testing.T) {
 func TestHelpTextStability(t *testing.T) {
 	root := rootHelpText()
 	mcp := mcpHelpText()
-	if !strings.Contains(root, "janus mcp -c config.example.json -p policies/m1_5_minimal.json") {
+	if !strings.Contains(root, "nomos mcp -c config.example.json -p policies/m1_5_minimal.json") {
 		t.Fatalf("unexpected root help: %q", root)
 	}
 	if !strings.Contains(root, "doctor") {
@@ -116,7 +116,7 @@ func TestHelpTextStability(t *testing.T) {
 func TestDoctorExitCodesAndJSONDeterminism(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`), 0o600); err != nil {
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	configPath := filepath.Join(dir, "config.json")
@@ -165,7 +165,7 @@ func TestDoctorNotReadyExitCode(t *testing.T) {
 func TestDoctorInvalidFormatInternalErrorCode(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")
-	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`), 0o600); err != nil {
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	configPath := filepath.Join(dir, "config.json")
@@ -206,11 +206,11 @@ func writeDoctorTestConfig(t *testing.T, path, bundlePath string, mcpEnabled boo
 		"approvals":   map[string]any{"enabled": false},
 		"identity": map[string]any{
 			"principal":       "system",
-			"agent":           "janus",
+			"agent":           "nomos",
 			"environment":     "dev",
 			"api_keys":        map[string]any{"dev-api-key": "system"},
 			"service_secrets": map[string]any{},
-			"agent_secrets":   map[string]any{"janus": "dev-agent-secret"},
+			"agent_secrets":   map[string]any{"nomos": "dev-agent-secret"},
 			"oidc":            map[string]any{"enabled": false, "issuer": "", "audience": "", "public_key_path": ""},
 		},
 		"redaction": map[string]any{"patterns": []any{}},

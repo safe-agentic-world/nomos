@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/safe-agentic-world/janus/internal/gateway"
-	"github.com/safe-agentic-world/janus/internal/normalize"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/version"
+	"github.com/safe-agentic-world/nomos/internal/gateway"
+	"github.com/safe-agentic-world/nomos/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/version"
 )
 
 type Check struct {
@@ -79,7 +79,7 @@ func Run(options Options) (Report, error) {
 		bundlePath = cfg.Policy.BundlePath
 	}
 	bundlePathOK, bundlePathMsg := pathResolves(bundlePath)
-	mark("config.bundle_path_resolves", bundlePathOK, bundlePathMsg, "set --policy-bundle/-p or JANUS_POLICY_BUNDLE")
+	mark("config.bundle_path_resolves", bundlePathOK, bundlePathMsg, "set --policy-bundle/-p or NOMOS_POLICY_BUNDLE")
 
 	bundleExists := false
 	if bundlePath != "" {
@@ -136,7 +136,7 @@ func Run(options Options) (Report, error) {
 	mcpEnabled := cfgErr == nil && cfg.MCP.Enabled
 	mark("mcp.enabled", mcpEnabled, "mcp mode enabled", "set mcp.enabled=true for MCP readiness")
 	mark("mcp.transport_configured", mcpEnabled, "mcp stdio transport configured", "enable mcp mode in config")
-	mark("mcp.stdio_structure_valid", mcpEnabled, "mcp stdio structure valid", "enable mcp mode and keep standard janus mcp invocation")
+	mark("mcp.stdio_structure_valid", mcpEnabled, "mcp stdio structure valid", "enable mcp mode and keep standard nomos mcp invocation")
 
 	workspaceExists := false
 	workspaceCanon := false
@@ -197,7 +197,7 @@ func stableChecks(in []Check) []Check {
 
 func HumanSummary(report Report) string {
 	var b strings.Builder
-	b.WriteString("Janus Doctor Report\n\n")
+	b.WriteString("Nomos Doctor Report\n\n")
 	for _, check := range report.Checks {
 		b.WriteString(fmt.Sprintf("[%s] %s\n", check.Status, check.Message))
 		if check.Status == "FAIL" && check.Hint != "" {

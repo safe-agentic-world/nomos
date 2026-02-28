@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: janus-config
+  name: nomos-config
   labels:
-    app: janus
+    app: nomos
 data:
   config.json: |
     {
@@ -35,13 +35,13 @@ data:
       },
       "identity": {
         "principal": "system",
-        "agent": "janus",
+        "agent": "nomos",
         "environment": "prod",
         "api_keys": {
           "replace-me": "system"
         },
         "agent_secrets": {
-          "janus": "replace-me"
+          "nomos": "replace-me"
         },
         "oidc": {
           "enabled": false,

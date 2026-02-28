@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/audit"
-	"github.com/safe-agentic-world/janus/internal/executor"
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/audit"
+	"github.com/safe-agentic-world/nomos/internal/executor"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
 type recordSink struct {
@@ -61,7 +61,7 @@ func TestServiceAllowsReadAndRedacts(t *testing.T) {
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if err != nil {
@@ -90,7 +90,7 @@ func TestServiceAllowsReadAndRedacts(t *testing.T) {
 		t.Fatalf("expected at least 3 events, got %d", len(recorder.events))
 	}
 	decisionEvent := recorder.events[1]
-	if decisionEvent.Principal != "system" || decisionEvent.Agent != "janus" || decisionEvent.Environment != "dev" {
+	if decisionEvent.Principal != "system" || decisionEvent.Agent != "nomos" || decisionEvent.Environment != "dev" {
 		t.Fatalf("expected identity in audit event, got principal=%s agent=%s env=%s", decisionEvent.Principal, decisionEvent.Agent, decisionEvent.Environment)
 	}
 }
@@ -124,7 +124,7 @@ func TestServiceDeniesRead(t *testing.T) {
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if err != nil {
@@ -156,7 +156,7 @@ func TestServiceHTTPAllowlist(t *testing.T) {
 				Resource:     "url://example.com/**",
 				Decision:     policy.DecisionAllow,
 				Principals:   []string{"system"},
-				Agents:       []string{"janus"},
+				Agents:       []string{"nomos"},
 				Environments: []string{"dev"},
 				Obligations: map[string]any{
 					"net_allowlist": []any{"example.com"},
@@ -185,7 +185,7 @@ func TestServiceHTTPAllowlist(t *testing.T) {
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if err != nil {
@@ -217,7 +217,7 @@ func TestServiceExecRequiresAllowlist(t *testing.T) {
 				Resource:     "file://workspace/**",
 				Decision:     policy.DecisionAllow,
 				Principals:   []string{"system"},
-				Agents:       []string{"janus"},
+				Agents:       []string{"nomos"},
 				Environments: []string{"dev"},
 			},
 		},
@@ -242,7 +242,7 @@ func TestServiceExecRequiresAllowlist(t *testing.T) {
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if err != nil {
@@ -271,7 +271,7 @@ func TestServiceSandboxRequired(t *testing.T) {
 				Resource:     "file://workspace/**",
 				Decision:     policy.DecisionAllow,
 				Principals:   []string{"system"},
-				Agents:       []string{"janus"},
+				Agents:       []string{"nomos"},
 				Environments: []string{"dev"},
 				Obligations: map[string]any{
 					"sandbox_mode": "container",
@@ -299,7 +299,7 @@ func TestServiceSandboxRequired(t *testing.T) {
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	})
 	if err != nil {

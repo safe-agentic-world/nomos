@@ -1,6 +1,6 @@
 # Approval Binding Model
 
-Janus binds approvals to deterministic targets so approvals cannot be replayed across different inputs.
+Nomos binds approvals to deterministic targets so approvals cannot be replayed across different inputs.
 
 ## Fingerprint
 
@@ -25,17 +25,17 @@ Approvals are never global.
 ## Resume Flow
 
 1. Policy returns `REQUIRE_APPROVAL`.
-2. Janus persists a pending approval with TTL in sqlite.
+2. Nomos persists a pending approval with TTL in sqlite.
 3. External approver records `APPROVE` or `DENY` via approval endpoint/webhook.
 4. Agent retries the same action with `context.extensions.approval.approval_id`.
-5. Janus recomputes normalized action and fingerprint and only resumes when approval binding matches and TTL is valid.
+5. Nomos recomputes normalized action and fingerprint and only resumes when approval binding matches and TTL is valid.
 
 ## Integrations (Optional M7)
 
 M7 provides integration endpoints:
-- Generic webhook: `POST /webhooks/approvals` using header `X-Janus-Webhook-Token` when configured.
-- Slack webhook: `POST /webhooks/slack/approvals` using header `X-Janus-Slack-Token` when configured.
-- Teams webhook: `POST /webhooks/teams/approvals` using header `X-Janus-Teams-Token` when configured.
+- Generic webhook: `POST /webhooks/approvals` using header `X-Nomos-Webhook-Token` when configured.
+- Slack webhook: `POST /webhooks/slack/approvals` using header `X-Nomos-Slack-Token` when configured.
+- Teams webhook: `POST /webhooks/teams/approvals` using header `X-Nomos-Teams-Token` when configured.
 
 Slack payload schema:
 - `approval_id` (string, required)

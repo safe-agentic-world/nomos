@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/audit"
+	"github.com/safe-agentic-world/nomos/internal/audit"
 )
 
 func TestGatewayStartAndShutdown(t *testing.T) {
@@ -35,13 +35,13 @@ func TestGatewayStartAndShutdown(t *testing.T) {
 		"approvals": map[string]any{"enabled": false},
 		"identity": map[string]any{
 			"principal":   "system",
-			"agent":       "janus",
+			"agent":       "nomos",
 			"environment": "dev",
 			"api_keys": map[string]any{
 				"key1": "system",
 			},
 			"agent_secrets": map[string]any{
-				"janus": "secret",
+				"nomos": "secret",
 			},
 		},
 	})
@@ -87,13 +87,13 @@ func TestGatewayEmitsTraceEvents(t *testing.T) {
 		Audit:   AuditConfig{Sink: "stdout"},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys: map[string]string{
 				"key1": "system",
 			},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 		Policy: PolicyConfig{BundlePath: bundlePath},
@@ -105,8 +105,8 @@ func TestGatewayEmitsTraceEvents(t *testing.T) {
 	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
 	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer key1")
-	req.Header.Set("X-Janus-Agent-Id", "janus")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	req.Header.Set("X-Nomos-Agent-Id", "nomos")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 	w := httptest.NewRecorder()
 	gw.handleAction(w, req)
 	if len(recorder.events) < 3 {
@@ -131,7 +131,7 @@ func TestGatewayEmitsTraceEvents(t *testing.T) {
 		}
 	}
 	decisionEvent := recorder.events[1]
-	if decisionEvent.Principal != "system" || decisionEvent.Agent != "janus" || decisionEvent.Environment != "dev" {
+	if decisionEvent.Principal != "system" || decisionEvent.Agent != "nomos" || decisionEvent.Environment != "dev" {
 		t.Fatalf("expected identity in audit event, got principal=%s agent=%s env=%s", decisionEvent.Principal, decisionEvent.Agent, decisionEvent.Environment)
 	}
 }
@@ -152,13 +152,13 @@ func TestGatewayRunEndpointUsesActionHandler(t *testing.T) {
 		Executor: ExecutorConfig{WorkspaceRoot: dir},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys: map[string]string{
 				"key1": "system",
 			},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 		Policy: PolicyConfig{BundlePath: bundlePath},
@@ -179,8 +179,8 @@ func TestGatewayRunEndpointUsesActionHandler(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer key1")
-	req.Header.Set("X-Janus-Agent-Id", "janus")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	req.Header.Set("X-Nomos-Agent-Id", "nomos")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("do request: %v", err)
@@ -203,13 +203,13 @@ func TestGatewayConcurrencyLimitReturns429(t *testing.T) {
 		Audit:   AuditConfig{Sink: "stdout"},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys: map[string]string{
 				"key1": "system",
 			},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 		Policy: PolicyConfig{BundlePath: bundlePath},
@@ -224,8 +224,8 @@ func TestGatewayConcurrencyLimitReturns429(t *testing.T) {
 	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
 	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer key1")
-	req.Header.Set("X-Janus-Agent-Id", "janus")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	req.Header.Set("X-Nomos-Agent-Id", "nomos")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 	w := httptest.NewRecorder()
 	gw.handleAction(w, req)
 	if w.Code != http.StatusTooManyRequests {
@@ -249,13 +249,13 @@ func TestGatewayRateLimitPerPrincipal(t *testing.T) {
 		Executor: ExecutorConfig{WorkspaceRoot: dir},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys: map[string]string{
 				"key1": "system",
 			},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 		Policy: PolicyConfig{BundlePath: bundlePath},
@@ -267,8 +267,8 @@ func TestGatewayRateLimitPerPrincipal(t *testing.T) {
 	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
 	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer key1")
-	req.Header.Set("X-Janus-Agent-Id", "janus")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	req.Header.Set("X-Nomos-Agent-Id", "nomos")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 	w := httptest.NewRecorder()
 	gw.handleAction(w, req)
 	if w.Code != http.StatusOK {
@@ -277,8 +277,8 @@ func TestGatewayRateLimitPerPrincipal(t *testing.T) {
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer key1")
-	req.Header.Set("X-Janus-Agent-Id", "janus")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	req.Header.Set("X-Nomos-Agent-Id", "nomos")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 	gw.handleAction(w, req)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", w.Code)
@@ -299,13 +299,13 @@ func TestGatewayCircuitBreakerOpensAfterFailures(t *testing.T) {
 		Executor: ExecutorConfig{WorkspaceRoot: dir},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys: map[string]string{
 				"key1": "system",
 			},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 		Policy: PolicyConfig{BundlePath: bundlePath},
@@ -318,8 +318,8 @@ func TestGatewayCircuitBreakerOpensAfterFailures(t *testing.T) {
 	makeReq := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer key1")
-		req.Header.Set("X-Janus-Agent-Id", "janus")
-		req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+		req.Header.Set("X-Nomos-Agent-Id", "nomos")
+		req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 		w := httptest.NewRecorder()
 		gw.handleAction(w, req)
 		return w
@@ -351,13 +351,13 @@ func TestGatewayRequiresMTLSClientCert(t *testing.T) {
 		Executor: ExecutorConfig{WorkspaceRoot: dir},
 		Identity: IdentityConfig{
 			Principal:   "system",
-			Agent:       "janus",
+			Agent:       "nomos",
 			Environment: "dev",
 			APIKeys: map[string]string{
 				"key1": "system",
 			},
 			AgentSecrets: map[string]string{
-				"janus": "agent-secret",
+				"nomos": "agent-secret",
 			},
 		},
 		Policy: PolicyConfig{BundlePath: bundlePath},
@@ -369,8 +369,8 @@ func TestGatewayRequiresMTLSClientCert(t *testing.T) {
 	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
 	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer key1")
-	req.Header.Set("X-Janus-Agent-Id", "janus")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	req.Header.Set("X-Nomos-Agent-Id", "nomos")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 	w := httptest.NewRecorder()
 	gw.handleAction(w, req)
 	if w.Code != http.StatusUnauthorized {

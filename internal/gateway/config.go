@@ -193,7 +193,7 @@ func (c *Config) SetDefaults() error {
 	}
 	if c.Approvals.Enabled {
 		if c.Approvals.StorePath == "" {
-			c.Approvals.StorePath = "janus-approvals.db"
+			c.Approvals.StorePath = "nomos-approvals.db"
 		}
 		if c.Approvals.TTLSeconds == 0 {
 			c.Approvals.TTLSeconds = 900
@@ -306,146 +306,146 @@ func (c Config) Validate() error {
 }
 
 func ApplyEnvOverrides(cfg *Config, getenv func(string) string) {
-	if v := getenv("JANUS_GATEWAY_LISTEN"); v != "" {
+	if v := getenv("NOMOS_GATEWAY_LISTEN"); v != "" {
 		cfg.Gateway.Listen = v
 	}
-	if v := getenv("JANUS_GATEWAY_TRANSPORT"); v != "" {
+	if v := getenv("NOMOS_GATEWAY_TRANSPORT"); v != "" {
 		cfg.Gateway.Transport = v
 	}
-	if v := getenv("JANUS_GATEWAY_CONCURRENCY_LIMIT"); v != "" {
+	if v := getenv("NOMOS_GATEWAY_CONCURRENCY_LIMIT"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Gateway.ConcurrencyLimit = parsed
 		}
 	}
-	if v := getenv("JANUS_GATEWAY_RATE_LIMIT_PER_MINUTE"); v != "" {
+	if v := getenv("NOMOS_GATEWAY_RATE_LIMIT_PER_MINUTE"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Gateway.RateLimitPerMin = parsed
 		}
 	}
-	if v := getenv("JANUS_GATEWAY_CIRCUIT_BREAKER_FAILURES"); v != "" {
+	if v := getenv("NOMOS_GATEWAY_CIRCUIT_BREAKER_FAILURES"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Gateway.CircuitFailures = parsed
 		}
 	}
-	if v := getenv("JANUS_GATEWAY_CIRCUIT_BREAKER_COOLDOWN_SECONDS"); v != "" {
+	if v := getenv("NOMOS_GATEWAY_CIRCUIT_BREAKER_COOLDOWN_SECONDS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Gateway.CircuitCooldownS = parsed
 		}
 	}
-	if v := getenv("JANUS_RUNTIME_STATELESS_MODE"); v != "" {
+	if v := getenv("NOMOS_RUNTIME_STATELESS_MODE"); v != "" {
 		if parsed, ok := parseBool(v); ok {
 			cfg.Runtime.StatelessMode = parsed
 		}
 	}
-	if v := getenv("JANUS_POLICY_BUNDLE_PATH"); v != "" {
+	if v := getenv("NOMOS_POLICY_BUNDLE_PATH"); v != "" {
 		cfg.Policy.BundlePath = v
 	}
-	if v := getenv("JANUS_POLICY_VERIFY_SIGNATURES"); v != "" {
+	if v := getenv("NOMOS_POLICY_VERIFY_SIGNATURES"); v != "" {
 		if parsed, ok := parseBool(v); ok {
 			cfg.Policy.VerifySignatures = parsed
 		}
 	}
-	if v := getenv("JANUS_POLICY_SIGNATURE_PATH"); v != "" {
+	if v := getenv("NOMOS_POLICY_SIGNATURE_PATH"); v != "" {
 		cfg.Policy.SignaturePath = v
 	}
-	if v := getenv("JANUS_POLICY_PUBLIC_KEY_PATH"); v != "" {
+	if v := getenv("NOMOS_POLICY_PUBLIC_KEY_PATH"); v != "" {
 		cfg.Policy.PublicKeyPath = v
 	}
-	if v := getenv("JANUS_EXECUTOR_SANDBOX_ENABLED"); v != "" {
+	if v := getenv("NOMOS_EXECUTOR_SANDBOX_ENABLED"); v != "" {
 		if parsed, ok := parseBool(v); ok {
 			cfg.Executor.SandboxEnabled = parsed
 		}
 	}
-	if v := getenv("JANUS_EXECUTOR_SANDBOX_PROFILE"); v != "" {
+	if v := getenv("NOMOS_EXECUTOR_SANDBOX_PROFILE"); v != "" {
 		cfg.Executor.SandboxProfile = v
 	}
-	if v := getenv("JANUS_EXECUTOR_WORKSPACE_ROOT"); v != "" {
+	if v := getenv("NOMOS_EXECUTOR_WORKSPACE_ROOT"); v != "" {
 		cfg.Executor.WorkspaceRoot = v
 	}
-	if v := getenv("JANUS_EXECUTOR_MAX_OUTPUT_BYTES"); v != "" {
+	if v := getenv("NOMOS_EXECUTOR_MAX_OUTPUT_BYTES"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Executor.MaxOutputBytes = parsed
 		}
 	}
-	if v := getenv("JANUS_EXECUTOR_MAX_OUTPUT_LINES"); v != "" {
+	if v := getenv("NOMOS_EXECUTOR_MAX_OUTPUT_LINES"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Executor.MaxOutputLines = parsed
 		}
 	}
-	if v := getenv("JANUS_CREDENTIALS_ENABLED"); v != "" {
+	if v := getenv("NOMOS_CREDENTIALS_ENABLED"); v != "" {
 		if parsed, ok := parseBool(v); ok {
 			cfg.Credentials.Enabled = parsed
 		}
 	}
-	if v := getenv("JANUS_AUDIT_SINK"); v != "" {
+	if v := getenv("NOMOS_AUDIT_SINK"); v != "" {
 		cfg.Audit.Sink = v
 	}
-	if v := getenv("JANUS_REDACTION_PATTERNS"); v != "" {
+	if v := getenv("NOMOS_REDACTION_PATTERNS"); v != "" {
 		cfg.Redaction.Patterns = splitList(v)
 	}
-	if v := getenv("JANUS_MCP_ENABLED"); v != "" {
+	if v := getenv("NOMOS_MCP_ENABLED"); v != "" {
 		if parsed, ok := parseBool(v); ok {
 			cfg.MCP.Enabled = parsed
 		}
 	}
-	if v := getenv("JANUS_UPSTREAM_ROUTES"); v != "" {
+	if v := getenv("NOMOS_UPSTREAM_ROUTES"); v != "" {
 		cfg.Upstream.Routes = splitList(v)
 	}
-	if v := getenv("JANUS_APPROVALS_ENABLED"); v != "" {
+	if v := getenv("NOMOS_APPROVALS_ENABLED"); v != "" {
 		if parsed, ok := parseBool(v); ok {
 			cfg.Approvals.Enabled = parsed
 		}
 	}
-	if v := getenv("JANUS_APPROVALS_STORE_PATH"); v != "" {
+	if v := getenv("NOMOS_APPROVALS_STORE_PATH"); v != "" {
 		cfg.Approvals.StorePath = v
 	}
-	if v := getenv("JANUS_APPROVALS_TTL_SECONDS"); v != "" {
+	if v := getenv("NOMOS_APPROVALS_TTL_SECONDS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Approvals.TTLSeconds = parsed
 		}
 	}
-	if v := getenv("JANUS_APPROVALS_WEBHOOK_TOKEN"); v != "" {
+	if v := getenv("NOMOS_APPROVALS_WEBHOOK_TOKEN"); v != "" {
 		cfg.Approvals.WebhookToken = v
 	}
-	if v := getenv("JANUS_APPROVALS_SLACK_TOKEN"); v != "" {
+	if v := getenv("NOMOS_APPROVALS_SLACK_TOKEN"); v != "" {
 		cfg.Approvals.SlackToken = v
 	}
-	if v := getenv("JANUS_APPROVALS_TEAMS_TOKEN"); v != "" {
+	if v := getenv("NOMOS_APPROVALS_TEAMS_TOKEN"); v != "" {
 		cfg.Approvals.TeamsToken = v
 	}
-	if v := getenv("JANUS_IDENTITY_PRINCIPAL"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_PRINCIPAL"); v != "" {
 		cfg.Identity.Principal = v
 	}
-	if v := getenv("JANUS_IDENTITY_AGENT"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_AGENT"); v != "" {
 		cfg.Identity.Agent = v
 	}
-	if v := getenv("JANUS_IDENTITY_ENVIRONMENT"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_ENVIRONMENT"); v != "" {
 		cfg.Identity.Environment = v
 	}
-	if v := getenv("JANUS_IDENTITY_API_KEY"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_API_KEY"); v != "" {
 		if cfg.Identity.APIKeys == nil {
 			cfg.Identity.APIKeys = map[string]string{}
 		}
 		cfg.Identity.APIKeys[v] = cfg.Identity.Principal
 	}
-	if v := getenv("JANUS_IDENTITY_AGENT_SECRET"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_AGENT_SECRET"); v != "" {
 		if cfg.Identity.AgentSecrets == nil {
 			cfg.Identity.AgentSecrets = map[string]string{}
 		}
 		cfg.Identity.AgentSecrets[cfg.Identity.Agent] = v
 	}
-	if v := getenv("JANUS_IDENTITY_OIDC_ENABLED"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_OIDC_ENABLED"); v != "" {
 		if parsed, ok := parseBool(v); ok {
 			cfg.Identity.OIDC.Enabled = parsed
 		}
 	}
-	if v := getenv("JANUS_IDENTITY_OIDC_ISSUER"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_OIDC_ISSUER"); v != "" {
 		cfg.Identity.OIDC.Issuer = v
 	}
-	if v := getenv("JANUS_IDENTITY_OIDC_AUDIENCE"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_OIDC_AUDIENCE"); v != "" {
 		cfg.Identity.OIDC.Audience = v
 	}
-	if v := getenv("JANUS_IDENTITY_OIDC_PUBLIC_KEY_PATH"); v != "" {
+	if v := getenv("NOMOS_IDENTITY_OIDC_PUBLIC_KEY_PATH"); v != "" {
 		cfg.Identity.OIDC.PublicKeyPath = v
 	}
 }

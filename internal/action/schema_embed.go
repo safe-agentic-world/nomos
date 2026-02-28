@@ -3,7 +3,7 @@ package action
 import (
 	_ "embed"
 
-	"github.com/safe-agentic-world/janus/internal/schema"
+	"github.com/safe-agentic-world/nomos/internal/schema"
 )
 
 //go:embed schema/action.v1.json

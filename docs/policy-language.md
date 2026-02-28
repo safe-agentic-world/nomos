@@ -1,6 +1,6 @@
 # Policy Language (v1)
 
-Janus policy bundles are JSON files with deterministic, deny-wins evaluation.
+Nomos policy bundles are JSON files with deterministic, deny-wins evaluation.
 
 ## Bundle Format
 
@@ -14,7 +14,7 @@ Janus policy bundles are JSON files with deterministic, deny-wins evaluation.
       "resource": "file://workspace/README.md",
       "decision": "ALLOW",
       "principals": ["system"],
-      "agents": ["janus"],
+      "agents": ["nomos"],
       "environments": ["dev"],
       "risk_flags": ["risk.net"],
       "obligations": {}

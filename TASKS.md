@@ -1,9 +1,9 @@
 # TASKS.md
 ## One-liner
 
-**Janus — the zero-trust control plane for autonomous agents.**
+**Nomos — the zero-trust control plane for autonomous agents.**
 
-Janus is a **model-agnostic, agent-agnostic execution gateway** that:
+Nomos is a **model-agnostic, agent-agnostic execution gateway** that:
 
 - mediates agent side effects at the boundary
 - enforces deterministic policy, budgets, and circuit breakers
@@ -16,10 +16,10 @@ Janus is a **model-agnostic, agent-agnostic execution gateway** that:
 
 # 🚨 Core Philosophy (READ FIRST)
 
-## The Janus Contract
+## The Nomos Contract
 
-**Janus does not constrain reasoning.  
-Janus strictly governs execution authority, resource usage, and side effects.**
+**Nomos does not constrain reasoning.  
+Nomos strictly governs execution authority, resource usage, and side effects.**
 
 Agents/models are free to:
 
@@ -29,7 +29,7 @@ Agents/models are free to:
 - propose patches
 - attempt repairs
 
-Janus alone controls (when actions route through Janus):
+Nomos alone controls (when actions route through Nomos):
 
 - filesystem mutation (strong guarantee in sandboxed/mediated modes)
 - command execution
@@ -42,7 +42,7 @@ Janus alone controls (when actions route through Janus):
 
 ## Zero Trust Principles (Agentic Edition)
 
-Janus enforces:
+Nomos enforces:
 
 - Never trust, always verify
 - Least privilege, just-in-time
@@ -54,7 +54,7 @@ Janus enforces:
 
 ## 🧨 Threat Model Lite (MANDATORY)
 
-**Adversaries Janus must assume exist:**
+**Adversaries Nomos must assume exist:**
 
 - a malicious or compromised agent/model
 - a buggy agent that loops or over-acts
@@ -64,8 +64,8 @@ Janus enforces:
 
 **Trusted computing base (TCB) assumptions (v1):**
 
-- Janus gateway + policy engine binaries are trusted
-- Janus policy bundles are sourced from trusted storage (signing optional until v1 hardening)
+- Nomos gateway + policy engine binaries are trusted
+- Nomos policy bundles are sourced from trusted storage (signing optional until v1 hardening)
 - the sandbox runtime and host kernel enforce isolation as configured (in controlled runtimes)
 - credential store (e.g., Vault/KMS) is trusted to enforce lease TTL + access policies
 
@@ -78,13 +78,13 @@ Janus enforces:
 
 ## 🛡️ Enforcement Guarantees by Environment
 
-Janus provides **different guarantee levels** depending on deployment.
+Nomos provides **different guarantee levels** depending on deployment.
 
 ### Controlled Runtimes (CI, containers, K8s runners, remote dev)
 
 **Strong guarantee**
 
-- all governed side effects MUST flow through Janus
+- all governed side effects MUST flow through Nomos
 - sandbox and network controls are enforceable
 - credential isolation is enforceable
 - identity/environment claims are asserted by the gateway/auth layer (not agents)
@@ -93,7 +93,7 @@ Janus provides **different guarantee levels** depending on deployment.
 
 **Best-effort mediation**
 
-- Janus cannot guarantee full mediation
+- Nomos cannot guarantee full mediation
 - MUST provide publish/PR boundary validation
 - SHOULD provide optional local hooks
 - documentation MUST clearly state reduced guarantees
@@ -104,20 +104,20 @@ Janus provides **different guarantee levels** depending on deployment.
 
 ### Hard Security Rules
 
-- Agents MUST NOT be given direct credentials/access for Janus-governed side effects.
+- Agents MUST NOT be given direct credentials/access for Nomos-governed side effects.
 - Agents NEVER hold long-lived enterprise credentials.
-- Enforcement happens in Janus (gateway/executors), not in prompts.
-- All tool-mediated mutations flow through Janus authorization.
+- Enforcement happens in Nomos (gateway/executors), not in prompts.
+- All tool-mediated mutations flow through Nomos authorization.
 - All actions are auditable and replayable to the defined replay level.
 - Sensitive data MUST NOT leak via logs **or action outputs**.
 - Policy evaluation MUST be deterministic and side-effect free.
-- **Credentials MUST only be materialized inside Janus executors** (never returned to agents), and MUST be short-lived + bound.
+- **Credentials MUST only be materialized inside Nomos executors** (never returned to agents), and MUST be short-lived + bound.
 
 ### UX Requirement
 
 > When an action is allowed, the agent must feel unhindered.
 
-Janus must prefer:
+Nomos must prefer:
 
 - structured denials with remediation hints
 - fast retry loops
@@ -178,7 +178,7 @@ Examples:
 - `git.open_mr`
 - `ticket.update`
 
-Janus MUST be extensible to new action types.
+Nomos MUST be extensible to new action types.
 
 ---
 
@@ -205,7 +205,7 @@ Every request includes verified identity:
 - principal (human or service account)
 - agent runtime identity (agent software/process identity)
 - sub-agent (optional)
-- environment claim (dev/ci/prod) asserted by Janus, not by agents
+- environment claim (dev/ci/prod) asserted by Nomos, not by agents
 
 Identity MUST flow through the entire pipeline.
 
@@ -218,7 +218,7 @@ For every action:
 1. Authenticate (verify principal + agent runtime)
 2. Validate (schema, size limits, required fields)
 3. Normalize (resource + params canonicalization)
-4. Derive risk (Janus-derived risk flags, not agent-supplied)
+4. Derive risk (Nomos-derived risk flags, not agent-supplied)
 5. Authorize (PDP: deterministic policy evaluation)
 6. Constrain (merge obligations; enforce circuit breakers)
 7. Execute (executor + sandbox where applicable)
@@ -255,7 +255,7 @@ All hashes (`policy_bundle_hash`, `params_hash`, `action_fingerprint`, `audit_ev
 
 ## Precedence Rules (Deny Wins)
 
-Janus evaluates **all matching rules**.
+Nomos evaluates **all matching rules**.
 
 Decision order:
 
@@ -353,7 +353,7 @@ Legend:
 ## Repo Scaffold
 
 ```text
-/cmd/janus
+/cmd/nomos
 /internal/gateway
 /internal/action
 /internal/normalize
@@ -375,13 +375,13 @@ Legend:
 * [x] lint + format
 * [x] unit test harness
 * [x] minimal README
-* [x] `janus version` prints engine version + build info
+* [x] `nomos version` prints engine version + build info
 
 ## Configuration (MVP)
 
 * [x] config file + env override
 * [x] gateway listen/transport
-* [x] policy bundle path (required): policy_bundle_path in config and/or CLI flag --policy-bundle <path>. Janus MUST fail-closed on startup if no policy bundle is provided (from config or flag)
+* [x] policy bundle path (required): policy_bundle_path in config and/or CLI flag --policy-bundle <path>. Nomos MUST fail-closed on startup if no policy bundle is provided (from config or flag)
 * [x] executor settings
 * [x] audit sink
 * [x] MCP exposure
@@ -416,7 +416,7 @@ Required fields:
 * `params`
 * `principal` (verified)
 * `agent` (verified runtime identity)
-* `environment` (asserted by Janus)
+* `environment` (asserted by Nomos)
 * `context` (bounded metadata)
 * `trace_id`
 
@@ -495,23 +495,23 @@ without hardcoding any temporary policy rules into source code.
 ## Scope
 
 * [x] implement `fs.read` only (no write, no patch, no exec, no net)
-* [x] MCP stdio server exposes `janus.fs_read`
+* [x] MCP stdio server exposes `nomos.fs_read`
 * [x] gateway loads a policy bundle ONLY from an explicit flag/config:
   - CLI flag: `--policy-bundle <path>` (or config equivalent)
-  - **If no bundle is provided, Janus MUST refuse to start** (fail-closed)
+  - **If no bundle is provided, Nomos MUST refuse to start** (fail-closed)
 * [x] ship a minimal policy bundle file in-repo (not compiled in), e.g.:
   - `/policies/m1_5_minimal.yaml`
   - allows `fs.read` on `file://workspace/README.md` only
   - denies everything else by default
-* [x] `janus policy test --action <json> --bundle <path>` works against the bundle file
-* [x] `janus policy explain --action <json> --bundle <path>` works against the bundle file
+* [x] `nomos policy test --action <json> --bundle <path>` works against the bundle file
+* [x] `nomos policy explain --action <json> --bundle <path>` works against the bundle file
 * [x] emit audit JSONL for every request (allowed/denied)
 * [x] redaction pass invoked on outputs before returning (can be no-op but MUST exist)
 * [x] trace lifecycle events emitted (`trace.start`, `trace.end`) and `trace_id` propagated
 
 ## Required behaviors (tests)
 
-* [x] starting Janus without `--policy-bundle` fails with a clear error message
+* [x] starting Nomos without `--policy-bundle` fails with a clear error message
 * [x] with `/policies/m1_5_minimal.yaml` loaded:
   - [x] `fs.read file://workspace/README.md` → ALLOW and returns content (capped)
   - [x] `fs.read file://workspace/anything_else` → DENY with structured `DENIED_POLICY`
@@ -522,11 +522,11 @@ without hardcoding any temporary policy rules into source code.
 
 ## Acceptance
 
-* [x] agent (via MCP) can call `janus.fs_read` and receive `README.md` content (capped) WHEN launched with the provided bundle file
+* [x] agent (via MCP) can call `nomos.fs_read` and receive `README.md` content (capped) WHEN launched with the provided bundle file
 * [x] denied reads yield a structured `DENIED_POLICY` response (no content leakage)
 * [x] audit JSONL events are produced for every request (allow/deny)
 * [x] `trace.start` and `trace.end` events are produced with consistent `trace_id`
-* [x] `janus policy test` and `janus policy explain` operate on the bundle file
+* [x] `nomos policy test` and `nomos policy explain` operate on the bundle file
 
 ---
 
@@ -562,11 +562,11 @@ Match on:
 * principal (id, groups/roles)
 * agent runtime (id/type)
 * environment
-* Janus-derived risk flags
+* Nomos-derived risk flags
 
 ## NEW: Risk Flags (v1 set; deterministic)
 
-Risk flags MUST be computed by Janus from normalized action + trace counters + config only:
+Risk flags MUST be computed by Nomos from normalized action + trace counters + config only:
 
 * `risk.exec` (action_type == `process.exec`)
 * `risk.net` (action_type == `net.http_request`)
@@ -624,8 +624,8 @@ If multiple bundles are loaded, the “bundle identity” MUST include the order
 
 ## Policy Dev UX (CRITICAL)
 
-* [x] `janus policy test --action <json> --bundle <path>`
-* [x] `janus policy explain --action <json> --bundle <path>` (prints matched rules + obligations)
+* [x] `nomos policy test --action <json> --bundle <path>`
+* [x] `nomos policy explain --action <json> --bundle <path>` (prints matched rules + obligations)
 * [x] include `policy_bundle_hash` and engine version in explain output
 
 ## Starter Policy Packs
@@ -654,12 +654,12 @@ Ship:
 
 ## Tool Exposure (MVP)
 
-* [x] `janus.capabilities`
-* [x] `janus.fs_read`
-* [x] `janus.fs_write`
-* [x] `janus.apply_patch`
-* [x] `janus.exec` (heavily gated)
-* [x] `janus.http_request` (heavily gated)
+* [x] `nomos.capabilities`
+* [x] `nomos.fs_read`
+* [x] `nomos.fs_write`
+* [x] `nomos.apply_patch`
+* [x] `nomos.exec` (heavily gated)
+* [x] `nomos.http_request` (heavily gated)
 
 ## Capability Envelope (MVP)
 
@@ -706,7 +706,7 @@ Return:
 
 ## 🔴 Sensitive Data Handling (NON-NEGOTIABLE)
 
-Janus MUST prevent secret leakage via:
+Nomos MUST prevent secret leakage via:
 
 * logs
 * stdout/stderr
@@ -882,7 +882,7 @@ Define in `/docs/approvals.md`:
 
 ### Level 1 — Reconstructable (MVP)
 
-Janus guarantees:
+Nomos guarantees:
 
 * full timeline of actions and decisions
 * normalized inputs stored as hashes (and redacted summaries where safe)
@@ -1003,9 +1003,9 @@ Docs:
 
 ## Goal
 
-Improve operator UX when running `janus mcp` **without breaking MCP stdio transport**.
+Improve operator UX when running `nomos mcp` **without breaking MCP stdio transport**.
 
-Janus MUST remain protocol-correct while clearly indicating readiness.
+Nomos MUST remain protocol-correct while clearly indicating readiness.
 
 ---
 
@@ -1013,12 +1013,12 @@ Janus MUST remain protocol-correct while clearly indicating readiness.
 
 ### Startup Banner (stderr only)
 
-When MCP server is fully ready, Janus MUST emit **exactly one** human-readable line to **stderr**.
+When MCP server is fully ready, Nomos MUST emit **exactly one** human-readable line to **stderr**.
 
 Example:
 
 ```text
-[Janus] MCP server ready (env=<env>, policy_bundle_hash=<hash>, engine=<version>, pid=<pid>)
+[Nomos] MCP server ready (env=<env>, policy_bundle_hash=<hash>, engine=<version>, pid=<pid>)
 ```
 
 Rules:
@@ -1063,7 +1063,7 @@ Equivalent to `--log-level=error`.
 
 ### Debug Safety
 
-When `--log-level=debug`, Janus MAY log summaries but MUST NEVER log:
+When `--log-level=debug`, Nomos MAY log summaries but MUST NEVER log:
 
 - raw secrets  
 - credential material  
@@ -1109,7 +1109,7 @@ M14 MUST NOT modify:
 
 ## Goal
 
-Improve developer ergonomics when invoking Janus while preserving deterministic, fail-closed behavior.
+Improve developer ergonomics when invoking Nomos while preserving deterministic, fail-closed behavior.
 
 This milestone adds:
 
@@ -1125,7 +1125,7 @@ No runtime semantics may change.
 
 ### Short Flag Support
 
-Janus MUST support both long and short forms:
+Nomos MUST support both long and short forms:
 
 | Purpose | Long | Short |
 |--------|------|-------|
@@ -1144,22 +1144,22 @@ Rules:
 Example:
 
 ```text
-janus mcp -c config.json -p policies/safe-dev.json
+nomos mcp -c config.json -p policies/safe-dev.json
 ```
 
 ---
 
 ### Environment Variable Fallbacks
 
-If required flags are absent, Janus MUST consult environment variables.
+If required flags are absent, Nomos MUST consult environment variables.
 
 Support:
 
 | Setting | Env |
 |--------|-----|
-| config | `JANUS_CONFIG` |
-| policy bundle | `JANUS_POLICY_BUNDLE` |
-| log level | `JANUS_LOG_LEVEL` |
+| config | `NOMOS_CONFIG` |
+| policy bundle | `NOMOS_POLICY_BUNDLE` |
+| log level | `NOMOS_LOG_LEVEL` |
 
 Precedence (highest → lowest):
 
@@ -1178,10 +1178,10 @@ Rules:
 
 ### Invocation Robustness
 
-Janus binary MUST work correctly when invoked as:
+Nomos binary MUST work correctly when invoked as:
 
 ```text
-janus mcp ...
+nomos mcp ...
 ```
 
 Requirements:
@@ -1197,8 +1197,8 @@ Requirements:
 
 Improve:
 
-- `janus --help`  
-- `janus mcp --help`
+- `nomos --help`  
+- `nomos mcp --help`
 
 Help MUST:
 
@@ -1228,8 +1228,8 @@ This milestone is **CLI UX only**.
 - [ ] short flags behave identically to long flags  
 - [ ] env fallback works as specified  
 - [ ] precedence rules enforced deterministically  
-- [ ] Janus fails closed if bundle missing  
-- [ ] `janus mcp -c ... -p ...` works  
+- [ ] Nomos fails closed if bundle missing  
+- [ ] `nomos mcp -c ... -p ...` works  
 - [ ] binary runs correctly from any directory  
 - [ ] help output shows short flags  
 - [ ] tests cover flag/env precedence  
@@ -1261,7 +1261,7 @@ Add tests for:
 
 ## Goal
 
-Provide a deterministic preflight command that validates Janus configuration and runtime readiness **before** agents connect.
+Provide a deterministic preflight command that validates Nomos configuration and runtime readiness **before** agents connect.
 
 This reduces misconfiguration, improves first-run success, and strengthens operator confidence.
 
@@ -1274,7 +1274,7 @@ The doctor command MUST be read-only and side-effect free.
 Add a new top-level command:
 
 ```text
-janus doctor
+nomos doctor
 ```
 
 Purpose:
@@ -1354,7 +1354,7 @@ Doctor prints a concise report to stdout:
 Example structure:
 
 ```text
-Janus Doctor Report
+Nomos Doctor Report
 
 [PASS] config loaded
 [PASS] policy bundle parsed (hash=sha256:...)
@@ -1371,7 +1371,7 @@ Result: READY
 Support:
 
 ```text
-janus doctor --format json
+nomos doctor --format json
 ```
 
 JSON MUST be deterministic and include:
@@ -1428,7 +1428,7 @@ M16 MUST NOT modify:
 
 ## Acceptance
 
-- [ ] `janus doctor` runs without starting servers
+- [ ] `nomos doctor` runs without starting servers
 - [ ] failures produce actionable messages
 - [ ] JSON mode works deterministically
 - [ ] exit codes follow spec
@@ -1476,7 +1476,7 @@ This milestone gives you **massive leverage**:
 
 # ✅ Definition of Done (v1)
 
-Janus v1 must:
+Nomos v1 must:
 
 * mediate agent tool actions via MCP and HTTP
 * enforce deterministic policy with deny-wins and typed obligations
@@ -1491,9 +1491,9 @@ Janus v1 must:
 
 # 🏁 Final Positioning
 
-**Janus is not another agent.**
+**Nomos is not another agent.**
 
-Janus is:
+Nomos is:
 
 > **the zero-trust control plane for agentic systems**
 

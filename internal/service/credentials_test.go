@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/action"
-	"github.com/safe-agentic-world/janus/internal/credentials"
-	"github.com/safe-agentic-world/janus/internal/executor"
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/policy"
-	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/action"
+	"github.com/safe-agentic-world/nomos/internal/credentials"
+	"github.com/safe-agentic-world/nomos/internal/executor"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/policy"
+	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
-const helperCredentialEchoArg = "janus-helper-credential-echo"
+const helperCredentialEchoArg = "nomos-helper-credential-echo"
 
 func TestCredentialBrokerLeaseAndExecInjectionNoLeak(t *testing.T) {
 	dir := t.TempDir()

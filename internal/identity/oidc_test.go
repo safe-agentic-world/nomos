@@ -33,7 +33,7 @@ func TestAuthenticatorOIDC(t *testing.T) {
 	auth, err := NewAuthenticator(AuthConfig{
 		OIDCEnabled:       true,
 		OIDCIssuer:        "https://issuer.example",
-		OIDCAudience:      "janus",
+		OIDCAudience:      "nomos",
 		OIDCPublicKeyPath: pubPath,
 		AgentSecrets: map[string]string{
 			"agent1": "secret1",
@@ -46,7 +46,7 @@ func TestAuthenticatorOIDC(t *testing.T) {
 
 	claims := jwt.MapClaims{
 		"iss": "https://issuer.example",
-		"aud": "janus",
+		"aud": "nomos",
 		"sub": "oidc-user",
 		"exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
@@ -59,8 +59,8 @@ func TestAuthenticatorOIDC(t *testing.T) {
 	body := []byte(`{"schema_version":"v1","action_id":"act1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/action", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenStr)
-	req.Header.Set("X-Janus-Agent-Id", "agent1")
-	req.Header.Set("X-Janus-Agent-Signature", hmacHex("secret1", body))
+	req.Header.Set("X-Nomos-Agent-Id", "agent1")
+	req.Header.Set("X-Nomos-Agent-Signature", hmacHex("secret1", body))
 
 	id, err := auth.Verify(req, body)
 	if err != nil {

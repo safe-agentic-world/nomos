@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
 func TestSQLiteSinkStoresRedactedPayload(t *testing.T) {

@@ -79,7 +79,7 @@ Multiple sinks can be combined as a comma-separated list.
 
 ## Tamper Evidence (M9)
 
-Janus supports per-stream hash chaining:
+Nomos supports per-stream hash chaining:
 
 `event_hash_i = sha256(canonical_json(event_i_without_event_hash) || event_hash_{i-1})`
 
@@ -98,7 +98,7 @@ Janus supports per-stream hash chaining:
   "trace_id": "trace_123",
   "action_id": "act_123",
   "principal": "system",
-  "agent": "janus",
+  "agent": "nomos",
   "environment": "dev",
   "action_type": "fs.read",
   "resource_normalized": "file://workspace/README.md",

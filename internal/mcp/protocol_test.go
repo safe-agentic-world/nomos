@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/identity"
 )
 
 func TestFramedInitializeAndToolsList(t *testing.T) {
@@ -21,14 +21,14 @@ func TestFramedInitializeAndToolsList(t *testing.T) {
 		t.Fatalf("write readme: %v", err)
 	}
 	bundlePath := filepath.Join(dir, "bundle.json")
-	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`
+	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(bundle), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	var stderr bytes.Buffer
 	server, err := NewServerWithRuntimeOptions(bundlePath, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	}, dir, 1024, 10, false, false, "local", RuntimeOptions{
 		LogLevel:  "info",
@@ -67,7 +67,7 @@ func TestFramedInitializeAndToolsList(t *testing.T) {
 		t.Fatalf("missing protocolVersion: %+v", result1)
 	}
 	serverInfo := result1["serverInfo"].(map[string]any)
-	if serverInfo["name"] != "janus" {
+	if serverInfo["name"] != "nomos" {
 		t.Fatalf("unexpected server name: %+v", serverInfo)
 	}
 
@@ -88,14 +88,14 @@ func TestFramedToolsCallFsRead(t *testing.T) {
 		t.Fatalf("write readme: %v", err)
 	}
 	bundlePath := filepath.Join(dir, "bundle.json")
-	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["janus"],"environments":["dev"]}]}`
+	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
 	if err := os.WriteFile(bundlePath, []byte(bundle), 0o600); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	var stderr bytes.Buffer
 	server, err := NewServerWithRuntimeOptions(bundlePath, identity.VerifiedIdentity{
 		Principal:   "system",
-		Agent:       "janus",
+		Agent:       "nomos",
 		Environment: "dev",
 	}, dir, 1024, 10, false, false, "local", RuntimeOptions{
 		LogLevel:  "info",
@@ -111,7 +111,7 @@ func TestFramedToolsCallFsRead(t *testing.T) {
 		"id":      3,
 		"method":  "tools/call",
 		"params": map[string]any{
-			"name":      "janus.fs_read",
+			"name":      "nomos.fs_read",
 			"arguments": map[string]any{"resource": "file://workspace/README.md"},
 		},
 	})

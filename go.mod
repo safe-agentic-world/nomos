@@ -1,4 +1,4 @@
-module github.com/safe-agentic-world/janus
+module github.com/safe-agentic-world/nomos
 
 go 1.24
 

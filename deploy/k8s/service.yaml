@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: janus
+  name: nomos
   labels:
-    app: janus
+    app: nomos
 spec:
   selector:
-    app: janus
+    app: nomos
   ports:
     - name: http
       port: 8080

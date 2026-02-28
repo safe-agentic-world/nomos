@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to Janus.
+Thanks for contributing to Nomos.
 
 ## Development Setup
 
@@ -8,7 +8,7 @@ Thanks for contributing to Janus.
 2. Build:
 
 ```bash
-go build ./cmd/janus
+go build ./cmd/nomos
 ```
 
 3. Test:

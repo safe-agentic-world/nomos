@@ -29,13 +29,13 @@ func TestLoadConfigAppliesEnvOverrides(t *testing.T) {
 		"approvals": map[string]any{"enabled": false},
 		"identity": map[string]any{
 			"principal":   "system",
-			"agent":       "janus",
+			"agent":       "nomos",
 			"environment": "dev",
 			"api_keys": map[string]any{
 				"key1": "system",
 			},
 			"agent_secrets": map[string]any{
-				"janus": "secret",
+				"nomos": "secret",
 			},
 		},
 	})
@@ -44,14 +44,14 @@ func TestLoadConfigAppliesEnvOverrides(t *testing.T) {
 	}
 
 	env := map[string]string{
-		"JANUS_GATEWAY_LISTEN":        "127.0.0.1:0",
-		"JANUS_MCP_ENABLED":           "true",
-		"JANUS_IDENTITY_PRINCIPAL":    "override",
-		"JANUS_IDENTITY_API_KEY":      "override-key",
-		"JANUS_IDENTITY_AGENT_SECRET": "override-agent-secret",
-		"JANUS_POLICY_BUNDLE_PATH":    overridePath,
-		"JANUS_APPROVALS_SLACK_TOKEN": "slack-token",
-		"JANUS_APPROVALS_TEAMS_TOKEN": "teams-token",
+		"NOMOS_GATEWAY_LISTEN":        "127.0.0.1:0",
+		"NOMOS_MCP_ENABLED":           "true",
+		"NOMOS_IDENTITY_PRINCIPAL":    "override",
+		"NOMOS_IDENTITY_API_KEY":      "override-key",
+		"NOMOS_IDENTITY_AGENT_SECRET": "override-agent-secret",
+		"NOMOS_POLICY_BUNDLE_PATH":    overridePath,
+		"NOMOS_APPROVALS_SLACK_TOKEN": "slack-token",
+		"NOMOS_APPROVALS_TEAMS_TOKEN": "teams-token",
 	}
 	cfg, err := LoadConfig(path, func(key string) string {
 		return env[key]
@@ -71,7 +71,7 @@ func TestLoadConfigAppliesEnvOverrides(t *testing.T) {
 	if cfg.Identity.APIKeys["override-key"] != "override" {
 		t.Fatal("expected api key override")
 	}
-	if cfg.Identity.AgentSecrets["janus"] != "override-agent-secret" {
+	if cfg.Identity.AgentSecrets["nomos"] != "override-agent-secret" {
 		t.Fatal("expected agent secret override")
 	}
 	if cfg.Policy.BundlePath != overridePath {
@@ -100,13 +100,13 @@ func TestLoadConfigRequiresPolicyBundlePath(t *testing.T) {
 		"approvals": map[string]any{"enabled": false},
 		"identity": map[string]any{
 			"principal":   "system",
-			"agent":       "janus",
+			"agent":       "nomos",
 			"environment": "dev",
 			"api_keys": map[string]any{
 				"key1": "system",
 			},
 			"agent_secrets": map[string]any{
-				"janus": "secret",
+				"nomos": "secret",
 			},
 		},
 	})
@@ -140,13 +140,13 @@ func TestLoadConfigApprovalsValidationAndDefaults(t *testing.T) {
 		},
 		"identity": map[string]any{
 			"principal":   "system",
-			"agent":       "janus",
+			"agent":       "nomos",
 			"environment": "dev",
 			"api_keys": map[string]any{
 				"key1": "system",
 			},
 			"agent_secrets": map[string]any{
-				"janus": "secret",
+				"nomos": "secret",
 			},
 		},
 	})
@@ -187,13 +187,13 @@ func TestLoadConfigStatelessModeRules(t *testing.T) {
 		},
 		"identity": map[string]any{
 			"principal":   "system",
-			"agent":       "janus",
+			"agent":       "nomos",
 			"environment": "dev",
 			"api_keys": map[string]any{
 				"key1": "system",
 			},
 			"agent_secrets": map[string]any{
-				"janus": "secret",
+				"nomos": "secret",
 			},
 		},
 	})
@@ -227,13 +227,13 @@ func TestLoadConfigStatelessModeRules(t *testing.T) {
 		},
 		"identity": map[string]any{
 			"principal":   "system",
-			"agent":       "janus",
+			"agent":       "nomos",
 			"environment": "dev",
 			"api_keys": map[string]any{
 				"key1": "system",
 			},
 			"agent_secrets": map[string]any{
-				"janus": "secret",
+				"nomos": "secret",
 			},
 		},
 	})
@@ -289,15 +289,15 @@ func TestLoadConfigM13HardeningFields(t *testing.T) {
 		},
 		"identity": map[string]any{
 			"principal":   "system",
-			"agent":       "janus",
+			"agent":       "nomos",
 			"environment": "dev",
 			"agent_secrets": map[string]any{
-				"janus": "secret",
+				"nomos": "secret",
 			},
 			"oidc": map[string]any{
 				"enabled":         true,
 				"issuer":          "https://issuer.example",
-				"audience":        "janus",
+				"audience":        "nomos",
 				"public_key_path": oidcPub,
 			},
 		},

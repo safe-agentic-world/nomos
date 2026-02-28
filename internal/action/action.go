@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/safe-agentic-world/janus/internal/identity"
-	"github.com/safe-agentic-world/janus/internal/schema"
+	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/schema"
 )
 
 const (

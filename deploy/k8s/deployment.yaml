@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: janus
+  name: nomos
   labels:
-    app: janus
+    app: nomos
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: janus
+      app: nomos
   template:
     metadata:
       labels:
-        app: janus
+        app: nomos
     spec:
       terminationGracePeriodSeconds: 30
       containers:
-        - name: janus
-          image: janus:local
+        - name: nomos
+          image: nomos:local
           imagePullPolicy: IfNotPresent
           args:
             - serve
@@ -56,6 +56,6 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: janus-config
+            name: nomos-config
         - name: workspace
           emptyDir: {}
