@@ -1,6 +1,6 @@
 # Build artifacts
-/janus
-/janus.exe
+/nomos
+/nomos.exe
 /bin/
 /dist/
 /build/
@@ -26,4 +26,7 @@ Thumbs.db
 
 # Temporary directories
 .tmp/
+TASKS.md
 tmp/
+
+TASKS.md
