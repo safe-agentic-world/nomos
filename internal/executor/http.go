@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 
@@ -57,14 +58,15 @@ func (r *HTTPRunner) Do(url string, params HTTPParams) (HTTPResult, error) {
 }
 
 func (r *HTTPRunner) DoWithPolicy(url string, params HTTPParams, policy RedirectPolicy) (HTTPResult, error) {
-	if err := validateHTTPRequestTarget(url, policy.AllowHosts); err != nil {
+	safeURL, err := validateHTTPRequestTarget(url, policy.AllowHosts)
+	if err != nil {
 		return HTTPResult{}, err
 	}
 	if params.Method == "" {
 		params.Method = http.MethodGet
 	}
 	reader := strings.NewReader(params.Body)
-	req, err := http.NewRequest(params.Method, url, reader)
+	req, err := http.NewRequest(params.Method, safeURL, reader)
 	if err != nil {
 		return HTTPResult{}, err
 	}
@@ -154,16 +156,20 @@ func hostFromNormalizedURL(resource string) string {
 	return trimmed[:idx]
 }
 
-func validateHTTPRequestTarget(rawURL string, allowHosts []string) error {
+func validateHTTPRequestTarget(rawURL string, allowHosts []string) (string, error) {
+	parsed, err := neturl.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", ErrRedirectInvalidTarget
+	}
 	normalized, err := normalize.NormalizeRedirectURL(rawURL)
 	if err != nil {
-		return ErrRedirectInvalidTarget
+		return "", ErrRedirectInvalidTarget
 	}
 	if len(allowHosts) == 0 {
-		return nil
+		return parsed.Scheme + "://" + strings.TrimPrefix(normalized, "url://"), nil
 	}
 	if !hostAllowlisted(allowHosts, hostFromNormalizedURL(normalized)) {
-		return ErrRedirectDisallowedHost
+		return "", ErrRedirectDisallowedHost
 	}
-	return nil
+	return parsed.Scheme + "://" + strings.TrimPrefix(normalized, "url://"), nil
 }
