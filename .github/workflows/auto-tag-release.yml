@@ -88,7 +88,7 @@ jobs:
 
   tag-release:
     name: Tag Semantic Release
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.actor.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
