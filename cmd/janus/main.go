@@ -1,19 +1,29 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/gateway"
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/mcp"
-	"github.com/ai-developer-project/janus/internal/normalize"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/version"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/doctor"
+	"github.com/safe-agentic-world/janus/internal/gateway"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/mcp"
+	"github.com/safe-agentic-world/janus/internal/normalize"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/redact"
+	"github.com/safe-agentic-world/janus/internal/version"
 )
 
 func main() {
@@ -33,6 +43,8 @@ func main() {
 		runMCP(os.Args[2:])
 	case "policy":
 		runPolicy(os.Args[2:])
+	case "doctor":
+		os.Exit(runDoctorCommand(os.Args[2:], os.Stdout, os.Stderr, os.Getenv))
 	default:
 		usage()
 		os.Exit(2)
@@ -41,15 +53,22 @@ func main() {
 
 func runServe(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	configPath := fs.String("config", "", "path to config json")
-	policyBundle := fs.String("policy-bundle", "", "path to policy bundle")
+	fs.SetOutput(os.Stderr)
+	var configPath string
+	var policyBundle string
+	fs.StringVar(&configPath, "config", "", "path to config json")
+	fs.StringVar(&configPath, "c", "", "path to config json")
+	fs.StringVar(&policyBundle, "policy-bundle", "", "path to policy bundle")
+	fs.StringVar(&policyBundle, "p", "", "path to policy bundle")
+	fs.Usage = func() { _, _ = io.WriteString(fs.Output(), serveHelpText()) }
 	fs.Parse(args)
 
-	if *configPath == "" {
-		log.Fatal("config path is required")
+	resolved, err := resolveServeInvocation(configPath, policyBundle, os.Getenv)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	cfg, err := gateway.LoadConfig(*configPath, os.Getenv, *policyBundle)
+	cfg, err := gateway.LoadConfig(resolved.ConfigPath, os.Getenv, resolved.PolicyBundle)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
@@ -63,27 +82,62 @@ func runServe(args []string) {
 	if err := gw.Start(); err != nil {
 		log.Fatalf("gateway start: %v", err)
 	}
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := gw.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("gateway shutdown: %v", err)
+	}
 }
 
 func runMCP(args []string) {
 	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
-	configPath := fs.String("config", "", "path to config json")
-	policyBundle := fs.String("policy-bundle", "", "path to policy bundle")
+	fs.SetOutput(os.Stderr)
+	var configPath string
+	var policyBundle string
+	var logLevel string
+	var logFormat string
+	var quiet bool
+	fs.StringVar(&configPath, "config", "", "path to config json")
+	fs.StringVar(&configPath, "c", "", "path to config json")
+	fs.StringVar(&policyBundle, "policy-bundle", "", "path to policy bundle")
+	fs.StringVar(&policyBundle, "p", "", "path to policy bundle")
+	fs.StringVar(&logLevel, "log-level", "info", "mcp log level: error|warn|info|debug")
+	fs.StringVar(&logLevel, "l", "info", "mcp log level: error|warn|info|debug")
+	fs.BoolVar(&quiet, "quiet", false, "suppress startup banner and non-error logs")
+	fs.BoolVar(&quiet, "q", false, "suppress startup banner and non-error logs")
+	fs.StringVar(&logFormat, "log-format", "text", "mcp log format: text|json")
+	fs.Usage = func() { _, _ = io.WriteString(fs.Output(), mcpHelpText()) }
 	fs.Parse(args)
 
-	if *configPath == "" {
-		log.Fatal("config path is required")
+	resolved, err := resolveMCPInvocation(configPath, policyBundle, logLevel, quiet, os.Getenv)
+	if err != nil {
+		log.Fatal(err)
 	}
-	cfg, err := gateway.LoadConfig(*configPath, os.Getenv, *policyBundle)
+	runtimeOptions, err := mcp.ParseRuntimeOptions(mcp.RuntimeOptions{
+		LogLevel:  resolved.LogLevel,
+		Quiet:     resolved.Quiet,
+		LogFormat: logFormat,
+		ErrWriter: os.Stderr,
+	})
+	if err != nil {
+		log.Fatalf("invalid mcp runtime options: %v", err)
+	}
+	cfg, err := gateway.LoadConfig(resolved.ConfigPath, os.Getenv, resolved.PolicyBundle)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
+	}
+	if strings.EqualFold(resolved.LogLevelSource, "env") && strings.EqualFold(resolved.LogLevel, "debug") {
+		log.Printf("mcp log-level resolved from env JANUS_LOG_LEVEL")
 	}
 	id := identity.VerifiedIdentity{
 		Principal:   cfg.Identity.Principal,
 		Agent:       cfg.Identity.Agent,
 		Environment: cfg.Identity.Environment,
 	}
-	if err := mcp.RunStdio(cfg.Policy.BundlePath, id, cfg.Executor.WorkspaceRoot, cfg.Executor.MaxOutputBytes, cfg.Executor.MaxOutputLines, cfg.Approvals.Enabled, cfg.Executor.SandboxEnabled, cfg.Executor.SandboxProfile); err != nil {
+	if err := mcp.RunStdioWithRuntimeOptions(cfg.Policy.BundlePath, id, cfg.Executor.WorkspaceRoot, cfg.Executor.MaxOutputBytes, cfg.Executor.MaxOutputLines, cfg.Approvals.Enabled, cfg.Executor.SandboxEnabled, cfg.Executor.SandboxProfile, runtimeOptions); err != nil {
 		log.Fatalf("mcp server error: %v", err)
 	}
 }
@@ -184,11 +238,196 @@ func mustJSON(value any) string {
 }
 
 func usage() {
-	message := map[string]string{
-		"version": "print build metadata",
-		"serve":   "start gateway server",
-		"mcp":     "start MCP stdio server",
-		"policy":  "policy test/explain",
+	_, _ = io.WriteString(os.Stderr, rootHelpText())
+}
+
+func runDoctorCommand(args []string, stdout io.Writer, stderr io.Writer, getenv func(string) string) int {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var configPath string
+	var policyBundle string
+	var format string
+	fs.StringVar(&configPath, "config", "", "path to config json")
+	fs.StringVar(&configPath, "c", "", "path to config json")
+	fs.StringVar(&policyBundle, "policy-bundle", "", "path to policy bundle")
+	fs.StringVar(&policyBundle, "p", "", "path to policy bundle")
+	fs.StringVar(&format, "format", "text", "doctor output format: text|json")
+	fs.Usage = func() { _, _ = io.WriteString(fs.Output(), doctorHelpText()) }
+	if err := fs.Parse(args); err != nil {
+		return 2
 	}
-	_ = json.NewEncoder(os.Stderr).Encode(message)
+	configResolved, _, err := resolvePathOption(configPath, getenv("JANUS_CONFIG"), "--config/-c", "JANUS_CONFIG", true)
+	if err != nil {
+		writeRedactedLine(stderr, err.Error())
+		return 1
+	}
+	bundleResolved, _, err := resolvePathOption(policyBundle, getenv("JANUS_POLICY_BUNDLE"), "--policy-bundle/-p", "JANUS_POLICY_BUNDLE", false)
+	if err != nil {
+		writeRedactedLine(stderr, err.Error())
+		return 1
+	}
+	format = strings.ToLower(strings.TrimSpace(format))
+	if format != "text" && format != "json" {
+		writeRedactedLine(stderr, "invalid --format: use text or json")
+		return 2
+	}
+	report, err := doctor.Run(doctor.Options{
+		ConfigPath:           configResolved,
+		PolicyBundleOverride: bundleResolved,
+		Getenv:               getenv,
+	})
+	if err != nil {
+		writeRedactedLine(stderr, "doctor internal error: "+err.Error())
+		return 2
+	}
+	if format == "json" {
+		data, err := json.Marshal(report)
+		if err != nil {
+			writeRedactedLine(stderr, "doctor internal error: "+err.Error())
+			return 2
+		}
+		writeRedactedLine(stdout, string(data))
+	} else {
+		writeRedactedLine(stdout, doctor.HumanSummary(report))
+	}
+	if report.OverallStatus == "READY" {
+		return 0
+	}
+	return 1
+}
+
+type resolvedServeInvocation struct {
+	ConfigPath   string
+	PolicyBundle string
+}
+
+type resolvedMCPInvocation struct {
+	ConfigPath     string
+	PolicyBundle   string
+	LogLevel       string
+	LogLevelSource string
+	Quiet          bool
+}
+
+func resolveServeInvocation(configFlag, policyFlag string, getenv func(string) string) (resolvedServeInvocation, error) {
+	configRaw, _, err := resolvePathOption(configFlag, getenv("JANUS_CONFIG"), "--config/-c", "JANUS_CONFIG", true)
+	if err != nil {
+		return resolvedServeInvocation{}, err
+	}
+	bundleRaw, _, err := resolvePathOption(policyFlag, getenv("JANUS_POLICY_BUNDLE"), "--policy-bundle/-p", "JANUS_POLICY_BUNDLE", false)
+	if err != nil {
+		return resolvedServeInvocation{}, err
+	}
+	return resolvedServeInvocation{
+		ConfigPath:   configRaw,
+		PolicyBundle: bundleRaw,
+	}, nil
+}
+
+func resolveMCPInvocation(configFlag, policyFlag, logLevelFlag string, quiet bool, getenv func(string) string) (resolvedMCPInvocation, error) {
+	configRaw, _, err := resolvePathOption(configFlag, getenv("JANUS_CONFIG"), "--config/-c", "JANUS_CONFIG", true)
+	if err != nil {
+		return resolvedMCPInvocation{}, err
+	}
+	bundleRaw, _, err := resolvePathOption(policyFlag, getenv("JANUS_POLICY_BUNDLE"), "--policy-bundle/-p", "JANUS_POLICY_BUNDLE", false)
+	if err != nil {
+		return resolvedMCPInvocation{}, err
+	}
+	level, source := resolveValue(logLevelFlag, getenv("JANUS_LOG_LEVEL"))
+	if level == "" {
+		level = "info"
+		source = "default"
+	}
+	return resolvedMCPInvocation{
+		ConfigPath:     configRaw,
+		PolicyBundle:   bundleRaw,
+		LogLevel:       level,
+		LogLevelSource: source,
+		Quiet:          quiet,
+	}, nil
+}
+
+func resolvePathOption(flagValue, envValue, flagName, envName string, required bool) (string, string, error) {
+	value, source := resolveValue(flagValue, envValue)
+	if value == "" {
+		if required {
+			return "", "", fmt.Errorf("%s is required (or %s)", flagName, envName)
+		}
+		return "", "", nil
+	}
+	resolved, err := resolveAbsolutePath(value)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid path for %s/%s: %w", flagName, envName, err)
+	}
+	return resolved, source, nil
+}
+
+func resolveValue(flagValue, envValue string) (string, string) {
+	trimmedFlag := strings.TrimSpace(flagValue)
+	if trimmedFlag != "" {
+		return trimmedFlag, "flag"
+	}
+	trimmedEnv := strings.TrimSpace(envValue)
+	if trimmedEnv != "" {
+		return trimmedEnv, "env"
+	}
+	return "", ""
+}
+
+func resolveAbsolutePath(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("path is empty")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(abs), nil
+}
+
+func rootHelpText() string {
+	return "janus commands:\n" +
+		"  version    print build metadata\n" +
+		"  serve      start gateway server\n" +
+		"  mcp        start MCP stdio server\n" +
+		"  policy     policy test/explain\n" +
+		"  doctor     deterministic preflight checks\n\n" +
+		"example:\n" +
+		"  janus mcp -c config.example.json -p policies/m1_5_minimal.json\n"
+}
+
+func serveHelpText() string {
+	return "usage: janus serve [flags]\n" +
+		"  -c, --config <path>          config json path (or JANUS_CONFIG)\n" +
+		"  -p, --policy-bundle <path>   policy bundle path (or JANUS_POLICY_BUNDLE)\n\n" +
+		"example:\n" +
+		"  janus serve -c config.example.json -p policies/m1_5_minimal.json\n"
+}
+
+func mcpHelpText() string {
+	return "usage: janus mcp [flags]\n" +
+		"  -c, --config <path>          config json path (or JANUS_CONFIG)\n" +
+		"  -p, --policy-bundle <path>   policy bundle path (or JANUS_POLICY_BUNDLE)\n" +
+		"  -l, --log-level <level>      error|warn|info|debug (or JANUS_LOG_LEVEL)\n" +
+		"  -q, --quiet                  suppress banner and non-error logs\n" +
+		"      --log-format <format>    text|json\n\n" +
+		"example:\n" +
+		"  janus mcp -c config.example.json -p policies/m1_5_minimal.json\n"
+}
+
+func doctorHelpText() string {
+	return "usage: janus doctor [flags]\n" +
+		"  -c, --config <path>          config json path (or JANUS_CONFIG)\n" +
+		"  -p, --policy-bundle <path>   policy bundle path (or JANUS_POLICY_BUNDLE)\n" +
+		"      --format <format>        text|json\n\n" +
+		"example:\n" +
+		"  janus doctor -c config.example.json --format json\n"
+}
+
+func writeRedactedLine(w io.Writer, value string) {
+	redacted := redact.DefaultRedactor().RedactText(value)
+	if !strings.HasSuffix(redacted, "\n") {
+		redacted += "\n"
+	}
+	_, _ = io.WriteString(w, redacted)
 }

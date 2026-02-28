@@ -2,13 +2,19 @@ package policy
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 type Bundle struct {
@@ -29,7 +35,17 @@ type Rule struct {
 	Obligations  map[string]any `json:"obligations,omitempty"`
 }
 
+type LoadOptions struct {
+	VerifySignature bool
+	SignaturePath   string
+	PublicKeyPath   string
+}
+
 func LoadBundle(path string) (Bundle, error) {
+	return LoadBundleWithOptions(path, LoadOptions{})
+}
+
+func LoadBundleWithOptions(path string, options LoadOptions) (Bundle, error) {
 	if path == "" {
 		return Bundle{}, errors.New("bundle path is required")
 	}
@@ -49,9 +65,49 @@ func LoadBundle(path string) (Bundle, error) {
 	if err := bundle.Validate(); err != nil {
 		return Bundle{}, err
 	}
+	if options.VerifySignature {
+		if err := verifyBundleSignature(data, options.SignaturePath, options.PublicKeyPath); err != nil {
+			return Bundle{}, err
+		}
+	}
 	sum := sha256.Sum256(data)
 	bundle.Hash = hex.EncodeToString(sum[:])
 	return bundle, nil
+}
+
+func verifyBundleSignature(bundleData []byte, signaturePath, publicKeyPath string) error {
+	if signaturePath == "" || publicKeyPath == "" {
+		return errors.New("signature and public key paths are required")
+	}
+	sigData, err := os.ReadFile(signaturePath)
+	if err != nil {
+		return fmt.Errorf("read signature: %w", err)
+	}
+	sigRaw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sigData)))
+	if err != nil {
+		return errors.New("signature must be base64")
+	}
+	pubPEM, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("read public key: %w", err)
+	}
+	block, _ := pem.Decode(pubPEM)
+	if block == nil {
+		return errors.New("invalid public key pem")
+	}
+	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return errors.New("invalid rsa public key")
+	}
+	pub, ok := parsed.(*rsa.PublicKey)
+	if !ok {
+		return errors.New("public key is not rsa")
+	}
+	digest := sha256.Sum256(bundleData)
+	if err := rsa.VerifyPKCS1v15(pub, crypto.SHA256, digest[:], sigRaw); err != nil {
+		return errors.New("policy bundle signature verification failed")
+	}
+	return nil
 }
 
 func (b Bundle) Validate() error {

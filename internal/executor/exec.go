@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -11,9 +12,11 @@ import (
 )
 
 type ExecParams struct {
-	Argv             []string `json:"argv"`
-	Cwd              string   `json:"cwd"`
-	EnvAllowlistKeys []string `json:"env_allowlist_keys"`
+	Argv               []string          `json:"argv"`
+	Cwd                string            `json:"cwd"`
+	EnvAllowlistKeys   []string          `json:"env_allowlist_keys"`
+	CredentialLeaseIDs []string          `json:"credential_lease_ids,omitempty"`
+	InjectedEnv        map[string]string `json:"-"`
 }
 
 type ExecResult struct {
@@ -70,6 +73,7 @@ func (r *ExecRunner) Run(params ExecParams) (ExecResult, error) {
 		return ExecResult{}, errors.New("cwd escape detected")
 	}
 	cmd.Dir = absCwd
+	cmd.Env = filteredEnv(params.EnvAllowlistKeys, params.InjectedEnv)
 	stdout := newLimitedBuffer(r.maxBytes)
 	stderr := newLimitedBuffer(r.maxBytes)
 	cmd.Stdout = stdout
@@ -90,6 +94,29 @@ func (r *ExecRunner) Run(params ExecParams) (ExecResult, error) {
 		ExitCode:  exitCode,
 		Truncated: truncated,
 	}, nil
+}
+
+func filteredEnv(allowlist []string, injected map[string]string) []string {
+	allowed := map[string]struct{}{}
+	for _, key := range allowlist {
+		allowed[key] = struct{}{}
+	}
+	out := make([]string, 0)
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		if _, ok := allowed[parts[0]]; ok {
+			out = append(out, kv)
+		}
+	}
+	for key, value := range injected {
+		if _, ok := allowed[key]; ok {
+			out = append(out, key+"="+value)
+		}
+	}
+	return out
 }
 
 type limitedBuffer struct {

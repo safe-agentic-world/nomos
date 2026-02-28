@@ -1,0 +1,227 @@
+name: Enterprise CI
+
+on:
+  push:
+    branches: ["**"]
+    tags:
+      - "v*"
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+
+env:
+  GOFLAGS: -mod=readonly
+  GO_VERSION: "1.24.13"
+
+jobs:
+  quick-checks:
+    name: Quick Checks
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+  lint-and-static:
+    name: Lint And Static Analysis
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Verify formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(gofmt -l .)"
+          if [[ -n "${files}" ]]; then
+            echo "Unformatted files detected:"
+            echo "${files}"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+  test:
+    name: Test
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+  race-and-smoke:
+    name: Race + Doctor Smoke
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Race tests
+        run: go test -race ./...
+
+      - name: Doctor smoke (ready)
+        shell: bash
+        env:
+          JANUS_MCP_ENABLED: "true"
+        run: |
+          set -euo pipefail
+          go run ./cmd/janus doctor -c ./config.example.json -p ./policies/m1_5_minimal.json --format json > doctor.json
+          cat doctor.json
+          grep -q '"overall_status":"READY"' doctor.json
+
+  vulnerability-scan:
+    name: Vulnerability Scan
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  docker-build:
+    name: Docker Build Validation
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: janus:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release-binaries:
+    name: Release Binaries
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs:
+      - lint-and-static
+      - test
+      - race-and-smoke
+      - vulnerability-scan
+      - docker-build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="${GITHUB_SHA::12}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          for target in "linux amd64" "windows amd64 .exe" "darwin amd64"; do
+            set -- ${target}
+            GOOS_TARGET="$1"
+            GOARCH_TARGET="$2"
+            EXT="${3:-}"
+            OUT="dist/janus-${VERSION}-${GOOS_TARGET}-${GOARCH_TARGET}${EXT}"
+            GOOS="${GOOS_TARGET}" GOARCH="${GOARCH_TARGET}" \
+              go build -ldflags "-X github.com/safe-agentic-world/janus/internal/version.Version=${VERSION} -X github.com/safe-agentic-world/janus/internal/version.Commit=${COMMIT} -X github.com/safe-agentic-world/janus/internal/version.BuildDate=${BUILD_DATE}" \
+              -o "${OUT}" ./cmd/janus
+            sha256sum "${OUT}" > "${OUT}.sha256"
+          done
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: janus-release-binaries
+          path: dist/*

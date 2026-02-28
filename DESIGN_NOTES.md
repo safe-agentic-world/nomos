@@ -1,0 +1,29 @@
+# Design Notes
+
+- M0 transport is limited to HTTP for the gateway; other transports are rejected to preserve a strict, deterministic surface while the policy layer is deny-by-default.
+- Identity and environment are injected from config and rejected if missing; the action request does not accept identity fields to avoid agent-supplied claims.
+- Redaction is implemented with conservative, minimal patterns in M0 (authorization headers, bearer tokens, AWS key prefixes). This keeps "redact before logging/returning" in place while leaving room for more comprehensive rules in later milestones.
+- M1 normalization treats traversal attempts (`..`) as the deterministic proxy for symlink escape rejection; executor-time resolution will be required for full TOCTOU-safe symlink handling.
+- `url://` normalization lowercases hosts and strips ports 80/443 even without scheme; this is a conservative default for determinism until explicit schemes are introduced.
+- M1.5 MCP requests derive `action_id` and `trace_id` from the MCP request id (`mcp_<id>`) to avoid non-deterministic ID generation.
+- M1.5 policy bundles are JSON-only with exact-match rules for `action_type` and `resource` to keep evaluation deterministic and deny-by-default.
+- M2 authentication supports dev API keys and service HMAC signatures; agent runtime identity is verified separately via HMAC to avoid agent-supplied identity.
+- M3 policy matching supports deterministic glob patterns and optional identity/risk filters; rule order does not affect decisions (deny-wins).
+- M3 risk flags are computed from normalized action and deterministic thresholds (large IO at 32KB, high fanout at 100 actions) without agent-supplied inputs.
+- M4 capabilities are derived by evaluating synthetic actions against policy rules (sample resources per tool); this is conservative and may under-report permissions.
+- M4 publish boundary validation treats each changed path as a `repo.apply_patch` action against `file://workspace/<path>` and blocks any non-ALLOW decision.
+- M5 `repo.apply_patch` is implemented as a deterministic file replacement (`path` + `content`) rather than full diff application.
+- M5 HTTP requests use normalized `url://` resources and map them to `https://` for execution; host allowlists are enforced prior to request.
+- M6 sandbox selection is obligation-driven (`sandbox_mode`) and deterministically fails closed when the configured profile is weaker than required.
+- M7 approval scope defaults to exact action fingerprints; bounded class approvals are limited to `action_type_resource` via explicit policy obligation (`approval_scope_class`) to keep scope narrow and deterministic.
+- M7 Slack/Teams integration uses explicit shared-token headers with strict JSON payload schemas to preserve deterministic validation; provider-specific signature verification can be layered in later hardening milestones.
+- M8 uses `action.completed` as the canonical replay-level event containing required `AuditEvent v1` fields, while retaining trace/decision events for timeline readability.
+- M9 hash chaining is computed on canonicalized event payloads after attaching `prev_event_hash`; this keeps verification deterministic across OS/language boundaries while leaving signing/key management for later hardening.
+- M10 visibility surfaces `credential_lease_ids` from policy/executor metadata only (never from raw secrets), and defaults to an empty list when no broker lease IDs are present.
+- M11 integration guidance treats capability envelopes as advisory and keeps per-action authorization as the source of truth (deny-wins), which is the safest behavior for unmanaged environments.
+- M12 interprets the HTTP Run API as `/run` mapped to the existing strict action handler, avoiding a parallel execution path and preserving deterministic policy/audit behavior.
+- M13 OIDC verification uses statically configured RSA public keys (no discovery) as the safest deterministic default for offline/controlled deployments; key rotation automation is deferred.
+- DoD closeout adds an in-memory credential broker with lease TTL and strict `(principal, agent, environment, trace_id)` binding; only lease IDs are returned to agents.
+- M14 keeps MCP stdout protocol-pure by routing operator UX output (ready banner/logs/errors) to stderr and using a non-emitting in-process audit recorder for MCP runtime handling.
+- M15 resolves `--config/-c` and `--policy-bundle/-p` to absolute paths at parse time and applies precedence `flag > env > fail` (`JANUS_CONFIG`, `JANUS_POLICY_BUNDLE`, `JANUS_LOG_LEVEL`) to reduce invocation ambiguity while preserving fail-closed startup.
+- M16 treats "recognized environment" as a strict deterministic allowlist (`dev`, `staging`, `prod`, `ci`, `local`, `test`) for doctor preflight reporting; this affects readiness diagnostics only and does not change runtime policy semantics.

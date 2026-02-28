@@ -7,8 +7,12 @@ type VerifiedIdentity struct {
 }
 
 type AuthConfig struct {
-	APIKeys        map[string]string
-	ServiceSecrets map[string]string
-	AgentSecrets   map[string]string
-	Environment    string
+	APIKeys           map[string]string
+	ServiceSecrets    map[string]string
+	AgentSecrets      map[string]string
+	Environment       string
+	OIDCEnabled       bool
+	OIDCIssuer        string
+	OIDCAudience      string
+	OIDCPublicKeyPath string
 }

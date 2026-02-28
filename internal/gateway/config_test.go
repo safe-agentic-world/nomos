@@ -50,6 +50,8 @@ func TestLoadConfigAppliesEnvOverrides(t *testing.T) {
 		"JANUS_IDENTITY_API_KEY":      "override-key",
 		"JANUS_IDENTITY_AGENT_SECRET": "override-agent-secret",
 		"JANUS_POLICY_BUNDLE_PATH":    overridePath,
+		"JANUS_APPROVALS_SLACK_TOKEN": "slack-token",
+		"JANUS_APPROVALS_TEAMS_TOKEN": "teams-token",
 	}
 	cfg, err := LoadConfig(path, func(key string) string {
 		return env[key]
@@ -74,6 +76,12 @@ func TestLoadConfigAppliesEnvOverrides(t *testing.T) {
 	}
 	if cfg.Policy.BundlePath != overridePath {
 		t.Fatalf("expected bundle override, got %s", cfg.Policy.BundlePath)
+	}
+	if cfg.Approvals.SlackToken != "slack-token" {
+		t.Fatalf("expected slack token override, got %s", cfg.Approvals.SlackToken)
+	}
+	if cfg.Approvals.TeamsToken != "teams-token" {
+		t.Fatalf("expected teams token override, got %s", cfg.Approvals.TeamsToken)
 	}
 }
 
@@ -108,5 +116,196 @@ func TestLoadConfigRequiresPolicyBundlePath(t *testing.T) {
 	_, err := LoadConfig(path, os.Getenv, "")
 	if err == nil {
 		t.Fatal("expected policy bundle path error")
+	}
+}
+
+func TestLoadConfigApprovalsValidationAndDefaults(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	path := filepath.Join(dir, "config.json")
+	configJSON := mustMarshal(map[string]any{
+		"gateway": map[string]any{"listen": ":8080", "transport": "http"},
+		"policy":  map[string]any{"policy_bundle_path": bundlePath},
+		"executor": map[string]any{
+			"sandbox_enabled": true,
+		},
+		"audit":    map[string]any{"sink": "stdout"},
+		"mcp":      map[string]any{"enabled": false},
+		"upstream": map[string]any{"routes": []any{}},
+		"approvals": map[string]any{
+			"enabled": true,
+		},
+		"identity": map[string]any{
+			"principal":   "system",
+			"agent":       "janus",
+			"environment": "dev",
+			"api_keys": map[string]any{
+				"key1": "system",
+			},
+			"agent_secrets": map[string]any{
+				"janus": "secret",
+			},
+		},
+	})
+	if err := os.WriteFile(path, configJSON, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := LoadConfig(path, os.Getenv, "")
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Approvals.StorePath == "" {
+		t.Fatal("expected approvals.store_path default")
+	}
+	if cfg.Approvals.TTLSeconds <= 0 {
+		t.Fatal("expected approvals.ttl_seconds default")
+	}
+}
+
+func TestLoadConfigStatelessModeRules(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	path := filepath.Join(dir, "config.json")
+	configJSON := mustMarshal(map[string]any{
+		"gateway": map[string]any{"listen": ":8080", "transport": "http", "concurrency_limit": 4},
+		"runtime": map[string]any{"stateless_mode": true},
+		"policy":  map[string]any{"policy_bundle_path": bundlePath},
+		"executor": map[string]any{
+			"sandbox_enabled": true,
+		},
+		"audit":    map[string]any{"sink": "stdout"},
+		"mcp":      map[string]any{"enabled": false},
+		"upstream": map[string]any{"routes": []any{}},
+		"approvals": map[string]any{
+			"enabled": false,
+		},
+		"identity": map[string]any{
+			"principal":   "system",
+			"agent":       "janus",
+			"environment": "dev",
+			"api_keys": map[string]any{
+				"key1": "system",
+			},
+			"agent_secrets": map[string]any{
+				"janus": "secret",
+			},
+		},
+	})
+	if err := os.WriteFile(path, configJSON, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := LoadConfig(path, os.Getenv, "")
+	if err != nil {
+		t.Fatalf("expected valid stateless config, got %v", err)
+	}
+	if !cfg.Runtime.StatelessMode {
+		t.Fatal("expected stateless mode true")
+	}
+	if cfg.Gateway.ConcurrencyLimit != 4 {
+		t.Fatalf("expected concurrency limit 4, got %d", cfg.Gateway.ConcurrencyLimit)
+	}
+
+	badPath := filepath.Join(dir, "config-bad.json")
+	badJSON := mustMarshal(map[string]any{
+		"gateway": map[string]any{"listen": ":8080", "transport": "http"},
+		"runtime": map[string]any{"stateless_mode": true},
+		"policy":  map[string]any{"policy_bundle_path": bundlePath},
+		"executor": map[string]any{
+			"sandbox_enabled": true,
+		},
+		"audit":    map[string]any{"sink": "sqlite:./audit.db"},
+		"mcp":      map[string]any{"enabled": false},
+		"upstream": map[string]any{"routes": []any{}},
+		"approvals": map[string]any{
+			"enabled": true,
+		},
+		"identity": map[string]any{
+			"principal":   "system",
+			"agent":       "janus",
+			"environment": "dev",
+			"api_keys": map[string]any{
+				"key1": "system",
+			},
+			"agent_secrets": map[string]any{
+				"janus": "secret",
+			},
+		},
+	})
+	if err := os.WriteFile(badPath, badJSON, 0o600); err != nil {
+		t.Fatalf("write bad config: %v", err)
+	}
+	if _, err := LoadConfig(badPath, os.Getenv, ""); err == nil {
+		t.Fatal("expected stateless mode validation error")
+	}
+}
+
+func TestLoadConfigM13HardeningFields(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	sigPath := filepath.Join(dir, "bundle.sig")
+	pubPath := filepath.Join(dir, "bundle_pub.pem")
+	oidcPub := filepath.Join(dir, "oidc_pub.pem")
+	if err := os.WriteFile(sigPath, []byte("AA=="), 0o600); err != nil {
+		t.Fatalf("write sig: %v", err)
+	}
+	if err := os.WriteFile(pubPath, []byte("-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA7a+x\n-----END PUBLIC KEY-----"), 0o600); err != nil {
+		t.Fatalf("write policy pub: %v", err)
+	}
+	if err := os.WriteFile(oidcPub, []byte("-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA7a+x\n-----END PUBLIC KEY-----"), 0o600); err != nil {
+		t.Fatalf("write oidc pub: %v", err)
+	}
+	path := filepath.Join(dir, "config.json")
+	configJSON := mustMarshal(map[string]any{
+		"gateway": map[string]any{
+			"listen":                           ":8080",
+			"transport":                        "http",
+			"concurrency_limit":                5,
+			"rate_limit_per_minute":            10,
+			"circuit_breaker_failures":         3,
+			"circuit_breaker_cooldown_seconds": 30,
+		},
+		"runtime": map[string]any{"stateless_mode": false},
+		"policy": map[string]any{
+			"policy_bundle_path": bundlePath,
+			"verify_signatures":  true,
+			"signature_path":     sigPath,
+			"public_key_path":    pubPath,
+		},
+		"executor": map[string]any{"sandbox_enabled": true},
+		"audit":    map[string]any{"sink": "stdout"},
+		"mcp":      map[string]any{"enabled": false},
+		"upstream": map[string]any{"routes": []any{}},
+		"approvals": map[string]any{
+			"enabled": false,
+		},
+		"identity": map[string]any{
+			"principal":   "system",
+			"agent":       "janus",
+			"environment": "dev",
+			"agent_secrets": map[string]any{
+				"janus": "secret",
+			},
+			"oidc": map[string]any{
+				"enabled":         true,
+				"issuer":          "https://issuer.example",
+				"audience":        "janus",
+				"public_key_path": oidcPub,
+			},
+		},
+	})
+	if err := os.WriteFile(path, configJSON, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if _, err := LoadConfig(path, os.Getenv, ""); err != nil {
+		t.Fatalf("expected valid m13 config, got %v", err)
 	}
 }

@@ -5,16 +5,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/audit"
-	"github.com/ai-developer-project/janus/internal/executor"
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/redact"
-	"github.com/ai-developer-project/janus/internal/service"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/audit"
+	"github.com/safe-agentic-world/janus/internal/executor"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/service"
+	"github.com/safe-agentic-world/janus/internal/version"
 )
 
 type Server struct {
@@ -24,6 +27,9 @@ type Server struct {
 	sandboxEnabled   bool
 	outputMaxBytes   int
 	outputMaxLines   int
+	policyBundleHash string
+	logger           *runtimeLogger
+	pid              int
 }
 
 type Request struct {
@@ -36,6 +42,25 @@ type Response struct {
 	ID     string      `json:"id"`
 	Result interface{} `json:"result,omitempty"`
 	Error  string      `json:"error,omitempty"`
+}
+
+type rpcRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type rpcResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	ID      interface{} `json:"id,omitempty"`
+	Result  interface{} `json:"result,omitempty"`
+	Error   *rpcError   `json:"error,omitempty"`
 }
 
 type fsReadParams struct {
@@ -70,6 +95,10 @@ type changeSetParams struct {
 }
 
 func NewServer(bundlePath string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string) (*Server, error) {
+	return NewServerWithRuntimeOptions(bundlePath, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile, RuntimeOptions{})
+}
+
+func NewServerWithRuntimeOptions(bundlePath string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string, runtimeOptions RuntimeOptions) (*Server, error) {
 	if identity.Principal == "" || identity.Agent == "" || identity.Environment == "" {
 		return nil, errors.New("identity is required")
 	}
@@ -77,7 +106,7 @@ func NewServer(bundlePath string, identity identity.VerifiedIdentity, workspaceR
 	if err != nil {
 		return nil, err
 	}
-	writer, err := audit.NewWriter("stdout", redact.DefaultRedactor())
+	logger, err := newRuntimeLogger(runtimeOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +116,7 @@ func NewServer(bundlePath string, identity identity.VerifiedIdentity, workspaceR
 	patcher := executor.NewPatchApplier(workspaceRoot, maxBytes)
 	execRunner := executor.NewExecRunner(workspaceRoot, maxBytes)
 	httpRunner := executor.NewHTTPRunner(maxBytes)
-	svc := service.New(engine, reader, writerExec, patcher, execRunner, httpRunner, writer, redact.DefaultRedactor(), sandboxProfile, nil)
+	svc := service.New(engine, reader, writerExec, patcher, execRunner, httpRunner, noopRecorder{}, logger.redactor, nil, nil, sandboxProfile, nil)
 	return &Server{
 		service:          svc,
 		identity:         identity,
@@ -95,29 +124,260 @@ func NewServer(bundlePath string, identity identity.VerifiedIdentity, workspaceR
 		sandboxEnabled:   sandboxEnabled,
 		outputMaxBytes:   maxBytes,
 		outputMaxLines:   maxLines,
+		policyBundleHash: bundle.Hash,
+		logger:           logger,
+		pid:              os.Getpid(),
 	}, nil
 }
 
 func (s *Server) ServeStdio(in io.Reader, out io.Writer) error {
-	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
-	encoder := json.NewEncoder(out)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
+	reader := bufio.NewReader(in)
+	writer := bufio.NewWriter(out)
+	defer writer.Flush()
+	s.logger.ReadyBanner(s.identity.Environment, s.policyBundleHash, version.Current().Version, s.pid)
+	for {
+		peek, err := reader.Peek(1)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			s.logger.Error("mcp stdio read failure: " + err.Error())
+			return err
+		}
+		if len(peek) == 0 {
 			continue
 		}
-		var req Request
-		dec := json.NewDecoder(bytes.NewReader(line))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&req); err != nil {
-			_ = encoder.Encode(Response{ID: "", Error: "invalid_request"})
+		if peek[0] == '{' {
+			line, err := reader.ReadBytes('\n')
+			if err != nil && !errors.Is(err, io.EOF) {
+				s.logger.Error("mcp stdio line read failure: " + err.Error())
+				return err
+			}
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				continue
+			}
+			resp := s.handleLegacyLine(line)
+			if writeErr := writeJSONLine(writer, resp); writeErr != nil {
+				s.logger.Error("mcp stdio line write failure: " + writeErr.Error())
+				return writeErr
+			}
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
 			continue
 		}
-		resp := s.handleRequest(req)
-		_ = encoder.Encode(resp)
+		payload, readErr := readFramedPayload(reader)
+		if readErr != nil {
+			s.logger.Error("mcp stdio framed read failure: " + readErr.Error())
+			return readErr
+		}
+		resp := s.handleRPCPayload(payload)
+		if resp == nil {
+			continue
+		}
+		if writeErr := writeFramedPayload(writer, resp); writeErr != nil {
+			s.logger.Error("mcp stdio framed write failure: " + writeErr.Error())
+			return writeErr
+		}
 	}
-	return scanner.Err()
+}
+
+func (s *Server) handleLegacyLine(line []byte) Response {
+	var req Request
+	dec := json.NewDecoder(bytes.NewReader(line))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		s.logger.Debug("invalid MCP legacy request payload")
+		return Response{ID: "", Error: "invalid_request"}
+	}
+	s.logger.Debug("handling MCP legacy request")
+	return s.handleRequest(req)
+}
+
+func (s *Server) handleRPCPayload(payload []byte) *rpcResponse {
+	var req rpcRequest
+	dec := json.NewDecoder(bytes.NewReader(payload))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		return &rpcResponse{JSONRPC: "2.0", Error: &rpcError{Code: -32700, Message: "parse error"}}
+	}
+	if req.Method == "" {
+		return &rpcResponse{JSONRPC: "2.0", ID: parseRPCID(req.ID), Error: &rpcError{Code: -32600, Message: "invalid request"}}
+	}
+	switch req.Method {
+	case "initialize":
+		return &rpcResponse{
+			JSONRPC: "2.0",
+			ID:      parseRPCID(req.ID),
+			Result: map[string]any{
+				"protocolVersion": "2024-11-05",
+				"capabilities": map[string]any{
+					"tools": map[string]any{},
+				},
+				"serverInfo": map[string]any{
+					"name":    "janus",
+					"version": version.Current().Version,
+				},
+			},
+		}
+	case "notifications/initialized":
+		return nil
+	case "ping":
+		return &rpcResponse{
+			JSONRPC: "2.0",
+			ID:      parseRPCID(req.ID),
+			Result:  map[string]any{},
+		}
+	case "tools/list":
+		return &rpcResponse{
+			JSONRPC: "2.0",
+			ID:      parseRPCID(req.ID),
+			Result: map[string]any{
+				"tools": s.toolsList(),
+			},
+		}
+	case "tools/call":
+		resp, err := s.handleToolsCall(req)
+		if err != nil {
+			return &rpcResponse{
+				JSONRPC: "2.0",
+				ID:      parseRPCID(req.ID),
+				Result: map[string]any{
+					"content": []map[string]string{{"type": "text", "text": err.Error()}},
+					"isError": true,
+				},
+			}
+		}
+		return &rpcResponse{
+			JSONRPC: "2.0",
+			ID:      parseRPCID(req.ID),
+			Result: map[string]any{
+				"content": []map[string]string{{"type": "text", "text": resp}},
+				"isError": false,
+			},
+		}
+	default:
+		return &rpcResponse{JSONRPC: "2.0", ID: parseRPCID(req.ID), Error: &rpcError{Code: -32601, Message: "method not found"}}
+	}
+}
+
+func (s *Server) handleToolsCall(req rpcRequest) (string, error) {
+	var payload struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(req.Params))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&payload); err != nil {
+		return "", errors.New("invalid params")
+	}
+	if payload.Name == "" {
+		return "", errors.New("invalid params")
+	}
+	if len(payload.Arguments) == 0 {
+		payload.Arguments = []byte(`{}`)
+	}
+	legacyReq := Request{
+		ID:     string(req.ID),
+		Method: payload.Name,
+		Params: payload.Arguments,
+	}
+	legacyResp := s.handleRequest(legacyReq)
+	if legacyResp.Error != "" {
+		return "", errors.New(legacyResp.Error)
+	}
+	data, err := json.Marshal(legacyResp.Result)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func (s *Server) toolsList() []map[string]any {
+	return []map[string]any{
+		{"name": "janus.capabilities", "description": "Return policy-derived capability envelope", "inputSchema": map[string]any{"type": "object", "additionalProperties": false}},
+		{"name": "janus.fs_read", "description": "Read a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}}, "required": []string{"resource"}, "additionalProperties": false}},
+		{"name": "janus.fs_write", "description": "Write a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"resource", "content"}, "additionalProperties": false}},
+		{"name": "janus.apply_patch", "description": "Apply deterministic patch payload", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}, "additionalProperties": false}},
+		{"name": "janus.exec", "description": "Run a bounded process action", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"argv": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "cwd": map[string]any{"type": "string"}, "env_allowlist_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"argv"}, "additionalProperties": false}},
+		{"name": "janus.http_request", "description": "Run a policy-gated HTTP request", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "method": map[string]any{"type": "string"}, "body": map[string]any{"type": "string"}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}}, "required": []string{"resource"}, "additionalProperties": false}},
+		{"name": "repo.validate_change_set", "description": "Validate changed repo paths against policy", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"paths": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"paths"}, "additionalProperties": false}},
+	}
+}
+
+func readFramedPayload(reader *bufio.Reader) ([]byte, error) {
+	headers := map[string]string{}
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			return nil, errors.New("invalid framed header")
+		}
+		headers[strings.ToLower(strings.TrimSpace(parts[0]))] = strings.TrimSpace(parts[1])
+	}
+	lengthRaw := headers["content-length"]
+	if lengthRaw == "" {
+		return nil, errors.New("missing content-length")
+	}
+	n, err := strconv.Atoi(lengthRaw)
+	if err != nil || n < 0 || n > (4*1024*1024) {
+		return nil, errors.New("invalid content-length")
+	}
+	body := make([]byte, n)
+	if _, err := io.ReadFull(reader, body); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func writeFramedPayload(writer *bufio.Writer, payload *rpcResponse) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(data)); err != nil {
+		return err
+	}
+	if _, err := writer.Write(data); err != nil {
+		return err
+	}
+	return writer.Flush()
+}
+
+func writeJSONLine(writer *bufio.Writer, payload Response) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(data); err != nil {
+		return err
+	}
+	if err := writer.WriteByte('\n'); err != nil {
+		return err
+	}
+	return writer.Flush()
+}
+
+func parseRPCID(raw json.RawMessage) interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+	var decoded interface{}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil
+	}
+	return decoded
 }
 
 func (s *Server) handleRequest(req Request) Response {
@@ -338,7 +598,11 @@ func (s *Server) toolEnabled(tool string) bool {
 }
 
 func RunStdio(bundlePath string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string) error {
-	server, err := NewServer(bundlePath, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile)
+	return RunStdioWithRuntimeOptions(bundlePath, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile, RuntimeOptions{})
+}
+
+func RunStdioWithRuntimeOptions(bundlePath string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string, runtimeOptions RuntimeOptions) error {
+	server, err := NewServerWithRuntimeOptions(bundlePath, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile, runtimeOptions)
 	if err != nil {
 		return err
 	}
@@ -352,3 +616,7 @@ func mustJSONBytes(value any) []byte {
 	}
 	return data
 }
+
+type noopRecorder struct{}
+
+func (noopRecorder) WriteEvent(_ audit.Event) error { return nil }

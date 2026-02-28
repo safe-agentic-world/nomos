@@ -1,1 +1,29 @@
-**.md
+# Build artifacts
+/janus
+/janus.exe
+/bin/
+/dist/
+/build/
+
+# Go coverage and profiling
+*.out
+*.test
+*.prof
+coverage.*
+
+# Editor/OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Local runtime/state artifacts
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+
+# Temporary directories
+.tmp/
+tmp/

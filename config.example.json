@@ -1,14 +1,42 @@
 {
   "gateway": {
     "listen": ":8080",
-    "transport": "http"
+    "transport": "http",
+    "concurrency_limit": 32,
+    "rate_limit_per_minute": 120,
+    "circuit_breaker_failures": 5,
+    "circuit_breaker_cooldown_seconds": 60,
+    "tls": {
+      "enabled": false,
+      "cert_file": "",
+      "key_file": "",
+      "client_ca_file": "",
+      "require_mtls": false
+    }
+  },
+  "runtime": {
+    "stateless_mode": false
   },
   "policy": {
-    "policy_bundle_path": ".\\policy-bundle.json"
+    "policy_bundle_path": ".\\policy-bundle.json",
+    "verify_signatures": false,
+    "signature_path": "",
+    "public_key_path": ""
   },
   "executor": {
     "sandbox_enabled": true,
     "sandbox_profile": "local"
+  },
+  "credentials": {
+    "enabled": false,
+    "secrets": [
+      {
+        "id": "github_token",
+        "env_key": "GITHUB_TOKEN",
+        "value": "replace-me",
+        "ttl_seconds": 300
+      }
+    ]
   },
   "audit": {
     "sink": "stdout"
@@ -20,7 +48,12 @@
     "routes": []
   },
   "approvals": {
-    "enabled": false
+    "enabled": false,
+    "store_path": ".\\janus-approvals.db",
+    "ttl_seconds": 900,
+    "webhook_token": "",
+    "slack_token": "",
+    "teams_token": ""
   },
   "identity": {
     "principal": "system",
@@ -31,6 +64,12 @@
     },
     "agent_secrets": {
       "janus": "dev-agent-secret"
+    },
+    "oidc": {
+      "enabled": false,
+      "issuer": "",
+      "audience": "",
+      "public_key_path": ""
     }
   }
 }

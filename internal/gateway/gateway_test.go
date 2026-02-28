@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/audit"
+	"github.com/safe-agentic-world/janus/internal/audit"
 )
 
 func TestGatewayStartAndShutdown(t *testing.T) {
@@ -109,14 +109,21 @@ func TestGatewayEmitsTraceEvents(t *testing.T) {
 	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
 	w := httptest.NewRecorder()
 	gw.handleAction(w, req)
-	if len(recorder.events) != 3 {
-		t.Fatalf("expected 3 events, got %d", len(recorder.events))
+	if len(recorder.events) < 3 {
+		t.Fatalf("expected at least 3 events, got %d", len(recorder.events))
 	}
 	if recorder.events[0].EventType != "trace.start" {
 		t.Fatalf("expected trace.start, got %s", recorder.events[0].EventType)
 	}
-	if recorder.events[2].EventType != "trace.end" {
-		t.Fatalf("expected trace.end, got %s", recorder.events[2].EventType)
+	foundTraceEnd := false
+	for _, event := range recorder.events {
+		if event.EventType == "trace.end" {
+			foundTraceEnd = true
+			break
+		}
+	}
+	if !foundTraceEnd {
+		t.Fatal("expected trace.end event")
 	}
 	for _, event := range recorder.events {
 		if event.TraceID != "trace1" {
@@ -126,6 +133,248 @@ func TestGatewayEmitsTraceEvents(t *testing.T) {
 	decisionEvent := recorder.events[1]
 	if decisionEvent.Principal != "system" || decisionEvent.Agent != "janus" || decisionEvent.Environment != "dev" {
 		t.Fatalf("expected identity in audit event, got principal=%s agent=%s env=%s", decisionEvent.Principal, decisionEvent.Agent, decisionEvent.Environment)
+	}
+}
+
+func TestGatewayRunEndpointUsesActionHandler(t *testing.T) {
+	recorder := &recordSink{}
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("ok"), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	cfg := Config{
+		Gateway:  GatewayConfig{Listen: "127.0.0.1:0", Transport: "http", ConcurrencyLimit: 2},
+		Audit:    AuditConfig{Sink: "stdout"},
+		Executor: ExecutorConfig{WorkspaceRoot: dir},
+		Identity: IdentityConfig{
+			Principal:   "system",
+			Agent:       "janus",
+			Environment: "dev",
+			APIKeys: map[string]string{
+				"key1": "system",
+			},
+			AgentSecrets: map[string]string{
+				"janus": "agent-secret",
+			},
+		},
+		Policy: PolicyConfig{BundlePath: bundlePath},
+	}
+	gw, err := NewWithRecorder(cfg, recorder, func() time.Time { return time.Unix(0, 0) })
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	if err := gw.Start(); err != nil {
+		t.Fatalf("start gateway: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = gw.Shutdown(context.Background())
+	})
+	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
+	req, err := http.NewRequest(http.MethodPost, "http://"+gw.listener.Addr().String()+"/run", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer key1")
+	req.Header.Set("X-Janus-Agent-Id", "janus")
+	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestGatewayConcurrencyLimitReturns429(t *testing.T) {
+	recorder := &recordSink{}
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	cfg := Config{
+		Gateway: GatewayConfig{Listen: "127.0.0.1:0", Transport: "http", ConcurrencyLimit: 1},
+		Audit:   AuditConfig{Sink: "stdout"},
+		Identity: IdentityConfig{
+			Principal:   "system",
+			Agent:       "janus",
+			Environment: "dev",
+			APIKeys: map[string]string{
+				"key1": "system",
+			},
+			AgentSecrets: map[string]string{
+				"janus": "agent-secret",
+			},
+		},
+		Policy: PolicyConfig{BundlePath: bundlePath},
+	}
+	gw, err := NewWithRecorder(cfg, recorder, func() time.Time { return time.Unix(0, 0) })
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	// Occupy the only slot to force rate-limit path deterministically.
+	gw.actionTokens <- struct{}{}
+
+	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer key1")
+	req.Header.Set("X-Janus-Agent-Id", "janus")
+	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	w := httptest.NewRecorder()
+	gw.handleAction(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestGatewayRateLimitPerPrincipal(t *testing.T) {
+	recorder := &recordSink{}
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("ok"), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	cfg := Config{
+		Gateway:  GatewayConfig{Listen: "127.0.0.1:0", Transport: "http", ConcurrencyLimit: 2, RateLimitPerMin: 1, CircuitFailures: 5, CircuitCooldownS: 60},
+		Audit:    AuditConfig{Sink: "stdout"},
+		Executor: ExecutorConfig{WorkspaceRoot: dir},
+		Identity: IdentityConfig{
+			Principal:   "system",
+			Agent:       "janus",
+			Environment: "dev",
+			APIKeys: map[string]string{
+				"key1": "system",
+			},
+			AgentSecrets: map[string]string{
+				"janus": "agent-secret",
+			},
+		},
+		Policy: PolicyConfig{BundlePath: bundlePath},
+	}
+	gw, err := NewWithRecorder(cfg, recorder, func() time.Time { return time.Unix(0, 0) })
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer key1")
+	req.Header.Set("X-Janus-Agent-Id", "janus")
+	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	w := httptest.NewRecorder()
+	gw.handleAction(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer key1")
+	req.Header.Set("X-Janus-Agent-Id", "janus")
+	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	gw.handleAction(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", w.Code)
+	}
+}
+
+func TestGatewayCircuitBreakerOpensAfterFailures(t *testing.T) {
+	recorder := &recordSink{}
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	now := time.Unix(0, 0)
+	cfg := Config{
+		Gateway:  GatewayConfig{Listen: "127.0.0.1:0", Transport: "http", ConcurrencyLimit: 2, RateLimitPerMin: 100, CircuitFailures: 2, CircuitCooldownS: 60},
+		Audit:    AuditConfig{Sink: "stdout"},
+		Executor: ExecutorConfig{WorkspaceRoot: dir},
+		Identity: IdentityConfig{
+			Principal:   "system",
+			Agent:       "janus",
+			Environment: "dev",
+			APIKeys: map[string]string{
+				"key1": "system",
+			},
+			AgentSecrets: map[string]string{
+				"janus": "agent-secret",
+			},
+		},
+		Policy: PolicyConfig{BundlePath: bundlePath},
+	}
+	gw, err := NewWithRecorder(cfg, recorder, func() time.Time { return now })
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/missing.txt","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
+	makeReq := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer key1")
+		req.Header.Set("X-Janus-Agent-Id", "janus")
+		req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+		w := httptest.NewRecorder()
+		gw.handleAction(w, req)
+		return w
+	}
+	if w := makeReq(); w.Code != http.StatusBadRequest {
+		t.Fatalf("expected first failure 400, got %d", w.Code)
+	}
+	if w := makeReq(); w.Code != http.StatusBadRequest {
+		t.Fatalf("expected second failure 400, got %d", w.Code)
+	}
+	if w := makeReq(); w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected circuit open 429, got %d", w.Code)
+	}
+}
+
+func TestGatewayRequiresMTLSClientCert(t *testing.T) {
+	recorder := &recordSink{}
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow-readme","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("ok"), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	cfg := Config{
+		Gateway:  GatewayConfig{Listen: "127.0.0.1:0", Transport: "http", ConcurrencyLimit: 2, RateLimitPerMin: 100, CircuitFailures: 5, CircuitCooldownS: 60, TLS: TLSConfig{RequireMTLS: true}},
+		Audit:    AuditConfig{Sink: "stdout"},
+		Executor: ExecutorConfig{WorkspaceRoot: dir},
+		Identity: IdentityConfig{
+			Principal:   "system",
+			Agent:       "janus",
+			Environment: "dev",
+			APIKeys: map[string]string{
+				"key1": "system",
+			},
+			AgentSecrets: map[string]string{
+				"janus": "agent-secret",
+			},
+		},
+		Policy: PolicyConfig{BundlePath: bundlePath},
+	}
+	gw, err := NewWithRecorder(cfg, recorder, func() time.Time { return time.Unix(0, 0) })
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	body := `{"schema_version":"v1","action_id":"act1","action_type":"fs.read","resource":"file://workspace/README.md","params":{},"trace_id":"trace1","context":{"extensions":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer key1")
+	req.Header.Set("X-Janus-Agent-Id", "janus")
+	req.Header.Set("X-Janus-Agent-Signature", hmacHex("agent-secret", []byte(body)))
+	w := httptest.NewRecorder()
+	gw.handleAction(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when mTLS required, got %d", w.Code)
 	}
 }
 

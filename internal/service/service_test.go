@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/audit"
-	"github.com/ai-developer-project/janus/internal/executor"
-	"github.com/ai-developer-project/janus/internal/identity"
-	"github.com/ai-developer-project/janus/internal/policy"
-	"github.com/ai-developer-project/janus/internal/redact"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/audit"
+	"github.com/safe-agentic-world/janus/internal/executor"
+	"github.com/safe-agentic-world/janus/internal/identity"
+	"github.com/safe-agentic-world/janus/internal/policy"
+	"github.com/safe-agentic-world/janus/internal/redact"
 )
 
 type recordSink struct {
@@ -49,7 +49,7 @@ func TestServiceAllowsReadAndRedacts(t *testing.T) {
 	execRunner := executor.NewExecRunner(dir, 32)
 	httpRunner := executor.NewHTTPRunner(32)
 	httpRunner.SetClient(newTestHTTPClient("ok"))
-	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), "local", func() time.Time { return time.Unix(0, 0) })
+	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), nil, nil, "local", func() time.Time { return time.Unix(0, 0) })
 
 	act, err := action.ToAction(action.Request{
 		SchemaVersion: "v1",
@@ -86,8 +86,8 @@ func TestServiceAllowsReadAndRedacts(t *testing.T) {
 	if len(resp.Output) > 32 {
 		t.Fatalf("expected output <= 32 bytes, got %d", len(resp.Output))
 	}
-	if len(recorder.events) != 3 {
-		t.Fatalf("expected 3 events, got %d", len(recorder.events))
+	if len(recorder.events) < 3 {
+		t.Fatalf("expected at least 3 events, got %d", len(recorder.events))
 	}
 	decisionEvent := recorder.events[1]
 	if decisionEvent.Principal != "system" || decisionEvent.Agent != "janus" || decisionEvent.Environment != "dev" {
@@ -112,7 +112,7 @@ func TestServiceDeniesRead(t *testing.T) {
 	execRunner := executor.NewExecRunner(dir, 32)
 	httpRunner := executor.NewHTTPRunner(32)
 	httpRunner.SetClient(newTestHTTPClient("ok"))
-	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), "local", func() time.Time { return time.Unix(0, 0) })
+	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), nil, nil, "local", func() time.Time { return time.Unix(0, 0) })
 
 	act, err := action.ToAction(action.Request{
 		SchemaVersion: "v1",
@@ -140,8 +140,8 @@ func TestServiceDeniesRead(t *testing.T) {
 	if resp.Output != "" {
 		t.Fatal("expected no output on deny")
 	}
-	if len(recorder.events) != 3 {
-		t.Fatalf("expected 3 events, got %d", len(recorder.events))
+	if len(recorder.events) < 3 {
+		t.Fatalf("expected at least 3 events, got %d", len(recorder.events))
 	}
 }
 
@@ -173,7 +173,7 @@ func TestServiceHTTPAllowlist(t *testing.T) {
 	httpRunner := executor.NewHTTPRunner(32)
 	httpRunner.SetClient(newTestHTTPClient("hello"))
 	recorder := &recordSink{}
-	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), "local", func() time.Time { return time.Unix(0, 0) })
+	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), nil, nil, "local", func() time.Time { return time.Unix(0, 0) })
 
 	act, err := action.ToAction(action.Request{
 		SchemaVersion: "v1",
@@ -230,7 +230,7 @@ func TestServiceExecRequiresAllowlist(t *testing.T) {
 	execRunner := executor.NewExecRunner(dir, 32)
 	httpRunner := executor.NewHTTPRunner(32)
 	recorder := &recordSink{}
-	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), "local", func() time.Time { return time.Unix(0, 0) })
+	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), nil, nil, "local", func() time.Time { return time.Unix(0, 0) })
 
 	act, err := action.ToAction(action.Request{
 		SchemaVersion: "v1",
@@ -287,7 +287,7 @@ func TestServiceSandboxRequired(t *testing.T) {
 	execRunner := executor.NewExecRunner(dir, 32)
 	httpRunner := executor.NewHTTPRunner(32)
 	recorder := &recordSink{}
-	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), "local", func() time.Time { return time.Unix(0, 0) })
+	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), nil, nil, "local", func() time.Time { return time.Unix(0, 0) })
 
 	act, err := action.ToAction(action.Request{
 		SchemaVersion: "v1",

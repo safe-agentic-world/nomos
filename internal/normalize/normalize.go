@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ai-developer-project/janus/internal/action"
-	"github.com/ai-developer-project/janus/internal/canonicaljson"
+	"github.com/safe-agentic-world/janus/internal/action"
+	"github.com/safe-agentic-world/janus/internal/canonicaljson"
 )
 
 type NormalizedAction struct {
@@ -72,6 +72,8 @@ func normalizeResource(raw string) (string, error) {
 		return normalizeRepoResource(parsed)
 	case "url":
 		return normalizeURLResource(parsed)
+	case "secret":
+		return normalizeSecretResource(parsed)
 	default:
 		return "", fmt.Errorf("unsupported resource scheme %q", parsed.Scheme)
 	}
@@ -127,6 +129,18 @@ func normalizeURLResource(parsed *url.URL) (string, error) {
 	}
 	cleaned := cleanPath(parsed.Path)
 	return "url://" + host + cleaned, nil
+}
+
+func normalizeSecretResource(parsed *url.URL) (string, error) {
+	host := strings.ToLower(parsed.Host)
+	if host == "" {
+		return "", errors.New("secret host is required")
+	}
+	secretPath := strings.ToLower(strings.TrimPrefix(parsed.Path, "/"))
+	if secretPath == "" || strings.Contains(secretPath, "/") {
+		return "", errors.New("secret path must be single segment")
+	}
+	return "secret://" + host + "/" + secretPath, nil
 }
 
 func cleanPath(raw string) string {

@@ -10,7 +10,7 @@ import (
 )
 
 func TestAuthenticatorAPIKeyAndAgent(t *testing.T) {
-	auth := NewAuthenticator(AuthConfig{
+	auth, err := NewAuthenticator(AuthConfig{
 		APIKeys: map[string]string{
 			"key1": "principal1",
 		},
@@ -19,6 +19,9 @@ func TestAuthenticatorAPIKeyAndAgent(t *testing.T) {
 		},
 		Environment: "dev",
 	})
+	if err != nil {
+		t.Fatalf("new auth: %v", err)
+	}
 	body := []byte(`{"schema_version":"v1","action_id":"act1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/action", nil)
 	req.Header.Set("Authorization", "Bearer key1")
@@ -35,7 +38,7 @@ func TestAuthenticatorAPIKeyAndAgent(t *testing.T) {
 }
 
 func TestAuthenticatorServiceSignature(t *testing.T) {
-	auth := NewAuthenticator(AuthConfig{
+	auth, err := NewAuthenticator(AuthConfig{
 		ServiceSecrets: map[string]string{
 			"service1": "svc-secret",
 		},
@@ -44,6 +47,9 @@ func TestAuthenticatorServiceSignature(t *testing.T) {
 		},
 		Environment: "prod",
 	})
+	if err != nil {
+		t.Fatalf("new auth: %v", err)
+	}
 	body := []byte(`{"schema_version":"v1","action_id":"act1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/action", nil)
 	req.Header.Set("X-Janus-Service-Id", "service1")
@@ -61,7 +67,7 @@ func TestAuthenticatorServiceSignature(t *testing.T) {
 }
 
 func TestAuthenticatorRejectsMissingAgent(t *testing.T) {
-	auth := NewAuthenticator(AuthConfig{
+	auth, err := NewAuthenticator(AuthConfig{
 		APIKeys: map[string]string{
 			"key1": "principal1",
 		},
@@ -70,10 +76,13 @@ func TestAuthenticatorRejectsMissingAgent(t *testing.T) {
 		},
 		Environment: "dev",
 	})
+	if err != nil {
+		t.Fatalf("new auth: %v", err)
+	}
 	body := []byte(`{"schema_version":"v1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/action", nil)
 	req.Header.Set("Authorization", "Bearer key1")
-	_, err := auth.Verify(req, body)
+	_, err = auth.Verify(req, body)
 	if err == nil {
 		t.Fatal("expected agent auth failure")
 	}

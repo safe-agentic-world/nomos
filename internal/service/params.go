@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ai-developer-project/janus/internal/executor"
+	"github.com/safe-agentic-world/janus/internal/executor"
 )
 
 type writeParams struct {
@@ -18,6 +18,10 @@ type writeParams struct {
 type patchParams struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
+}
+
+type checkoutParams struct {
+	SecretID string `json:"secret_id"`
 }
 
 func decodeWriteParams(raw []byte) (writeParams, error) {
@@ -57,6 +61,17 @@ func decodeHTTPParams(raw []byte) (executor.HTTPParams, error) {
 	var params executor.HTTPParams
 	if err := decodeStrict(raw, &params); err != nil {
 		return executor.HTTPParams{}, err
+	}
+	return params, nil
+}
+
+func decodeCheckoutParams(raw []byte) (checkoutParams, error) {
+	var params checkoutParams
+	if err := decodeStrict(raw, &params); err != nil {
+		return checkoutParams{}, err
+	}
+	if strings.TrimSpace(params.SecretID) == "" {
+		return checkoutParams{}, errors.New("secret_id is required")
 	}
 	return params, nil
 }
@@ -138,4 +153,15 @@ func netAllowed(obligations map[string]any, host string) bool {
 		}
 	}
 	return false
+}
+
+func redactSecrets(text string, secrets []string) string {
+	out := text
+	for _, s := range secrets {
+		if s == "" {
+			continue
+		}
+		out = strings.ReplaceAll(out, s, "[REDACTED]")
+	}
+	return out
 }
