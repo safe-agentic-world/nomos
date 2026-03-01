@@ -1,4 +1,4 @@
-<img src="docs/assets/nomos-logo.jpeg" alt="Nomos logo" width="220">
+<img src="docs/assets/nomos-logo.png" alt="Nomos logo" width="220">
 
 # Nomos
 
