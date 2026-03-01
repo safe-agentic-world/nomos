@@ -44,6 +44,12 @@ Nomos adds an actual policy boundary:
 go install github.com/safe-agentic-world/nomos/cmd/nomos@latest
 ```
 
+On Windows, `go install` places `nomos.exe` in `%USERPROFILE%\\go\\bin` unless `GOBIN` is set. Add that directory to your `PATH`, or run it directly:
+
+```powershell
+$env:USERPROFILE\go\bin\nomos.exe
+```
+
 ### macOS and Linux quick install
 
 ```bash
@@ -54,24 +60,6 @@ Optional:
 
 - set `NOMOS_VERSION=vX.Y.Z` to pin a version
 - set `INSTALL_DIR=$HOME/.local/bin` to install without sudo
-
-### Homebrew
-
-Tap once, then install normally:
-
-```bash
-brew tap safe-agentic-world/nomos
-brew install nomos
-```
-
-### Windows (Scoop)
-
-Add the bucket once, then install normally:
-
-```powershell
-scoop bucket add nomos https://github.com/safe-agentic-world/nomos
-scoop install nomos
-```
 
 ### Direct download
 
@@ -156,7 +144,7 @@ You should see:
 - Golden normalization corpus, redirect policy controls, and bypass-suite coverage
 - Corpus-backed redaction guarantees plus no-leak harness coverage
 - Actionable `policy explain` denial context (`why_denied`, `minimal_allowing_change`, `obligations_preview`)
-- Workflow-managed releases with GitHub Release assets, checksums, Homebrew tap updates, and Scoop manifest updates
+- Workflow-managed releases with GitHub Release assets and checksums
 
 ---
 

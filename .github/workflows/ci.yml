@@ -294,22 +294,6 @@ jobs:
             rm -rf "${STAGE_DIR}"
           done
 
-          WIN_HASH="$(awk '/  nomos-windows-amd64.zip$/ { print $1 }' dist/nomos-checksums.txt)"
-          cat > dist/nomos-scoop.json <<EOF
-          {
-            "version": "${VERSION#v}",
-            "description": "Zero-trust execution gateway for autonomous agents",
-            "homepage": "https://github.com/safe-agentic-world/nomos",
-            "license": "Apache-2.0",
-            "architecture": {
-              "64bit": {
-                "url": "https://github.com/safe-agentic-world/nomos/releases/download/${VERSION}/nomos-windows-amd64.zip",
-                "hash": "${WIN_HASH}"
-              }
-            },
-            "bin": "nomos.exe"
-          }
-          EOF
 
   release-binaries:
     name: Release Binaries
@@ -368,22 +352,6 @@ jobs:
             rm -rf "${STAGE_DIR}"
           done
 
-          WIN_HASH="$(awk '/  nomos-windows-amd64.zip$/ { print $1 }' dist/nomos-checksums.txt)"
-          cat > dist/nomos-scoop.json <<EOF
-          {
-            "version": "${VERSION#v}",
-            "description": "Zero-trust execution gateway for autonomous agents",
-            "homepage": "https://github.com/safe-agentic-world/nomos",
-            "license": "Apache-2.0",
-            "architecture": {
-              "64bit": {
-                "url": "https://github.com/safe-agentic-world/nomos/releases/download/${VERSION}/nomos-windows-amd64.zip",
-                "hash": "${WIN_HASH}"
-              }
-            },
-            "bin": "nomos.exe"
-          }
-          EOF
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
