@@ -1,6 +1,8 @@
-# Integration Kit (M11)
+# Integration Kit
 
 This guide covers agent integration for Nomos using MCP stdio mode.
+
+If you are starting from a fresh machine, install Nomos first via `go install`, GitHub Releases, Homebrew tap, Scoop, or `install.sh` as documented in `README.md`.
 
 ## Codex Setup
 
@@ -17,7 +19,7 @@ This guide covers agent integration for Nomos using MCP stdio mode.
 3. Start MCP server:
 
 ```powershell
-.\bin\nomos.exe mcp --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe mcp --config .\config.example.json --policy-bundle .\policies\your-policy-bundle.json
 ```
 
 4. Configure Codex MCP client to launch the command above over stdio.
@@ -29,7 +31,7 @@ OpenClaw uses the same MCP stdio contract.
 1. Start Nomos with:
 
 ```powershell
-.\bin\nomos.exe mcp --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe mcp --config .\config.example.json --policy-bundle .\policies\your-policy-bundle.json
 ```
 
 2. Register Nomos in OpenClaw MCP server config with command `.\bin\nomos.exe` and args:
@@ -37,9 +39,9 @@ OpenClaw uses the same MCP stdio contract.
 - `--config`
 - `.\config.example.json`
 - `--policy-bundle`
-- `.\policies\m1_5_minimal.json`
+- `.\policies\your-policy-bundle.json`
 
-## MCP Runtime UX (M14)
+## MCP Runtime UX
 
 MCP mode keeps stdout protocol-only. Human-readable status/logs are written to stderr.
 
@@ -53,7 +55,7 @@ Default MCP runtime output behavior:
 - errors on stderr
 - no non-protocol text on stdout
 
-## CLI Ergonomics (M15)
+## CLI Ergonomics
 
 `nomos mcp` now supports short aliases and env fallbacks with deterministic precedence.
 
@@ -76,10 +78,10 @@ Precedence:
 Example:
 
 ```powershell
-nomos mcp -c .\config.example.json -p .\policies\m1_5_minimal.json -l info
+nomos mcp -c .\config.example.json -p .\policies\your-policy-bundle.json -l info
 ```
 
-## Doctor Preflight (M16)
+## Doctor Preflight
 
 Use `nomos doctor` before connecting MCP clients to validate configuration and runtime readiness.
 
@@ -109,7 +111,7 @@ Exit codes:
         "--config",
         ".\\config.example.json",
         "--policy-bundle",
-        ".\\policies\\m1_5_minimal.json"
+        ".\\policies\\your-policy-bundle.json"
       ]
     }
   }
@@ -155,3 +157,4 @@ Safe workflow recommendations:
 
 Operational note:
 - Stronger enforcement guarantees are expected in controlled runtimes (CI/container/K8s runners).
+- See `docs/assurance-levels.md` and `docs/guarantees.md` for the current assurance labels exposed in audit and `nomos policy explain`.

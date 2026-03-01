@@ -30,4 +30,4 @@ jobs:
         run: |
           echo "Reference workflow only."
           echo "Run 'nomos doctor' with an environment-specific strong-guarantee config before agent execution."
-          echo "That config must satisfy M17 hardening checks (container sandbox, mTLS, OIDC, durable audit, deployment-bound environment)."
+          echo "That config must satisfy the strong-guarantee hardening checks (container sandbox, mTLS, OIDC, durable audit, deployment-bound environment)."

@@ -6,7 +6,7 @@ Nomos binds approvals to deterministic targets so approvals cannot be replayed a
 
 `action_fingerprint = sha256(canonical_json({normalized_action, principal, agent, environment}))`
 
-`normalized_action` for M7 includes:
+`normalized_action` includes:
 - `schema_version`
 - `action_type`
 - `resource`
@@ -16,7 +16,7 @@ Any change to normalized inputs (including params) produces a new fingerprint an
 
 ## Scope
 
-M7 supports two narrowly scoped bindings:
+Nomos supports two narrowly scoped bindings:
 - `fingerprint` (default): a single normalized action.
 - `class` (optional): bounded class key currently limited to `action_type_resource`, derived as `<action_type>|<resource>`.
 
@@ -30,9 +30,9 @@ Approvals are never global.
 4. Agent retries the same action with `context.extensions.approval.approval_id`.
 5. Nomos recomputes normalized action and fingerprint and only resumes when approval binding matches and TTL is valid.
 
-## Integrations (Optional M7)
+## Integrations
 
-M7 provides integration endpoints:
+Nomos provides integration endpoints:
 - Generic webhook: `POST /webhooks/approvals` using header `X-Nomos-Webhook-Token` when configured.
 - Slack webhook: `POST /webhooks/slack/approvals` using header `X-Nomos-Slack-Token` when configured.
 - Teams webhook: `POST /webhooks/teams/approvals` using header `X-Nomos-Teams-Token` when configured.
@@ -55,4 +55,4 @@ Unknown fields are rejected for deterministic validation behavior.
 
 ## Params Patch (Future)
 
-Approvals may optionally provide a params patch in future milestones. If applied, it creates a new normalized action and fingerprint, which requires approval against that new target.
+Approvals may optionally provide a params patch in a future revision. If applied, it creates a new normalized action and fingerprint, which requires approval against that new target.

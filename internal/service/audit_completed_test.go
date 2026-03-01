@@ -13,7 +13,7 @@ import (
 	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
-func TestM8CompletedAuditEventFields(t *testing.T) {
+func TestCompletedAuditEventFields(t *testing.T) {
 	dir := t.TempDir()
 	bundle := policy.Bundle{
 		Version: "v1",
@@ -37,11 +37,11 @@ func TestM8CompletedAuditEventFields(t *testing.T) {
 
 	act, err := action.ToAction(action.Request{
 		SchemaVersion: "v1",
-		ActionID:      "act-m8-1",
+		ActionID:      "act-audit-1",
 		ActionType:    "fs.read",
 		Resource:      "file://workspace/README.md",
 		Params:        []byte(`{"note":"Authorization: secret-token"}`),
-		TraceID:       "trace-m8-1",
+		TraceID:       "trace-audit-1",
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}, identity.VerifiedIdentity{Principal: "system", Agent: "nomos", Environment: "dev"})
 	if err != nil {

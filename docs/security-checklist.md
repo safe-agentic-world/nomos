@@ -1,4 +1,4 @@
-# Security Review Checklist (M13)
+# Security Review Checklist
 
 Use this checklist before release.
 

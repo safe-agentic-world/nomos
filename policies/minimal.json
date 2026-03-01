@@ -5,7 +5,10 @@
       "id": "allow-readme",
       "action_type": "fs.read",
       "resource": "file://workspace/README.md",
-      "decision": "ALLOW"
+      "decision": "ALLOW",
+      "principals": ["system"],
+      "agents": ["nomos"],
+      "environments": ["dev"]
     }
   ]
 }

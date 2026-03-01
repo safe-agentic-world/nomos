@@ -1,6 +1,6 @@
 # HTTP Redirect Semantics
 
-This document defines the M19 redirect policy for `net.http_request`.
+This document defines the redirect policy for `net.http_request`.
 
 ## Default Stance
 

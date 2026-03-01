@@ -1,6 +1,6 @@
 # Assurance Levels
 
-This document defines the M18 assurance levels used by audit events and `nomos policy explain`.
+This document defines the assurance levels used by audit events and `nomos policy explain`.
 
 ## Levels
 
@@ -36,4 +36,4 @@ This derivation is:
 
 ## Scope
 
-M18 only defines the assurance label and its documentation contract. It does not change policy decisions or broaden executor capabilities.
+This document only defines the assurance label and its documentation contract. It does not change policy decisions or broaden executor capabilities.

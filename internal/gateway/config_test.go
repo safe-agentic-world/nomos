@@ -306,6 +306,6 @@ func TestLoadConfigM13HardeningFields(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 	if _, err := LoadConfig(path, os.Getenv, ""); err != nil {
-		t.Fatalf("expected valid m13 config, got %v", err)
+		t.Fatalf("expected valid config, got %v", err)
 	}
 }

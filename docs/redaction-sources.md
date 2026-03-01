@@ -1,6 +1,6 @@
 # Redaction Sources
 
-This document lists the M20 redaction sources used by Nomos.
+This document lists the redaction sources used by Nomos.
 
 ## Built-In Sources
 

@@ -197,7 +197,7 @@ jobs:
           NOMOS_MCP_ENABLED: "true"
         run: |
           set -euo pipefail
-          go run ./cmd/nomos doctor -c ./config.example.json -p ./policies/m1_5_minimal.json --format json > doctor.json
+          go run ./cmd/nomos doctor -c ./config.example.json -p ./policies/minimal.json --format json > doctor.json
           cat doctor.json
           grep -q '"overall_status":"READY"' doctor.json
 

@@ -1,6 +1,6 @@
 # Egress And Identity
 
-This document explains how the M17 reference deployment combines environment controls and Nomos controls.
+This document explains how the reference deployment combines environment controls and Nomos controls.
 
 ## Egress Enforcement
 
@@ -19,7 +19,7 @@ This creates a layered model:
 
 The reference deployment uses workload identity to bind the runtime to an operator-controlled identity source.
 
-For M17, the strong-guarantee readiness signal is OIDC enabled in Nomos config:
+For the strong-guarantee posture, the readiness signal is OIDC enabled in Nomos config:
 
 - environment asserts identity
 - Nomos verifies identity material
@@ -35,7 +35,7 @@ For M17, the strong-guarantee readiness signal is OIDC enabled in Nomos config:
 
 Nomos alone cannot stop an untrusted workload from bypassing mediation if the environment allows unrestricted egress, direct credential access, or unrestricted process escape.
 
-The M17 reference architecture is therefore explicitly a combined control plane:
+The reference architecture is therefore explicitly a combined control plane:
 
 - environment enforces the outer boundary
 - Nomos enforces the inner deterministic authorization boundary

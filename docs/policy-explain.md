@@ -1,6 +1,6 @@
 # Policy Explain
 
-This document defines the M21 `nomos policy explain` output contract.
+This document defines the `nomos policy explain` output contract.
 
 ## Purpose
 

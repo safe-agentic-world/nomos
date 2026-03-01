@@ -1,4 +1,13 @@
-# Deployment Readiness (M12)
+# Deployment Readiness
+
+This document describes the base deployment posture.
+
+For stronger, later deployment guidance, also see:
+
+- `docs/strong-guarantee-deployment.md`
+- `docs/reference-architecture.md`
+- `docs/egress-and-identity.md`
+- `docs/ci-k8s.md`
 
 ## Stateless Mode
 
@@ -48,7 +57,7 @@ docker build -t nomos:local .
 Run:
 
 ```powershell
-docker run --rm -p 8080:8080 -v ${PWD}:/workspace nomos:local serve --config /workspace/config.example.json --policy-bundle /workspace/policies/m1_5_minimal.json
+docker run --rm -p 8080:8080 -v ${PWD}:/workspace nomos:local serve --config /workspace/config.example.json --policy-bundle /workspace/policies/your-policy-bundle.json
 ```
 
 ## Graceful Shutdown

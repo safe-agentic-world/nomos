@@ -1,6 +1,6 @@
 # Mediation Coverage Matrix
 
-This document defines the M18 mediation coverage contract for Nomos.
+This document defines the mediation coverage contract for Nomos.
 
 ## CI
 

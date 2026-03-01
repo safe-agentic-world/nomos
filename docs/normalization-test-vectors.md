@@ -1,6 +1,6 @@
 # Normalization Test Vectors
 
-This document defines the M19 golden-corpus contract for normalization.
+This document defines the golden-corpus contract for normalization.
 
 ## Files
 

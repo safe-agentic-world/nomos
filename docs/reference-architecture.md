@@ -1,6 +1,6 @@
 # Controlled Runtime Reference Architecture
 
-This document defines the M17 reference architecture for a strong-guarantee Nomos deployment.
+This document defines the reference architecture for a strong-guarantee Nomos deployment.
 
 ## Threat Assumptions
 
@@ -54,7 +54,7 @@ This document defines the M17 reference architecture for a strong-guarantee Nomo
 
 ## Verifiable Signals
 
-The M17 `nomos doctor` strong-guarantee mode validates conservative proxy signals for this architecture:
+The `nomos doctor` strong-guarantee mode validates conservative proxy signals for this architecture:
 
 - container sandbox profile
 - gateway mTLS

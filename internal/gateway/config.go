@@ -218,7 +218,7 @@ func (c Config) Validate() error {
 		errs = append(errs, "gateway.listen is required")
 	}
 	if c.Gateway.Transport != "http" {
-		errs = append(errs, "gateway.transport must be \"http\" for M0")
+		errs = append(errs, "gateway.transport must be \"http\"")
 	}
 	if c.Gateway.ConcurrencyLimit <= 0 {
 		errs = append(errs, "gateway.concurrency_limit must be > 0")

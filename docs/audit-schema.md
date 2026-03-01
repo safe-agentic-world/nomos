@@ -1,6 +1,6 @@
 # Audit Schema v1
 
-This document defines `AuditEvent` for M8 replay level 1 (reconstructable).
+This document defines `AuditEvent` for replay level 1 (reconstructable).
 
 ## Replay Level 1 Guarantees
 
@@ -77,7 +77,7 @@ Configured via `audit.sink`:
 
 Multiple sinks can be combined as a comma-separated list.
 
-## Tamper Evidence (M9)
+## Tamper Evidence
 
 Nomos supports per-stream hash chaining:
 

@@ -12,7 +12,7 @@ import (
 	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
-func TestM10SafetyVisibilityFields(t *testing.T) {
+func TestSafetyVisibilityFields(t *testing.T) {
 	dir := t.TempDir()
 	bundle := policy.Bundle{
 		Version: "v1",
@@ -29,7 +29,7 @@ func TestM10SafetyVisibilityFields(t *testing.T) {
 				},
 			},
 		},
-		Hash: "bundle-hash-m10",
+		Hash: "bundle-hash-visibility",
 	}
 	engine := policy.NewEngine(bundle)
 	reader := executor.NewFSReader(dir, 64*1024, 200)
@@ -46,11 +46,11 @@ func TestM10SafetyVisibilityFields(t *testing.T) {
 	})
 	act, err := action.ToAction(action.Request{
 		SchemaVersion: "v1",
-		ActionID:      "act-m10-1",
+		ActionID:      "act-visibility-1",
 		ActionType:    "net.http_request",
 		Resource:      "url://example.com/path",
 		Params:        []byte(`{"method":"GET"}`),
-		TraceID:       "trace-m10-1",
+		TraceID:       "trace-visibility-1",
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}, identity.VerifiedIdentity{Principal: "system", Agent: "nomos", Environment: "dev"})
 	if err != nil {
@@ -70,7 +70,7 @@ func TestM10SafetyVisibilityFields(t *testing.T) {
 		if e.RiskLevel == "" {
 			t.Fatal("expected risk_level")
 		}
-		if e.PolicyBundleHash != "bundle-hash-m10" {
+		if e.PolicyBundleHash != "bundle-hash-visibility" {
 			t.Fatalf("expected policy bundle hash, got %s", e.PolicyBundleHash)
 		}
 		if e.EngineVersion == "" {

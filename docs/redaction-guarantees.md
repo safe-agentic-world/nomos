@@ -1,6 +1,6 @@
 # Redaction Guarantees
 
-This document defines the M20 redaction contract for Nomos.
+This document defines the redaction contract for Nomos.
 
 ## Hard Guarantees
 
@@ -24,7 +24,7 @@ The following remain best-effort:
 
 ## Scope
 
-M20 measures the redaction path across:
+The redaction path is measured across:
 
 - agent-visible stdout/stderr or tool output
 - HTTP header/body text handled by Nomos

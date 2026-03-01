@@ -2,7 +2,7 @@
 
 ## Scope
 
-M13 hardening scope covers:
+Current hardening scope covers:
 - OIDC principal authentication
 - mTLS channel/client authentication
 - per principal/agent/environment rate limiting and circuit breakers

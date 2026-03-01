@@ -15,7 +15,7 @@ import (
 	"github.com/safe-agentic-world/nomos/internal/redact"
 )
 
-func TestM20SecretNeverLeaksFromExecOutputOrAudit(t *testing.T) {
+func TestSecretNeverLeaksFromExecOutputOrAudit(t *testing.T) {
 	dir := t.TempDir()
 	recorder := &recordSink{}
 	secretValue := "super-secret-value-123"
@@ -28,7 +28,7 @@ func TestM20SecretNeverLeaksFromExecOutputOrAudit(t *testing.T) {
 	argv, allowPrefix := secretEchoCommand()
 	bundle := policy.Bundle{
 		Version: "v1",
-		Hash:    "bundle-hash-m20",
+		Hash:    "bundle-hash-redaction",
 		Rules: []policy.Rule{
 			{
 				ID:           "allow-secret-checkout",
@@ -71,11 +71,11 @@ func TestM20SecretNeverLeaksFromExecOutputOrAudit(t *testing.T) {
 
 	checkoutResp, err := svc.Process(mustAction(t, action.Request{
 		SchemaVersion: "v1",
-		ActionID:      "act-m20-checkout",
+		ActionID:      "act-secret-checkout",
 		ActionType:    "secrets.checkout",
 		Resource:      "secret://vault/github_token",
 		Params:        []byte(`{"secret_id":"github_token"}`),
-		TraceID:       "trace-m20",
+		TraceID:       "trace-secret-redaction",
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}))
 	if err != nil {
@@ -96,11 +96,11 @@ func TestM20SecretNeverLeaksFromExecOutputOrAudit(t *testing.T) {
 	}
 	execResp, err := svc.Process(mustAction(t, action.Request{
 		SchemaVersion: "v1",
-		ActionID:      "act-m20-exec",
+		ActionID:      "act-secret-exec",
 		ActionType:    "process.exec",
 		Resource:      "file://workspace/",
 		Params:        execParams,
-		TraceID:       "trace-m20",
+		TraceID:       "trace-secret-redaction",
 		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
 	}))
 	if err != nil {
@@ -122,7 +122,7 @@ func TestM20SecretNeverLeaksFromExecOutputOrAudit(t *testing.T) {
 		if strings.Contains(string(data), secretValue) {
 			t.Fatalf("secret leaked in audit event %s: %s", event.EventType, string(data))
 		}
-		if event.EventType == "action.completed" && event.ActionID == "act-m20-exec" {
+		if event.EventType == "action.completed" && event.ActionID == "act-secret-exec" {
 			foundCompleted = true
 			if len(event.CredentialLeaseIDs) != 1 || event.CredentialLeaseIDs[0] != checkoutResp.CredentialLeaseID {
 				t.Fatalf("expected only lease refs in audit event, got %+v", event.CredentialLeaseIDs)

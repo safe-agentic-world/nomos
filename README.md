@@ -1,3 +1,5 @@
+<img src="docs/assets/nomos-logo.png" alt="Nomos logo" width="220">
+
 # Nomos
 
 **Ship agentic workflows without giving agents root trust.**
@@ -50,7 +52,7 @@ curl -fsSL https://raw.githubusercontent.com/safe-agentic-world/nomos/main/insta
 
 Optional:
 
-- set `NOMOS_VERSION=v0.0.1` to pin a version
+- set `NOMOS_VERSION=vX.Y.Z` to pin a version
 - set `INSTALL_DIR=$HOME/.local/bin` to install without sudo
 
 ### Homebrew
@@ -100,7 +102,7 @@ go build -o .\bin\nomos.exe .\cmd\nomos
 ```powershell
 .\bin\nomos.exe mcp `
   --config .\config.example.json `
-  --policy-bundle .\policies\m1_5_minimal.json
+  --policy-bundle .\policies\your-policy-bundle.json
 ```
 
 ### 3) Register in Codex
@@ -109,7 +111,7 @@ go build -o .\bin\nomos.exe .\cmd\nomos
 codex mcp add nomos -- `
   .\bin\nomos.exe mcp `
   --config .\config.example.json `
-  --policy-bundle .\policies\m1_5_minimal.json
+  --policy-bundle .\policies\your-policy-bundle.json
 ```
 
 ### 4) Prove policy is real
@@ -137,8 +139,6 @@ You should see:
 5. Executor runs only if authorized.
 6. Output is redacted and audited.
 
-Tracked status: `TASKS.md` (`M0-M13` complete, with scoped `M6` caveat).
-
 ---
 
 ## Current Feature Set
@@ -148,9 +148,15 @@ Tracked status: `TASKS.md` (`M0-M13` complete, with scoped `M6` caveat).
 - Deterministic policy engine (`deny wins`) + `policy test` / `policy explain`
 - Executors: `fs.read`, `fs.write`, `repo.apply_patch`, `process.exec`, `net.http_request`
 - Approval workflow (sqlite + TTL + webhook/Slack/Teams endpoints)
-- Audit sinks (`stdout`, `sqlite/postgres`, `webhook`) + tamper-evident chain hashes
+- Audit sinks (`stdout`, `sqlite`, `webhook`) + tamper-evident chain hashes
 - Safety visibility metadata (risk level, sandbox/network mode, lease IDs, bundle hash)
 - Gateway protections (concurrency/rate/circuit limits, optional TLS/mTLS)
+- Strong-guarantee deployment checks and reference manifests for CI/K8s
+- Deterministic assurance labeling (`STRONG`, `GUARDED`, `BEST_EFFORT`, `NONE`) in audit and `policy explain`
+- Golden normalization corpus, redirect policy controls, and bypass-suite coverage
+- Corpus-backed redaction guarantees plus no-leak harness coverage
+- Actionable `policy explain` denial context (`why_denied`, `minimal_allowing_change`, `obligations_preview`)
+- Workflow-managed releases with GitHub Release assets, checksums, Homebrew tap updates, and Scoop manifest updates
 
 ---
 
@@ -159,15 +165,15 @@ Tracked status: `TASKS.md` (`M0-M13` complete, with scoped `M6` caveat).
 ```powershell
 go test ./...
 .\bin\nomos.exe version
-.\bin\nomos.exe policy test --action .\action.json --bundle .\policies\m1_5_minimal.json
-.\bin\nomos.exe policy explain --action .\action.json --bundle .\policies\m1_5_minimal.json
-.\bin\nomos.exe serve --config .\config.example.json --policy-bundle .\policies\m1_5_minimal.json
+.\bin\nomos.exe policy test --action .\action.json --bundle .\policies\your-policy-bundle.json
+.\bin\nomos.exe policy explain --action .\action.json --bundle .\policies\your-policy-bundle.json
+.\bin\nomos.exe serve --config .\config.example.json --policy-bundle .\policies\your-policy-bundle.json
 ```
 
 Release metadata build example:
 
 ```powershell
-go build -ldflags "-X github.com/safe-agentic-world/nomos/internal/version.Version=v1.0.0 -X github.com/safe-agentic-world/nomos/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/safe-agentic-world/nomos/internal/version.BuildDate=$(Get-Date -AsUTC -Format o)" -o .\bin\nomos.exe .\cmd\nomos
+go build -ldflags "-X github.com/safe-agentic-world/nomos/internal/version.Version=vX.Y.Z -X github.com/safe-agentic-world/nomos/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/safe-agentic-world/nomos/internal/version.BuildDate=$(Get-Date -AsUTC -Format o)" -o .\bin\nomos.exe .\cmd\nomos
 .\bin\nomos.exe version
 ```
 
@@ -189,6 +195,8 @@ HTTP endpoints in `serve` mode:
 - Codex + OpenClaw setup: `docs/integration-kit.md`
 - MCP capability model and workflow notes: `docs/integration-kit.md`
 - Unmanaged laptop limitations and safer workflows: `docs/integration-kit.md`
+- Assurance and mediation contract: `docs/assurance-levels.md`, `docs/guarantees.md`
+- Policy troubleshooting: `docs/policy-explain.md`
 
 ---
 
@@ -201,13 +209,17 @@ HTTP endpoints in `serve` mode:
 - Normalization rules: `docs/normalization.md`
 - Approval binding model: `docs/approvals.md`
 - Audit schema and replay notes: `docs/audit-schema.md`
+- Redaction guarantees and source coverage: `docs/redaction-guarantees.md`, `docs/redaction-sources.md`
+- Normalization vectors and redirect rules: `docs/normalization-test-vectors.md`, `docs/http-redirects.md`
+- Bypass coverage model: `docs/bypass-playbook.md`
 
 ---
 
 ## Deployment
 
-- M12 deployment guide: `docs/deployment-m12.md`
-- CI/K8s readiness: `docs/ci-k8s.md`
+- Base deployment guide: `docs/deployment.md`
+- CI/K8s readiness and release automation: `docs/ci-k8s.md`
+- Strong-guarantee reference deployment: `docs/strong-guarantee-deployment.md`, `docs/reference-architecture.md`, `docs/egress-and-identity.md`
 - Container image: `Dockerfile`
 - K8s manifests: `deploy/k8s/`
 

@@ -106,7 +106,7 @@ func TestLoadConfigFailsClosedWithoutBundle(t *testing.T) {
 func TestHelpTextStability(t *testing.T) {
 	root := rootHelpText()
 	mcp := mcpHelpText()
-	if !strings.Contains(root, "nomos mcp -c config.example.json -p policies/m1_5_minimal.json") {
+	if !strings.Contains(root, "nomos mcp -c config.example.json -p policies/minimal.json") {
 		t.Fatalf("unexpected root help: %q", root)
 	}
 	if !strings.Contains(root, "doctor") {

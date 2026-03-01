@@ -1,35 +1,36 @@
 # Design Notes
 
-- M0 transport is limited to HTTP for the gateway; other transports are rejected to preserve a strict, deterministic surface while the policy layer is deny-by-default.
+- Transport is limited to HTTP for the gateway; other transports are rejected to preserve a strict, deterministic surface while the policy layer is deny-by-default.
 - Identity and environment are injected from config and rejected if missing; the action request does not accept identity fields to avoid agent-supplied claims.
-- Redaction is implemented with conservative, minimal patterns in M0 (authorization headers, bearer tokens, AWS key prefixes). This keeps "redact before logging/returning" in place while leaving room for more comprehensive rules in later milestones.
-- M1 normalization treats traversal attempts (`..`) as the deterministic proxy for symlink escape rejection; executor-time resolution will be required for full TOCTOU-safe symlink handling.
+- Redaction is implemented with conservative, minimal patterns (authorization headers, bearer tokens, AWS key prefixes). This keeps "redact before logging/returning" in place while leaving room for more comprehensive rules in later revisions.
+- Normalization treats traversal attempts (`..`) as the deterministic proxy for symlink escape rejection; executor-time resolution is required for full TOCTOU-safe symlink handling.
 - `url://` normalization lowercases hosts and strips ports 80/443 even without scheme; this is a conservative default for determinism until explicit schemes are introduced.
-- M1.5 MCP requests derive `action_id` and `trace_id` from the MCP request id (`mcp_<id>`) to avoid non-deterministic ID generation.
-- M1.5 policy bundles are JSON-only with exact-match rules for `action_type` and `resource` to keep evaluation deterministic and deny-by-default.
-- M2 authentication supports dev API keys and service HMAC signatures; agent runtime identity is verified separately via HMAC to avoid agent-supplied identity.
-- M3 policy matching supports deterministic glob patterns and optional identity/risk filters; rule order does not affect decisions (deny-wins).
-- M3 risk flags are computed from normalized action and deterministic thresholds (large IO at 32KB, high fanout at 100 actions) without agent-supplied inputs.
-- M4 capabilities are derived by evaluating synthetic actions against policy rules (sample resources per tool); this is conservative and may under-report permissions.
-- M4 publish boundary validation treats each changed path as a `repo.apply_patch` action against `file://workspace/<path>` and blocks any non-ALLOW decision.
-- M5 `repo.apply_patch` is implemented as a deterministic file replacement (`path` + `content`) rather than full diff application.
-- M5 HTTP requests use normalized `url://` resources and map them to `https://` for execution; host allowlists are enforced prior to request.
-- M6 sandbox selection is obligation-driven (`sandbox_mode`) and deterministically fails closed when the configured profile is weaker than required.
-- M7 approval scope defaults to exact action fingerprints; bounded class approvals are limited to `action_type_resource` via explicit policy obligation (`approval_scope_class`) to keep scope narrow and deterministic.
-- M7 Slack/Teams integration uses explicit shared-token headers with strict JSON payload schemas to preserve deterministic validation; provider-specific signature verification can be layered in later hardening milestones.
-- M8 uses `action.completed` as the canonical replay-level event containing required `AuditEvent v1` fields, while retaining trace/decision events for timeline readability.
-- M9 hash chaining is computed on canonicalized event payloads after attaching `prev_event_hash`; this keeps verification deterministic across OS/language boundaries while leaving signing/key management for later hardening.
-- M10 visibility surfaces `credential_lease_ids` from policy/executor metadata only (never from raw secrets), and defaults to an empty list when no broker lease IDs are present.
-- M11 integration guidance treats capability envelopes as advisory and keeps per-action authorization as the source of truth (deny-wins), which is the safest behavior for unmanaged environments.
-- M12 interprets the HTTP Run API as `/run` mapped to the existing strict action handler, avoiding a parallel execution path and preserving deterministic policy/audit behavior.
-- M13 OIDC verification uses statically configured RSA public keys (no discovery) as the safest deterministic default for offline/controlled deployments; key rotation automation is deferred.
+- MCP requests derive `action_id` and `trace_id` from the MCP request id (`mcp_<id>`) to avoid non-deterministic ID generation.
+- Policy bundles are JSON-only with exact-match rules for `action_type` and `resource` to keep evaluation deterministic and deny-by-default.
+- Authentication supports dev API keys and service HMAC signatures; agent runtime identity is verified separately via HMAC to avoid agent-supplied identity.
+- Policy matching supports deterministic glob patterns and optional identity/risk filters; rule order does not affect decisions (deny-wins).
+- Risk flags are computed from normalized action and deterministic thresholds (large IO at 32KB, high fanout at 100 actions) without agent-supplied inputs.
+- Capabilities are derived by evaluating synthetic actions against policy rules (sample resources per tool); this is conservative and may under-report permissions.
+- Publish boundary validation treats each changed path as a `repo.apply_patch` action against `file://workspace/<path>` and blocks any non-ALLOW decision.
+- `repo.apply_patch` is implemented as a deterministic file replacement (`path` + `content`) rather than full diff application.
+- HTTP requests use normalized `url://` resources and map them to `https://` for execution; host allowlists are enforced prior to request.
+- Sandbox selection is obligation-driven (`sandbox_mode`) and deterministically fails closed when the configured profile is weaker than required.
+- Approval scope defaults to exact action fingerprints; bounded class approvals are limited to `action_type_resource` via explicit policy obligation (`approval_scope_class`) to keep scope narrow and deterministic.
+- Slack/Teams integration uses explicit shared-token headers with strict JSON payload schemas to preserve deterministic validation; provider-specific signature verification can be layered in later hardening work.
+- `action.completed` is the canonical replay-level event containing required `AuditEvent v1` fields, while retaining trace/decision events for timeline readability.
+- Hash chaining is computed on canonicalized event payloads after attaching `prev_event_hash`; this keeps verification deterministic across OS/language boundaries while leaving signing/key management for later hardening.
+- Visibility surfaces `credential_lease_ids` from policy/executor metadata only (never from raw secrets), and defaults to an empty list when no broker lease IDs are present.
+- Integration guidance treats capability envelopes as advisory and keeps per-action authorization as the source of truth (deny-wins), which is the safest behavior for unmanaged environments.
+- The HTTP Run API uses `/run` mapped to the existing strict action handler, avoiding a parallel execution path and preserving deterministic policy/audit behavior.
+- OIDC verification uses statically configured RSA public keys (no discovery) as the safest deterministic default for offline/controlled deployments; key rotation automation is deferred.
 - DoD closeout adds an in-memory credential broker with lease TTL and strict `(principal, agent, environment, trace_id)` binding; only lease IDs are returned to agents.
-- M14 keeps MCP stdout protocol-pure by routing operator UX output (ready banner/logs/errors) to stderr and using a non-emitting in-process audit recorder for MCP runtime handling.
-- M15 resolves `--config/-c` and `--policy-bundle/-p` to absolute paths at parse time and applies precedence `flag > env > fail` (`NOMOS_CONFIG`, `NOMOS_POLICY_BUNDLE`, `NOMOS_LOG_LEVEL`) to reduce invocation ambiguity while preserving fail-closed startup.
-- M16 treats "recognized environment" as a strict deterministic allowlist (`dev`, `staging`, `prod`, `ci`, `local`, `test`) for doctor preflight reporting; this affects readiness diagnostics only and does not change runtime policy semantics.
-- M17 adds an explicit `runtime.strong_guarantee` doctor mode; because deployment-level egress and workload isolation are not fully introspectable from Nomos process config alone, doctor uses conservative proxy checks (container sandbox, mTLS, OIDC workload identity, durable audit sink, and deployment-bound environment) and fails closed when those signals are absent.
-- M18 derives `assurance_level` strictly from operator-controlled runtime config (`runtime.deployment_mode` + `runtime.strong_guarantee`) and propagates it into explain/audit output only; it does not alter policy decisions, which keeps authorization deterministic and side-effect free.
-- M19 takes the strict interpretation for redirects: Nomos denies redirects unless a matched policy explicitly enables `http_redirects`; when allowed, each hop is normalized and rechecked against the existing `net_allowlist`, and audit records only the minimized final destination (`url://host/path`) to avoid leaking query material.
-- M20 keeps regex redaction intentionally bounded and deterministic: built-in patterns cover common textual secret classes plus exact brokered secret-value replacement during exec, while non-text payloads and unknown token formats remain explicitly best-effort.
-- M21 keeps `policy explain` remediation intentionally shallow: suggestions are derived only from normalized action type/resource shape plus the final policy outcome, and never echo raw params, headers, or broader policy structure beyond matched deny rule IDs.
-- M22 models unmanaged-mode weakness as safe degradation where possible: when runtime guarantees are weaker, the bypass suite expects fail-closed denials such as `sandbox_required` rather than attempting to prove host-level mediation that Nomos cannot guarantee on its own.
+- MCP keeps stdout protocol-pure by routing operator UX output (ready banner/logs/errors) to stderr and using a non-emitting in-process audit recorder for MCP runtime handling.
+- The CLI resolves `--config/-c` and `--policy-bundle/-p` to absolute paths at parse time and applies precedence `flag > env > fail` (`NOMOS_CONFIG`, `NOMOS_POLICY_BUNDLE`, `NOMOS_LOG_LEVEL`) to reduce invocation ambiguity while preserving fail-closed startup.
+- "Recognized environment" is a strict deterministic allowlist (`dev`, `staging`, `prod`, `ci`, `local`, `test`) for doctor preflight reporting; this affects readiness diagnostics only and does not change runtime policy semantics.
+- `runtime.strong_guarantee` adds an explicit doctor mode; because deployment-level egress and workload isolation are not fully introspectable from Nomos process config alone, doctor uses conservative proxy checks (container sandbox, mTLS, OIDC workload identity, durable audit sink, and deployment-bound environment) and fails closed when those signals are absent.
+- `assurance_level` is derived strictly from operator-controlled runtime config (`runtime.deployment_mode` + `runtime.strong_guarantee`) and propagates into explain/audit output only; it does not alter policy decisions, which keeps authorization deterministic and side-effect free.
+- Redirect handling takes the strict interpretation: Nomos denies redirects unless a matched policy explicitly enables `http_redirects`; when allowed, each hop is normalized and rechecked against the existing `net_allowlist`, and audit records only the minimized final destination (`url://host/path`) to avoid leaking query material.
+- Regex redaction stays intentionally bounded and deterministic: built-in patterns cover common textual secret classes plus exact brokered secret-value replacement during exec, while non-text payloads and unknown token formats remain explicitly best-effort.
+- `policy explain` remediation stays intentionally shallow: suggestions are derived only from normalized action type/resource shape plus the final policy outcome, and never echo raw params, headers, or broader policy structure beyond matched deny rule IDs.
+- Unmanaged-mode weakness is modeled as safe degradation where possible: when runtime guarantees are weaker, the bypass suite expects fail-closed denials such as `sandbox_required` rather than attempting to prove host-level mediation that Nomos cannot guarantee on its own.
+- Release automation is workflow-managed end to end: a successful `main` CI run can create a semver tag, dispatch the release workflow, publish archives/checksums, and then update Homebrew/Scoop manifests. The privileged tagging path stays API-only, while the release workflow uses the built-in `GITHUB_TOKEN` only for the explicit release and manifest-push steps.

@@ -1,6 +1,6 @@
 # Bypass Playbook
 
-This document defines the M22 bypass regression suite.
+This document defines the bypass regression suite.
 
 ## Purpose
 

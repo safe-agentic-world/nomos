@@ -1,6 +1,6 @@
 # Strong-Guarantee Deployment
 
-This is the M17 golden path for a reproducible strong-guarantee Nomos deployment.
+This is the golden path for a reproducible strong-guarantee Nomos deployment.
 
 ## Kubernetes Golden Path
 
@@ -57,4 +57,4 @@ Use the reference workflow in `deploy/ci/github-actions-hardened.yml` as the har
 
 ## Scope
 
-M17 provides a reference deployment and readiness checks. It does not yet prove mediation coverage across every environment; that precision is deferred to later assurance-focused milestones.
+This provides a reference deployment and readiness checks. It does not yet prove mediation coverage across every environment; that precision is deferred to later assurance-focused work.

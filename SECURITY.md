@@ -22,3 +22,5 @@ Maintainers will acknowledge receipt and coordinate remediation and disclosure t
 - No secret leakage in logs, audit output, or agent-visible responses.
 - Deterministic, fail-closed behavior for policy/config errors.
 - No trust in agent-supplied identity/environment claims.
+- Release assets should be consumed via GitHub Releases and verified against `nomos-checksums.txt`.
+- Automation that creates tags, releases, or install manifests should remain workflow-managed and least-privilege.
