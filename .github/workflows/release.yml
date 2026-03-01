@@ -178,6 +178,8 @@ jobs:
 
       - name: Commit manifest updates
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd repo-main
@@ -189,4 +191,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Formula/nomos.rb bucket/nomos.json
           git commit -m "chore(release): update install manifests for ${{ steps.meta.outputs.tag }}"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin HEAD:main
