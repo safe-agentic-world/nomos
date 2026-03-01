@@ -47,7 +47,13 @@ go install github.com/safe-agentic-world/nomos/cmd/nomos@latest
 On Windows, `go install` places `nomos.exe` in `%USERPROFILE%\\go\\bin` unless `GOBIN` is set. Add that directory to your `PATH`, or run it directly:
 
 ```powershell
-$env:USERPROFILE\go\bin\nomos.exe
+& "$env:USERPROFILE\go\bin\nomos.exe"
+```
+
+To use `nomos` in the current PowerShell session immediately:
+
+```powershell
+$env:Path += ";$env:USERPROFILE\go\bin"
 ```
 
 ### macOS and Linux quick install
