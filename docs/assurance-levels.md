@@ -1,6 +1,6 @@
 # Assurance Levels
 
-This document defines the assurance levels used by audit events and `nomos policy explain`.
+This document defines the assurance levels used by audit events, `nomos policy explain`, and `nomos.capabilities`.
 
 ## Levels
 
@@ -36,4 +36,4 @@ This derivation is:
 
 ## Scope
 
-This document only defines the assurance label and its documentation contract. It does not change policy decisions or broaden executor capabilities.
+This document only defines the assurance label and its documentation contract. It does not change policy decisions or broaden executor capabilities. In unmanaged environments, the label should be read together with the `mediation_notice` surfaced by `nomos.capabilities`.

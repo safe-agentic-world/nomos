@@ -182,6 +182,8 @@ func TestDocumentedArtifactsExist(t *testing.T) {
 		filepath.Join("..", "..", "docs", "obligations.md"),
 		filepath.Join("..", "..", "policies", "safe-dev.json"),
 		filepath.Join("..", "..", "policies", "safe-dev.yaml"),
+		filepath.Join("..", "..", "policies", "safe-dev-hardened.json"),
+		filepath.Join("..", "..", "policies", "safe-dev-hardened.yaml"),
 		filepath.Join("..", "..", "policies", "guarded-prod.json"),
 		filepath.Join("..", "..", "policies", "guarded-prod.yaml"),
 		filepath.Join("..", "..", "policies", "unsafe.json"),

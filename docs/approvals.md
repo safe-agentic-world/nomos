@@ -27,7 +27,7 @@ Approvals are never global.
 1. Policy returns `REQUIRE_APPROVAL`.
 2. Nomos persists a pending approval with TTL in sqlite.
 3. External approver records `APPROVE` or `DENY` via approval endpoint/webhook.
-4. Agent retries the same action with `context.extensions.approval.approval_id`.
+4. Agent retries the same action with `context.extensions.approval = {"approval_id":"..."}`.
 5. Nomos recomputes normalized action and fingerprint and only resumes when approval binding matches and TTL is valid.
 
 ## Integrations

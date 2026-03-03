@@ -28,6 +28,7 @@ type Server struct {
 	outputMaxBytes   int
 	outputMaxLines   int
 	policyBundleHash string
+	assuranceLevel   string
 	logger           *runtimeLogger
 	pid              int
 }
@@ -132,6 +133,7 @@ func NewServerWithRuntimeOptionsAndRecorder(bundlePath string, identity identity
 		outputMaxBytes:   maxBytes,
 		outputMaxLines:   maxLines,
 		policyBundleHash: bundle.Hash,
+		assuranceLevel:   "NONE",
 		logger:           logger,
 		pid:              os.Getpid(),
 	}, nil
@@ -141,6 +143,11 @@ func (s *Server) SetAssuranceLevel(level string) {
 	if s == nil {
 		return
 	}
+	level = strings.TrimSpace(level)
+	if level == "" {
+		level = "NONE"
+	}
+	s.assuranceLevel = level
 	s.service.SetAssuranceLevel(level)
 }
 
@@ -296,25 +303,17 @@ func (s *Server) handleRPCPayload(payload []byte) *rpcResponse {
 }
 
 func (s *Server) handleToolsCall(req rpcRequest) (string, error) {
-	var payload struct {
-		Name      string          `json:"name"`
-		Arguments json.RawMessage `json:"arguments"`
-	}
-	dec := json.NewDecoder(bytes.NewReader(req.Params))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&payload); err != nil {
+	name, args, err := parseToolCallParams(req.Params)
+	if err != nil {
 		return "", errors.New("invalid params")
 	}
-	if payload.Name == "" {
-		return "", errors.New("invalid params")
-	}
-	if len(payload.Arguments) == 0 {
-		payload.Arguments = []byte(`{}`)
+	if len(args) == 0 {
+		args = []byte(`{}`)
 	}
 	legacyReq := Request{
 		ID:     string(req.ID),
-		Method: payload.Name,
-		Params: payload.Arguments,
+		Method: name,
+		Params: args,
 	}
 	legacyResp := s.handleRequest(legacyReq)
 	if legacyResp.Error != "" {
@@ -325,6 +324,33 @@ func (s *Server) handleToolsCall(req rpcRequest) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func parseToolCallParams(raw json.RawMessage) (string, json.RawMessage, error) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return "", nil, errors.New("invalid params")
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", nil, err
+	}
+	var name string
+	if rawName, ok := payload["name"]; ok {
+		if err := json.Unmarshal(rawName, &name); err != nil {
+			return "", nil, err
+		}
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", nil, errors.New("invalid params")
+	}
+	if args, ok := payload["arguments"]; ok && len(bytes.TrimSpace(args)) > 0 {
+		return name, args, nil
+	}
+	if args, ok := payload["input"]; ok && len(bytes.TrimSpace(args)) > 0 {
+		return name, args, nil
+	}
+	return name, []byte(`{}`), nil
 }
 
 func (s *Server) toolsList() []map[string]any {
@@ -450,7 +476,7 @@ func (s *Server) handleRequest(req Request) Response {
 	}
 	resp, err := s.service.Process(act)
 	if err != nil {
-		return Response{ID: req.ID, Error: "execution_error"}
+		return Response{ID: req.ID, Error: classifyToolError(err)}
 	}
 	return Response{ID: req.ID, Result: resp}
 }
@@ -480,7 +506,7 @@ func (s *Server) handleFSWrite(req Request) Response {
 	}
 	resp, err := s.service.Process(act)
 	if err != nil {
-		return Response{ID: req.ID, Error: "execution_error"}
+		return Response{ID: req.ID, Error: classifyToolError(err)}
 	}
 	return Response{ID: req.ID, Result: resp}
 }
@@ -510,7 +536,7 @@ func (s *Server) handleApplyPatch(req Request) Response {
 	}
 	resp, err := s.service.Process(act)
 	if err != nil {
-		return Response{ID: req.ID, Error: "execution_error"}
+		return Response{ID: req.ID, Error: classifyToolError(err)}
 	}
 	return Response{ID: req.ID, Result: resp}
 }
@@ -540,7 +566,7 @@ func (s *Server) handleExec(req Request) Response {
 	}
 	resp, err := s.service.Process(act)
 	if err != nil {
-		return Response{ID: req.ID, Error: "execution_error"}
+		return Response{ID: req.ID, Error: classifyToolError(err)}
 	}
 	return Response{ID: req.ID, Result: resp}
 }
@@ -570,7 +596,7 @@ func (s *Server) handleHTTPRequest(req Request) Response {
 	}
 	resp, err := s.service.Process(act)
 	if err != nil {
-		return Response{ID: req.ID, Error: "execution_error"}
+		return Response{ID: req.ID, Error: classifyToolError(err)}
 	}
 	return Response{ID: req.ID, Result: resp}
 }
@@ -595,6 +621,8 @@ func (s *Server) handleCapabilities(req Request) Response {
 		OutputMaxBytes:   s.outputMaxBytes,
 		OutputMaxLines:   s.outputMaxLines,
 		ApprovalsEnabled: s.approvalsEnabled,
+		AssuranceLevel:   s.assuranceLevel,
+		MediationNotice:  capabilityMediationNotice(s.assuranceLevel),
 	}
 	return Response{ID: req.ID, Result: result}
 }
@@ -655,3 +683,43 @@ func mustJSONBytes(value any) []byte {
 type noopRecorder struct{}
 
 func (noopRecorder) WriteEvent(_ audit.Event) error { return nil }
+
+func classifyToolError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if os.IsNotExist(err) {
+		return "not_found"
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(msg, "traversal"),
+		strings.Contains(msg, "path escape"),
+		strings.Contains(msg, "cwd escape"),
+		strings.Contains(msg, "unsupported resource"),
+		strings.Contains(msg, "invalid resource uri"),
+		strings.Contains(msg, "encoded separators"),
+		strings.Contains(msg, "userinfo is not allowed"),
+		strings.Contains(msg, "url host is required"),
+		strings.Contains(msg, "secret host is required"),
+		strings.Contains(msg, "repo host is required"),
+		strings.Contains(msg, "file path is required"),
+		strings.Contains(msg, "canonicalization failed"):
+		return "normalization_error"
+	default:
+		return "execution_error"
+	}
+}
+
+func capabilityMediationNotice(level string) string {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
+	case "STRONG":
+		return ""
+	case "GUARDED":
+		return "Guarded mediation. Verify deployment controls before assuming exclusive side-effect mediation."
+	case "BEST_EFFORT":
+		return "Best-effort mediation only. Built-in or unmanaged tools outside Nomos can bypass policy unless they are disabled."
+	default:
+		return "No mediation assurance is established for this runtime."
+	}
+}

@@ -104,3 +104,10 @@ When multiple bundles are supported, they MUST be merged in this explicit order:
 3. repo pack (optional)
 4. environment pack (dev/ci/prod)
 5. local overrides (dev only, loud warnings)
+
+Current starter bundles shipped in-repo:
+- `policies/minimal.{json,yaml}` (minimal demo/allowlist)
+- `policies/safe-dev.{json,yaml}` (broad local development starter)
+- `policies/safe-dev-hardened.{json,yaml}` (safer local starter with secret/code-file read denials)
+- `policies/guarded-prod.{json,yaml}` (stricter allowlists and stronger sandbox expectations)
+- `policies/unsafe.{json,yaml}` (explicit opt-in)

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__nomos-local__nomos_fs_read",
+      "mcp__nomos-local__nomos_capabilities"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "nomos-local"
+  ]
+}

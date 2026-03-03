@@ -1,0 +1,86 @@
+{
+  "version": "v1",
+  "rules": [
+    {
+      "id": "deny-root-env",
+      "action_type": "fs.read",
+      "resource": "file://workspace/.env",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-nested-env",
+      "action_type": "fs.read",
+      "resource": "file://workspace/**/.env",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-root-env-variants",
+      "action_type": "fs.read",
+      "resource": "file://workspace/.env.*",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-nested-env-variants",
+      "action_type": "fs.read",
+      "resource": "file://workspace/**/.env.*",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-root-pem",
+      "action_type": "fs.read",
+      "resource": "file://workspace/*.pem",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-nested-pem",
+      "action_type": "fs.read",
+      "resource": "file://workspace/**/*.pem",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-root-key",
+      "action_type": "fs.read",
+      "resource": "file://workspace/*.key",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-nested-key",
+      "action_type": "fs.read",
+      "resource": "file://workspace/**/*.key",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-root-python",
+      "action_type": "fs.read",
+      "resource": "file://workspace/*.py",
+      "decision": "DENY"
+    },
+    {
+      "id": "deny-nested-python",
+      "action_type": "fs.read",
+      "resource": "file://workspace/**/*.py",
+      "decision": "DENY"
+    },
+    {
+      "id": "allow-root-markdown",
+      "action_type": "fs.read",
+      "resource": "file://workspace/*.md",
+      "decision": "ALLOW"
+    },
+    {
+      "id": "allow-nested-markdown",
+      "action_type": "fs.read",
+      "resource": "file://workspace/**/*.md",
+      "decision": "ALLOW"
+    },
+    {
+      "id": "allow-manual-test-writes",
+      "action_type": "fs.write",
+      "resource": "file://workspace/.tmp/manual-tests/**",
+      "decision": "ALLOW",
+      "obligations": {
+        "sandbox_mode": "local"
+      }
+    }
+  ]
+}

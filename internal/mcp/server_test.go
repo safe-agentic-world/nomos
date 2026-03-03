@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/safe-agentic-world/nomos/internal/assurance"
 	"github.com/safe-agentic-world/nomos/internal/identity"
 	"github.com/safe-agentic-world/nomos/internal/service"
 )
@@ -83,5 +84,35 @@ func TestValidateChangeSetBlocksForbiddenPaths(t *testing.T) {
 	}
 	if result["allowed"].(bool) {
 		t.Fatal("expected change set to be blocked")
+	}
+}
+
+func TestCapabilitiesSurfaceAssuranceLevelAndNotice(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	data := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
+	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	server, err := NewServer(bundlePath, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	}, dir, 64, 10, false, false, "local")
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	server.SetAssuranceLevel(assurance.LevelBestEffort)
+
+	resp := server.handleCapabilities(Request{ID: "1", Method: "nomos.capabilities"})
+	tools, ok := resp.Result.(service.CapabilityEnvelope)
+	if !ok {
+		t.Fatalf("expected capability envelope")
+	}
+	if tools.AssuranceLevel != assurance.LevelBestEffort {
+		t.Fatalf("expected assurance level %s, got %+v", assurance.LevelBestEffort, tools)
+	}
+	if tools.MediationNotice == "" {
+		t.Fatalf("expected mediation notice for non-strong assurance, got %+v", tools)
 	}
 }

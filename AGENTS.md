@@ -1,35 +1,45 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is currently documentation-only. The top-level files are:
-- `README.md`: project summary.
-- `TASKS.md`: task tracking and notes.
-- `LICENSE`: licensing information.
+Nomos is a Go codebase with policy bundles, docs, deployment manifests, and test fixtures.
 
-If you introduce source code or tests, propose a clear layout in your PR (for example, `src/` for implementation and `tests/` for automated tests), and update this guide to reflect the new structure.
+Key paths:
+- `cmd/nomos`: CLI entrypoint (`version`, `serve`, `mcp`, `policy`, `doctor`)
+- `internal/`: implementation packages (`action`, `policy`, `gateway`, `service`, `mcp`, `executor`, `audit`, `identity`, `doctor`, etc.)
+- `policies/`: starter policy bundles (`minimal`, `safe-dev`, `safe-dev-hardened`, `guarded-prod`, `unsafe`)
+- `docs/`: product, security, and deployment documentation
+- `deploy/`: CI and Kubernetes reference artifacts
+- `testdata/`: corpora, bypass fixtures, and CI config fixtures
+- top-level configs: `config.example.json`, `config.all-fields.example.json`, `config.codex.json`
 
 ## Build, Test, and Development Commands
-No build, test, or run scripts are defined yet. If you add tooling, document it here with exact commands. Examples to add when applicable:
-- `npm run build`: compile or bundle the project.
-- `npm test`: run the test suite.
-- `make lint`: run linters/formatters.
+Primary commands:
+- `go build ./cmd/nomos`: build the CLI
+- `go test ./...`: run the full test suite
+- `go vet ./...`: run Go static checks
+- `go test ./internal/mcp`: focused MCP compatibility tests
+- `go run ./cmd/nomos doctor -c ./config.example.json --format json`: deterministic readiness check
+
+If you change workflows, keep `.github/workflows/ci.yml` green and preserve least-privilege defaults.
 
 ## Coding Style & Naming Conventions
-There is no established language-specific style yet. Follow these baseline rules:
-- Match the existing file’s indentation and formatting.
-- Use clear, descriptive names (e.g., `policyEngine`, `agentConfig`).
-- Keep Markdown headings short and in Title Case.
-
-If you introduce a formatter or linter, include the exact command and config file path (for example, `pyproject.toml`, `.editorconfig`, `.prettierrc`).
+Current conventions:
+- follow standard Go formatting (`gofmt`)
+- keep policy/config behavior deterministic and fail closed
+- reject unknown fields unless the API explicitly allows extensions
+- keep Markdown headings short and in Title Case
+- use descriptive rule IDs in policy bundles and keep them stable
 
 ## Testing Guidelines
-No testing framework is currently configured. If you add tests:
-- Place them in a dedicated `tests/` directory (or language-standard equivalent).
-- Use descriptive names like `test_policy_validation.py` or `policy_validation.test.ts`.
-- Ensure new functionality is covered and note how to run the tests in this guide.
+Tests are already in place across `cmd/` and `internal/`.
+
+When changing behavior:
+- add or update targeted unit tests near the affected package
+- run at least the focused package tests plus `go test ./...`
+- keep CI smoke checks passing, especially CLI/policy/doctor and MCP compatibility tests
 
 ## Commit & Pull Request Guidelines
-Git history only contains “Initial commit,” so there is no established convention. Use short, imperative subject lines (e.g., “Add policy validation notes”).
+Use short, imperative subject lines (for example, `Add safe-dev-hardened starter bundle`).
 
 Pull requests should include:
 - A concise summary of changes.
@@ -38,4 +48,9 @@ Pull requests should include:
 - Documentation updates when behavior or structure changes.
 
 ## Security & Configuration Notes
-Do not add secrets to the repository. If configuration is required in the future, provide sample files (e.g., `config.example.json`) and document required fields in `README.md`.
+Do not add secrets to the repository.
+
+Configuration guidance:
+- keep local developer configs separate from CI fixtures
+- use checked-in, portable fixtures for CI under `testdata/ci/`
+- prefer relative paths in sample configs unless a local-only config explicitly targets a workstation

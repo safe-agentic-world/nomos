@@ -18,6 +18,8 @@ type CapabilityEnvelope struct {
 	OutputMaxBytes   int      `json:"output_max_bytes"`
 	OutputMaxLines   int      `json:"output_max_lines"`
 	ApprovalsEnabled bool     `json:"approvals_enabled"`
+	AssuranceLevel   string   `json:"assurance_level,omitempty"`
+	MediationNotice  string   `json:"mediation_notice,omitempty"`
 }
 
 func (s *Service) EnabledTools(id identity.VerifiedIdentity) []string {

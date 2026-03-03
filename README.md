@@ -96,7 +96,7 @@ go build -o .\bin\nomos.exe .\cmd\nomos
 ```powershell
 .\bin\nomos.exe mcp `
   --config .\config.example.json `
-  --policy-bundle .\policies\your-policy-bundle.json
+  --policy-bundle .\policies\minimal.json
 ```
 
 ### 3) Register in Codex
@@ -105,20 +105,20 @@ go build -o .\bin\nomos.exe .\cmd\nomos
 codex mcp add nomos -- `
   .\bin\nomos.exe mcp `
   --config .\config.example.json `
-  --policy-bundle .\policies\your-policy-bundle.json
+  --policy-bundle .\policies\minimal.json
 ```
 
 ### 4) Prove policy is real
 
 In Codex, run:
 
-- Allowed: `Use nomos.fs_read to read README.md`
-- Denied: `Use nomos.fs_read to read .env`
+- Allowed: `Use nomos.fs_read to read file://workspace/README.md`
+- Denied: `Use nomos.fs_read to read file://workspace/TASKS.md`
 
 You should see:
 
 - `README.md` allowed (capped output)
-- `.env` denied (structured `DENIED_POLICY` response)
+- `TASKS.md` denied under the minimal bundle (structured deny response)
 - audit events emitted for both
 - redaction path executed before returning output
 
@@ -151,6 +151,7 @@ You should see:
 - Corpus-backed redaction guarantees plus no-leak harness coverage
 - Actionable `policy explain` denial context (`why_denied`, `minimal_allowing_change`, `obligations_preview`)
 - Workflow-managed releases with GitHub Release assets and checksums
+- Starter policy bundles include `safe-dev`, `safe-dev-hardened`, `guarded-prod`, and `unsafe`
 
 ---
 

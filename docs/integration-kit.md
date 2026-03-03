@@ -141,6 +141,8 @@ Response fields:
 - `network_mode`: `deny` or `allowlist` depending on policy-derived capability.
 - `output_max_bytes`, `output_max_lines`: output caps returned to the client.
 - `approvals_enabled`: whether approval workflow is configured.
+- `assurance_level`: runtime-derived assurance label for the current mediation environment.
+- `mediation_notice`: human-readable warning when the current runtime is not strong mediation.
 
 The capability envelope is advisory; final authorization is still performed per action with deny-wins semantics.
 
@@ -157,4 +159,5 @@ Safe workflow recommendations:
 
 Operational note:
 - Stronger enforcement guarantees are expected in controlled runtimes (CI/container/K8s runners).
+- In local Claude Code or similar unmanaged setups, disable direct built-in file/shell tools if you want Nomos to be the only practical side-effect path.
 - See `docs/assurance-levels.md` and `docs/guarantees.md` for the current assurance labels exposed in audit and `nomos policy explain`.
