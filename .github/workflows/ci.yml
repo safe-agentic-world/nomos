@@ -200,7 +200,7 @@ jobs:
             "schema_version": "v1",
             "action_id": "ci_policy_deny_1",
             "action_type": "fs.read",
-            "resource": "file://workspace/TASKS.md",
+            "resource": "file://workspace/CHANGELOG.md",
             "params": {},
             "principal": "system",
             "agent": "nomos",
@@ -341,7 +341,7 @@ jobs:
           [[ ${doctor_not_ready_status} -eq 1 ]]
           [[ "${doctor_not_ready_output}" == *"NOT_READY"* || "${doctor_not_ready_output}" == *"doctor completed: status=NOT_READY"* ]]
           [[ ${doctor_bad_format_status} -eq 2 ]]
-          [[ "${doctor_bad_format_output}" == *"invalid --format: use text or json"* ]]
+          [[ "${doctor_bad_format_output}" == *"invalid --format value"* && "${doctor_bad_format_output}" == *"expected text or json"* ]]
 
       - name: MCP capability and not-found smoke
         run: go test ./internal/mcp -run "TestCapabilitiesSurfaceAssuranceLevelAndNotice|TestHandleRequestMapsMissingFilesToNotFound"
@@ -451,10 +451,34 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./Dockerfile
+          target: runtime
           push: false
+          load: true
           tags: nomos:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Container doctor smoke
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            nomos:ci doctor -c /workspace/examples/quickstart/config.quickstart.json --format json
+
+      - name: Build OPA-enabled image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime-opa
+          push: false
+          load: true
+          tags: nomos:ci-opa
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: OPA binary smoke
+        run: docker run --rm --entrypoint /opa nomos:ci-opa version
 
   release-dry-run:
     name: Release Dry Run

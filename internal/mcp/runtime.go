@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -41,7 +40,7 @@ func ParseRuntimeOptions(options RuntimeOptions) (RuntimeOptions, error) {
 		format = "text"
 	}
 	if format != "text" && format != "json" {
-		return RuntimeOptions{}, errors.New("invalid log format")
+		return RuntimeOptions{}, fmt.Errorf("invalid log format %q: expected text or json", format)
 	}
 	if options.ErrWriter == nil {
 		options.ErrWriter = os.Stderr
@@ -65,7 +64,7 @@ func parseLogLevel(value string) (logLevel, error) {
 	case "debug":
 		return logLevelDebug, nil
 	default:
-		return logLevelInfo, errors.New("invalid log level")
+		return logLevelInfo, fmt.Errorf("invalid log level %q: expected error|warn|info|debug", strings.TrimSpace(value))
 	}
 }
 

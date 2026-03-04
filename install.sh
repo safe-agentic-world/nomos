@@ -122,3 +122,10 @@ cp "$binary_path" "${INSTALL_DIR}/nomos"
 chmod 0755 "${INSTALL_DIR}/nomos"
 
 echo "Installed nomos to ${INSTALL_DIR}/nomos"
+case ":${PATH:-}:" in
+  *:"${INSTALL_DIR}":*)
+    ;;
+  *)
+    echo "Add ${INSTALL_DIR} to PATH to use 'nomos' directly."
+    ;;
+esac

@@ -1,7 +1,11 @@
 FROM golang:1.24.13-alpine AS build
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN go build -o /out/nomos ./cmd/nomos
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/nomos ./cmd/nomos
 
 FROM alpine:3.20
 WORKDIR /demo

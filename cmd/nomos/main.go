@@ -35,6 +35,9 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "help", "-h", "--help":
+		usage()
+		os.Exit(0)
 	case "version":
 		fmt.Println(versionOutput())
 	case "serve":
@@ -552,7 +555,7 @@ func runDoctorCommand(args []string, stdout io.Writer, stderr io.Writer, getenv 
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
 	if format != "text" && format != "json" {
-		writeRedactedLine(stderr, "invalid --format: use text or json")
+		writeRedactedLine(stderr, "invalid --format value "+strconv.Quote(format)+": expected text or json")
 		return 2
 	}
 	report, err := doctor.Run(doctor.Options{

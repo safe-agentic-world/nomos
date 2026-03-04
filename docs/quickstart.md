@@ -84,7 +84,6 @@ The example prints both responses so you can see the policy-gated behavior direc
 
 ## Next Paths
 
-- Codex and Claude Code MCP setup: [integration-kit.md](/C:/Users/prudh/repos/safe-agentic-world/nomos/docs/integration-kit.md)
 - Codex and Claude Code MCP setup: [integration-kit.md](./integration-kit.md)
 - Docker demo: `docker compose -f .\deploy\docker-compose\docker-compose.yml up --build`
 - Kubernetes install: [deploy/helm/nomos/README.md](../deploy/helm/nomos/README.md)

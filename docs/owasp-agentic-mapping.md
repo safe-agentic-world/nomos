@@ -18,7 +18,7 @@ Environment note:
 
 - controlled runtimes (`ci` and `k8s`) can provide stronger guarantees
 - unmanaged laptops remain best-effort for mediation-dependent controls
-- see `docs/guarantees.md`, `docs/assurance-levels.md`, and `docs/strong-guarantee-deployment.md`
+- see `docs/assurance-levels.md` and `docs/strong-guarantee-deployment.md`
 
 ## ASI01 — Agent Goal Hijack
 

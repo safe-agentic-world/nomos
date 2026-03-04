@@ -6,11 +6,18 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/safe-agentic-world/nomos/internal/gateway"
 	"github.com/safe-agentic-world/nomos/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/opabridge"
 	"github.com/safe-agentic-world/nomos/internal/policy"
 	"github.com/safe-agentic-world/nomos/internal/version"
+)
+
+var (
+	newOPACommandEvaluator = opabridge.NewCommandEvaluator
+	evaluateOPA            = opabridge.Evaluate
 )
 
 type Check struct {
@@ -100,6 +107,35 @@ func Run(options Options) (Report, error) {
 	}
 	mark("policy.bundle_parses", bundleLoaded, "policy bundle parsed", "fix bundle JSON/schema so policy.LoadBundle succeeds")
 	mark("policy.bundle_hash", bundleLoaded && report.PolicyBundleHash != "", "policy bundle hash computed", "ensure bundle bytes are readable and valid")
+
+	if cfgErr == nil && cfg.Policy.OPA.Enabled {
+		opaEvaluator, err := newOPACommandEvaluator(opabridge.CommandConfig{
+			BinaryPath: cfg.Policy.OPA.BinaryPath,
+			PolicyPath: cfg.Policy.OPA.PolicyPath,
+			Query:      cfg.Policy.OPA.Query,
+			Timeout:    time.Duration(cfg.Policy.OPA.TimeoutMS) * time.Millisecond,
+		})
+		opaReady := err == nil
+		mark("policy.opa_evaluator_ready", opaReady, "opa evaluator initialized", "install OPA and verify policy.opa.binary_path, policy.opa.policy_path, and policy.opa.query")
+
+		opaProbeOK := false
+		if opaReady {
+			_, err = evaluateOPA(normalize.NormalizedAction{
+				SchemaVersion: "v1",
+				ActionID:      "doctor_opa_probe",
+				ActionType:    "doctor.unmatched",
+				Resource:      "file://workspace/__doctor_opa_probe__",
+				Params:        []byte("{}"),
+				ParamsHash:    "probe",
+				Principal:     cfg.Identity.Principal,
+				Agent:         cfg.Identity.Agent,
+				Environment:   cfg.Identity.Environment,
+				TraceID:       "doctor_opa_probe_trace",
+			}, opaEvaluator)
+			opaProbeOK = err == nil
+		}
+		mark("policy.opa_probe_evaluates", opaProbeOK, "opa policy probe evaluated", "fix Rego/query output contract so OPA returns one decision object with decision in ALLOW|DENY|REQUIRE_APPROVAL")
+	}
 
 	denyByDefault := false
 	if bundleLoaded && cfgErr == nil {

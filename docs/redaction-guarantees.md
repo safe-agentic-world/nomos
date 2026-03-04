@@ -1,6 +1,6 @@
 # Redaction Guarantees
 
-This document defines the redaction contract for Nomos.
+This is the canonical redaction model for Nomos. It combines the guarantee contract and source inventory.
 
 ## Hard Guarantees
 
@@ -13,6 +13,28 @@ Nomos guarantees the following by default:
 
 These guarantees apply to the built-in mediation path only.
 
+## Redaction Sources
+
+Built-in deterministic sources:
+
+- `Authorization` and `Proxy-Authorization` headers
+- `Cookie` and `Set-Cookie` headers
+- `X-Api-Key` and `X-Auth-Token` headers
+- bearer tokens
+- basic-auth payloads
+- AWS access-key style identifiers (`AKIA...`)
+- JWT-like tokens
+- PEM blocks
+
+Broker-aware source:
+
+- for `process.exec`, exact secret values materialized from credential leases are redacted before stdout/stderr are returned
+
+Operator-configured sources:
+
+- operators may append additional regex patterns through config
+- custom patterns run after built-ins in configured order
+
 ## Best-Effort Areas
 
 The following remain best-effort:
@@ -21,6 +43,12 @@ The following remain best-effort:
 - novel secret formats not covered by built-in or operator-configured patterns
 - secrets transformed beyond recognizable text signatures
 - secrets emitted outside Nomos mediation in unmanaged environments
+
+## Determinism
+
+- the same input bytes and the same configured pattern set always produce the same output bytes
+- built-in patterns run in stable order
+- custom patterns are appended in config order
 
 ## Scope
 

@@ -244,4 +244,4 @@ Safe workflow recommendations:
 Operational note:
 - Stronger enforcement guarantees are expected in controlled runtimes (`ci`, containers, and `k8s` runners).
 - In local Claude Code or similar unmanaged setups, disable direct built-in file/shell tools if you want Nomos to be the only practical side-effect path.
-- See `docs/assurance-levels.md` and `docs/guarantees.md` for the current assurance labels exposed in audit and `nomos policy explain`.
+- See `docs/assurance-levels.md` for the current assurance labels and mediation coverage exposed in audit and `nomos policy explain`.

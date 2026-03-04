@@ -2,6 +2,8 @@
 
 This document explains how to verify official Nomos release artifacts.
 
+It is also the canonical reference for the current supply-chain trust model.
+
 ## Trust Root
 
 Nomos release assets are signed with Sigstore keyless signing.
@@ -41,6 +43,20 @@ Current note:
 
 - the official release workflow publishes signed archives and signed metadata files
 - the official release workflow does not publish container images, so image signature verification is not part of the current release path
+
+## Supply-Chain Model Summary
+
+Current release model:
+
+- Sigstore keyless signing with Fulcio + Rekor
+- SPDX JSON SBOM artifact: `nomos-sbom.spdx.json`
+- in-toto provenance artifact: `nomos-provenance.intoto.jsonl`
+- provenance predicate alignment: `https://slsa.dev/provenance/v1`
+
+Trust boundary note:
+
+- binary/archive trust and policy-bundle trust are separate
+- policy bundle trust remains separate from binary trust
 
 ## Prerequisites
 

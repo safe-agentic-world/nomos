@@ -2,9 +2,14 @@ package doctor
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/safe-agentic-world/nomos/internal/normalize"
+	"github.com/safe-agentic-world/nomos/internal/opabridge"
+	"github.com/safe-agentic-world/nomos/internal/policy"
 )
 
 func TestRunReady(t *testing.T) {
@@ -88,6 +93,108 @@ func TestReportJSONDeterministic(t *testing.T) {
 	if string(j1) != string(j2) {
 		t.Fatalf("expected deterministic json output\n1=%s\n2=%s", string(j1), string(j2))
 	}
+}
+
+func TestRunOPAEnabledEvaluatorUnavailableNotReady(t *testing.T) {
+	restore := stubOPAChecks(
+		func(opabridge.CommandConfig) (opabridge.Evaluator, error) {
+			return nil, errors.New("opa binary not found")
+		},
+		nil,
+	)
+	defer restore()
+
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	regoPath := filepath.Join(dir, "policy.rego")
+	if err := os.WriteFile(regoPath, []byte(`package nomos`), 0o600); err != nil {
+		t.Fatalf("write rego: %v", err)
+	}
+	configPath := filepath.Join(dir, "config.json")
+	writeConfigWithOPA(t, configPath, bundlePath, dir, regoPath)
+
+	report, err := Run(Options{ConfigPath: configPath, Getenv: func(string) string { return "" }})
+	if err != nil {
+		t.Fatalf("doctor run: %v", err)
+	}
+	if report.OverallStatus != "NOT_READY" {
+		t.Fatalf("expected NOT_READY, got %s", report.OverallStatus)
+	}
+	assertCheckFailed(t, report, "policy.opa_evaluator_ready")
+	assertCheckFailed(t, report, "policy.opa_probe_evaluates")
+}
+
+func TestRunOPAEnabledProbeFailureNotReady(t *testing.T) {
+	restore := stubOPAChecks(
+		func(opabridge.CommandConfig) (opabridge.Evaluator, error) {
+			return fakeOPAEvaluator{}, nil
+		},
+		func(normalize.NormalizedAction, opabridge.Evaluator) (policy.Decision, error) {
+			return policy.Decision{}, errors.New("opa evaluator unavailable")
+		},
+	)
+	defer restore()
+
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	regoPath := filepath.Join(dir, "policy.rego")
+	if err := os.WriteFile(regoPath, []byte(`package nomos`), 0o600); err != nil {
+		t.Fatalf("write rego: %v", err)
+	}
+	configPath := filepath.Join(dir, "config.json")
+	writeConfigWithOPA(t, configPath, bundlePath, dir, regoPath)
+
+	report, err := Run(Options{ConfigPath: configPath, Getenv: func(string) string { return "" }})
+	if err != nil {
+		t.Fatalf("doctor run: %v", err)
+	}
+	if report.OverallStatus != "NOT_READY" {
+		t.Fatalf("expected NOT_READY, got %s", report.OverallStatus)
+	}
+	assertCheckPassed(t, report, "policy.opa_evaluator_ready")
+	assertCheckFailed(t, report, "policy.opa_probe_evaluates")
+}
+
+func TestRunOPAEnabledProbeSuccessReady(t *testing.T) {
+	restore := stubOPAChecks(
+		func(opabridge.CommandConfig) (opabridge.Evaluator, error) {
+			return fakeOPAEvaluator{}, nil
+		},
+		func(normalize.NormalizedAction, opabridge.Evaluator) (policy.Decision, error) {
+			return policy.Decision{
+				Decision: policy.DecisionAllow,
+			}, nil
+		},
+	)
+	defer restore()
+
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"r1","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	regoPath := filepath.Join(dir, "policy.rego")
+	if err := os.WriteFile(regoPath, []byte(`package nomos`), 0o600); err != nil {
+		t.Fatalf("write rego: %v", err)
+	}
+	configPath := filepath.Join(dir, "config.json")
+	writeConfigWithOPA(t, configPath, bundlePath, dir, regoPath)
+
+	report, err := Run(Options{ConfigPath: configPath, Getenv: func(string) string { return "" }})
+	if err != nil {
+		t.Fatalf("doctor run: %v", err)
+	}
+	if report.OverallStatus != "READY" {
+		t.Fatalf("expected READY, got %s", report.OverallStatus)
+	}
+	assertCheckPassed(t, report, "policy.opa_evaluator_ready")
+	assertCheckPassed(t, report, "policy.opa_probe_evaluates")
 }
 
 func TestRunStrongGuaranteeMissingHardeningNotReady(t *testing.T) {
@@ -289,6 +396,57 @@ func writeConfig(t *testing.T, path, bundlePath string, mcpEnabled bool, workspa
 	}
 }
 
+func writeConfigWithOPA(t *testing.T, path, bundlePath, workspaceRoot, policyPath string) {
+	t.Helper()
+	cfg := map[string]any{
+		"gateway": map[string]any{
+			"listen":    ":8080",
+			"transport": "http",
+		},
+		"runtime": map[string]any{
+			"stateless_mode":   false,
+			"strong_guarantee": false,
+			"deployment_mode":  "unmanaged",
+		},
+		"policy": map[string]any{
+			"policy_bundle_path": bundlePath,
+			"opa": map[string]any{
+				"enabled":     true,
+				"binary_path": "opa",
+				"policy_path": policyPath,
+				"query":       "data.nomos.decision",
+				"timeout_ms":  2000,
+			},
+		},
+		"executor": map[string]any{
+			"sandbox_enabled": false,
+			"workspace_root":  workspaceRoot,
+		},
+		"credentials": map[string]any{"enabled": false, "secrets": []any{}},
+		"audit":       map[string]any{"sink": "stdout"},
+		"mcp":         map[string]any{"enabled": true},
+		"upstream":    map[string]any{"routes": []any{}},
+		"approvals":   map[string]any{"enabled": false},
+		"identity": map[string]any{
+			"principal":       "system",
+			"agent":           "nomos",
+			"environment":     "dev",
+			"api_keys":        map[string]any{"dev-api-key": "system"},
+			"service_secrets": map[string]any{},
+			"agent_secrets":   map[string]any{"nomos": "dev-agent-secret"},
+			"oidc":            map[string]any{"enabled": false, "issuer": "", "audience": "", "public_key_path": ""},
+		},
+		"redaction": map[string]any{"patterns": []any{}},
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+}
+
 func writeStrongConfig(t *testing.T, path, bundlePath, workspaceRoot, certPath, keyPath, clientCAPath, oidcKeyPath string) {
 	writeStrongConfigForMode(t, path, bundlePath, workspaceRoot, certPath, keyPath, clientCAPath, oidcKeyPath, "k8s")
 }
@@ -361,4 +519,39 @@ func assertCheckFailed(t *testing.T, report Report, id string) {
 		}
 	}
 	t.Fatalf("missing check %s", id)
+}
+
+func assertCheckPassed(t *testing.T, report Report, id string) {
+	t.Helper()
+	for _, check := range report.Checks {
+		if check.ID == id {
+			if check.Status != "PASS" {
+				t.Fatalf("expected %s to pass, got %s", id, check.Status)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing check %s", id)
+}
+
+type fakeOPAEvaluator struct{}
+
+func (fakeOPAEvaluator) Evaluate([]byte) ([]byte, error) {
+	return []byte(`{"decision":"ALLOW"}`), nil
+}
+
+func stubOPAChecks(
+	newEvaluator func(opabridge.CommandConfig) (opabridge.Evaluator, error),
+	eval func(normalize.NormalizedAction, opabridge.Evaluator) (policy.Decision, error),
+) func() {
+	prevNew := newOPACommandEvaluator
+	prevEval := evaluateOPA
+	newOPACommandEvaluator = newEvaluator
+	if eval != nil {
+		evaluateOPA = eval
+	}
+	return func() {
+		newOPACommandEvaluator = prevNew
+		evaluateOPA = prevEval
+	}
 }

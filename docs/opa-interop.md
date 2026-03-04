@@ -80,3 +80,14 @@ Nomos executes:
 - `opa eval --format=json --stdin-input --data <policy_path> <query>`
 
 The configured query must evaluate to exactly one object that matches the supported external output schema above.
+
+## Doctor Readiness Checks
+
+When `policy.opa.enabled=true`, `nomos doctor` validates both native bundle readiness and OPA backend readiness.
+
+Additional OPA checks:
+
+- `policy.opa_evaluator_ready`: confirms the configured OPA evaluator can be initialized
+- `policy.opa_probe_evaluates`: runs a deterministic probe evaluation and requires a valid single decision object
+
+If either OPA check fails, doctor reports `NOT_READY`.
