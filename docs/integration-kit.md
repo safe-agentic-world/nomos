@@ -2,10 +2,10 @@
 
 This guide covers local agent integration for Nomos using checked-in quickstart files and MCP stdio mode.
 
-If you are starting from a fresh machine, install or build Nomos first:
+If you are starting from a fresh machine, install Nomos first:
 
 ```powershell
-go build -o .\bin\nomos.exe .\cmd\nomos
+go install ./cmd/nomos
 ```
 
 Shared quickstart assets used below:
@@ -20,13 +20,13 @@ Shared quickstart assets used below:
 1. Run a preflight check:
 
 ```powershell
-.\bin\nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
 2. Start the MCP server:
 
 ```powershell
-.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 3. Register Nomos in Codex MCP configuration with the checked-in example:
@@ -54,13 +54,13 @@ Troubleshooting:
 1. Run the same preflight:
 
 ```powershell
-.\bin\nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
 2. Start the MCP server:
 
 ```powershell
-.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 3. Register Nomos using the checked-in example:
@@ -74,7 +74,7 @@ Troubleshooting:
 
 Troubleshooting:
 
-- if Claude Code cannot connect, verify the MCP command path points to `.\bin\nomos.exe`
+- if Claude Code cannot connect, verify the MCP command path points to `nomos`
 - if the wrong workspace is used, confirm the config file is [config.quickstart.json](../examples/quickstart/config.quickstart.json)
 - in unmanaged local sessions, disable direct built-in file tools if you want Nomos to be the practical side-effect boundary
 
@@ -87,7 +87,7 @@ Use the runnable local HTTP example:
 1. Start Nomos:
 
 ```powershell
-.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 2. In a second terminal, run:
@@ -115,10 +115,10 @@ OpenClaw uses the same MCP stdio contract.
 1. Start Nomos with:
 
 ```powershell
-.\bin\nomos.exe mcp -c .\config.example.json -p .\policies\your-policy-bundle.json
+nomos mcp -c .\config.example.json -p .\policies\your-policy-bundle.json
 ```
 
-2. Register Nomos in OpenClaw MCP server config with command `.\bin\nomos.exe` and args:
+2. Register Nomos in OpenClaw MCP server config with command `nomos` and args:
 - `mcp`
 - `-c`
 - `.\config.example.json`
@@ -189,7 +189,7 @@ Exit codes:
 {
   "mcpServers": {
     "nomos": {
-      "command": ".\\bin\\nomos.exe",
+      "command": "nomos",
       "args": [
         "mcp",
         "-c",
@@ -245,3 +245,4 @@ Operational note:
 - Stronger enforcement guarantees are expected in controlled runtimes (`ci`, containers, and `k8s` runners).
 - In local Claude Code or similar unmanaged setups, disable direct built-in file/shell tools if you want Nomos to be the only practical side-effect path.
 - See `docs/assurance-levels.md` for the current assurance labels and mediation coverage exposed in audit and `nomos policy explain`.
+

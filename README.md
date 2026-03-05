@@ -24,10 +24,10 @@ Agent can still reason and plan freely. Nomos controls whether side effects exec
 From repo root:
 
 ```powershell
-go build -o .\bin\nomos.exe .\cmd\nomos
-.\bin\nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
-.\bin\nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
-.\bin\nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+go install ./cmd/nomos
+nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
 ```
 
 You should see one deterministic `ALLOW` and one deterministic `DENY`.
@@ -87,13 +87,13 @@ scoop install nomos
 ### HTTP mode
 
 ```powershell
-.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 ### MCP stdio mode
 
 ```powershell
-.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 ## Testing
@@ -106,7 +106,7 @@ Quick release gate:
 go test ./...
 go test -race ./...
 go vet ./...
-.\bin\nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
 ## Starter Policies
@@ -147,3 +147,4 @@ go vet ./...
 - `CODE_OF_CONDUCT.md`
 - `CHANGELOG.md`
 - `LICENSE`
+

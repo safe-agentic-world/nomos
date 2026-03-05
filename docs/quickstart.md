@@ -9,16 +9,16 @@ This is the canonical first run for Nomos. It uses only checked-in files and sho
 
 No Docker, Kubernetes, or external services are required for the first success path.
 
-## 1. Build Nomos
+## 1. Install Nomos CLI
 
 ```powershell
-go build -o .\bin\nomos.exe .\cmd\nomos
+go install ./cmd/nomos
 ```
 
 ## 2. Run Deterministic Preflight
 
 ```powershell
-.\bin\nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
 Expected result:
@@ -31,7 +31,7 @@ Audit output for the quickstart uses `stdout`, so the same terminal shows readin
 ## 3. Verify One Allowed Action
 
 ```powershell
-.\bin\nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
 ```
 
 Expected result:
@@ -41,7 +41,7 @@ Expected result:
 ## 4. Verify One Denied Action
 
 ```powershell
-.\bin\nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
 ```
 
 Expected result:
@@ -51,7 +51,7 @@ Expected result:
 ## 5. Start The HTTP Gateway
 
 ```powershell
-.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 The gateway listens on `http://127.0.0.1:8080`.
@@ -87,3 +87,4 @@ The example prints both responses so you can see the policy-gated behavior direc
 - Codex and Claude Code MCP setup: [integration-kit.md](./integration-kit.md)
 - Docker demo: `docker compose -f .\deploy\docker-compose\docker-compose.yml up --build`
 - Kubernetes install: [deploy/helm/nomos/README.md](../deploy/helm/nomos/README.md)
+
