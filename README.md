@@ -1,6 +1,6 @@
 <img src="docs/assets/nomos-logo.png" alt="Nomos logo" width="220">
 
-# Nomos
+## Nomos
 
 **Nomos helps you run AI agents safely without giving them full system trust.**
 
