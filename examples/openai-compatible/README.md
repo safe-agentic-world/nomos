@@ -7,7 +7,7 @@ This example uses only Python standard library modules and demonstrates the Nomo
 1. Start Nomos:
 
 ```powershell
-.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe-dev-hardened.yaml
+.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 2. Run the example:

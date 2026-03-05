@@ -47,11 +47,10 @@ $TmpDir = Join-Path $Repo ".tmp\manual-tests"
 $NomosExe = Join-Path $BinDir "nomos.exe"
 $ConfigCodex = Join-Path $Repo "config.codex.json"
 $ConfigAll = Join-Path $Repo "config.all-fields.example.json"
-$SafeDevYaml = Join-Path $Repo "policies\safe-dev.yaml"
-$SafeDevHardenedYaml = Join-Path $Repo "policies\safe-dev-hardened.yaml"
-$SafeDevJson = Join-Path $Repo "policies\safe-dev.json"
-$MinimalJson = Join-Path $Repo "policies\minimal.json"
+$SafeYaml = Join-Path $Repo "policies\safe.yaml"
+$SafeJson = Join-Path $Repo "policies\safe.json"
 $AllFieldsYaml = Join-Path $Repo "policies\all-fields.example.yaml"
+$AllFieldsJson = Join-Path $Repo "policies\all-fields.example.json"
 New-Item -ItemType Directory -Force $BinDir | Out-Null
 New-Item -ItemType Directory -Force $TmpDir | Out-Null
 ```
@@ -124,7 +123,7 @@ $ActionAllow = Join-Path $TmpDir "action-allow-readme.json"
 }
 '@ | Set-Content -Encoding UTF8 $ActionAllow
 
-& $NomosExe policy test --action $ActionAllow --bundle $MinimalJson
+& $NomosExe policy test --action $ActionAllow --bundle $SafeJson
 ```
 
 Expected:
@@ -152,7 +151,7 @@ $ActionDeny = Join-Path $TmpDir "action-deny-other-file.json"
 }
 '@ | Set-Content -Encoding UTF8 $ActionDeny
 
-& $NomosExe policy test --action $ActionDeny --bundle $MinimalJson
+& $NomosExe policy test --action $ActionDeny --bundle $SafeJson
 ```
 
 Expected:
@@ -163,8 +162,8 @@ Expected:
 ### Scenario 7: `policy test` with YAML bundle
 
 ```powershell
-& $NomosExe policy test --action $ActionAllow --bundle $SafeDevYaml
-& $NomosExe policy test --action $ActionAllow --bundle $SafeDevJson
+& $NomosExe policy test --action $ActionAllow --bundle $SafeYaml
+& $NomosExe policy test --action $ActionAllow --bundle $SafeJson
 ```
 
 Expected:
@@ -176,7 +175,7 @@ Expected:
 ### Scenario 8: `policy explain` with denied action
 
 ```powershell
-& $NomosExe policy explain --action $ActionDeny --bundle $MinimalJson
+& $NomosExe policy explain --action $ActionDeny --bundle $SafeJson
 ```
 
 Expected:
@@ -216,7 +215,7 @@ $BadAction = Join-Path $TmpDir "action-invalid.json"
 }
 '@ | Set-Content -Encoding UTF8 $BadAction
 
-& $NomosExe policy test --action $BadAction --bundle $SafeDevYaml
+& $NomosExe policy test --action $BadAction --bundle $SafeYaml
 ```
 
 Expected:
@@ -243,7 +242,7 @@ $TraversalAction = Join-Path $TmpDir "action-traversal.json"
 }
 '@ | Set-Content -Encoding UTF8 $TraversalAction
 
-& $NomosExe policy test --action $TraversalAction --bundle $SafeDevYaml
+& $NomosExe policy test --action $TraversalAction --bundle $SafeYaml
 ```
 
 Expected:
@@ -283,7 +282,7 @@ Create a temporary broken config:
 
 ```powershell
 $DoctorBadConfig = Join-Path $TmpDir "config-doctor-missing-bundle.json"
-(Get-Content -Raw $ConfigCodex).Replace("policies\\safe-dev.yaml", "policies\\missing.yaml") | Set-Content -Encoding UTF8 $DoctorBadConfig
+(Get-Content -Raw $ConfigCodex).Replace("policies\\safe.yaml", "policies\\missing.yaml") | Set-Content -Encoding UTF8 $DoctorBadConfig
 & $NomosExe doctor -c $DoctorBadConfig
 ```
 
@@ -310,7 +309,7 @@ The commands below use the current Claude Code MCP syntax from the Claude Code M
 
 Important:
 
-- if you open a new PowerShell session, variables like `$NomosExe`, `$ConfigCodex`, and `$SafeDevYaml` from the earlier setup section will not exist unless you define them again
+- if you open a new PowerShell session, variables like `$NomosExe`, `$ConfigCodex`, and `$SafeYaml` from the earlier setup section will not exist unless you define them again
 - for the Claude MCP registration step, prefer a self-contained command with explicit paths so you do not accidentally register a broken server command
 
 Important Windows note:
@@ -323,7 +322,7 @@ Use absolute paths so the MCP registration works from any directory.
 ### Scenario 16: Register Nomos as a Claude Code MCP server
 
 ```powershell
-claude mcp add --transport stdio --scope project nomos-local -- "C:\Users\prudh\repos\safe-agentic-world\nomos\bin\nomos.exe" mcp -c "C:\Users\prudh\repos\safe-agentic-world\nomos\config.codex.json" -p "C:\Users\prudh\repos\safe-agentic-world\nomos\policies\safe-dev.yaml"
+claude mcp add --transport stdio --scope project nomos-local -- "C:\Users\prudh\repos\safe-agentic-world\nomos\bin\nomos.exe" mcp -c "C:\Users\prudh\repos\safe-agentic-world\nomos\config.codex.json" -p "C:\Users\prudh\repos\safe-agentic-world\nomos\policies\safe.yaml"
 ```
 
 Expected:
@@ -369,7 +368,7 @@ Use nomos.capabilities and show me the JSON result.
 Expected:
 
 - enabled tools should include `nomos.fs_read`, `nomos.fs_write`, and `nomos.apply_patch`
-- `nomos.exec` and `nomos.http_request` should not be enabled under `safe-dev`
+- `nomos.exec` and `nomos.http_request` should not be enabled under `safe`
 - response should include `assurance_level`
 - in unmanaged local testing, response should also include `mediation_notice`
 
@@ -387,7 +386,7 @@ Expected:
 - content returned
 - output is capped if large
 
-### Scenario 20: MCP read of a different workspace file allowed under `safe-dev`
+### Scenario 20: MCP read of a different workspace file allowed under `safe`
 
 In Claude Code:
 
@@ -444,7 +443,7 @@ Expected:
 - allowed
 - file contents are replaced
 
-### Scenario 24: MCP exec denied under `safe-dev`
+### Scenario 24: MCP exec denied under `safe`
 
 In Claude Code:
 
@@ -456,7 +455,7 @@ Expected:
 
 - denied by policy
 
-### Scenario 25: MCP HTTP denied under `safe-dev`
+### Scenario 25: MCP HTTP denied under `safe`
 
 In Claude Code:
 
@@ -479,7 +478,7 @@ Use repo.validate_change_set for these paths: ["README.md",".tmp/manual-tests/mc
 Expected:
 
 - record the actual result returned by the current build
-- under the current `safe-dev` policy, this may conservatively block paths because `ValidateChangeSet` evaluates `repo.apply_patch` against `file://workspace/...`
+- under the current `safe` policy, this may conservatively block paths because `ValidateChangeSet` evaluates `repo.apply_patch` against `file://workspace/...`
 
 This scenario is a behavioral verification, not a policy expectation test.
 
@@ -498,7 +497,7 @@ Expected:
 ### Scenario 28: Start Nomos MCP directly
 
 ```powershell
-& $NomosExe mcp -c $ConfigCodex -p $SafeDevYaml
+& $NomosExe mcp -c $ConfigCodex -p $SafeYaml
 ```
 
 Expected:
@@ -512,7 +511,7 @@ Stop it with `Ctrl+C`.
 ### Scenario 29: Quiet mode
 
 ```powershell
-& $NomosExe mcp -c $ConfigCodex -p $SafeDevYaml --quiet
+& $NomosExe mcp -c $ConfigCodex -p $SafeYaml --quiet
 ```
 
 Expected:
@@ -525,7 +524,7 @@ Expected:
 ### Scenario 30: Start the gateway
 
 ```powershell
-& $NomosExe serve -c $ConfigCodex -p $SafeDevYaml
+& $NomosExe serve -c $ConfigCodex -p $SafeYaml
 ```
 
 Expected:
@@ -1163,4 +1162,4 @@ Nomos is locally validated when all of the following are true:
 - traversal, unsupported schemes, and redirect edge cases fail closed
 
 Optional hardened local policy check:
-- repeat the Claude Code MCP scenarios with `policies\safe-dev-hardened.yaml` to confirm `.env`, `.pem`, `.key`, and `.py` reads are denied while Markdown reads remain allowed
+- repeat the Claude Code MCP scenarios with `policies\safe.yaml` to confirm `.env`, `.pem`, `.key`, and `.py` reads are denied while Markdown reads remain allowed

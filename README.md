@@ -2,156 +2,135 @@
 
 # Nomos
 
-**Nomos helps you run AI agents safely without giving them full system trust.**
+**Nomos is a zero-trust control plane for AI agent side effects.**
 
-It sits between your agent and real side effects (files, shell, network, credentials), then:
+It governs execution authority at the boundary where actions touch real systems:
 
-- checks policy before execution
-- blocks unsafe actions by default
-- redacts sensitive output
-- writes an audit trail
+- policy-gated filesystem, exec, network, and secret operations
+- deterministic deny-wins decisions
+- output redaction before responses, logs, and telemetry
+- auditable traces with replay-focused event fields
 
-If you use Codex, Claude Code, OpenClaw, or custom agents, Nomos gives you a practical control layer.
+If you run Codex, Claude Code, OpenClaw, or custom agent loops, Nomos gives you a practical safety boundary.
 
----
+## Why This Exists
 
-## What Nomos Is (And Isn't)
+Prompt-only safety cannot enforce real side effects. Nomos enforces at execution time.
 
-Nomos **is**:
+Agent can still reason and plan freely. Nomos controls whether side effects execute.
 
-- a policy gate for agent actions
-- a deterministic execution boundary
-- an audit and redaction layer
+## 60-Second Proof
 
-Nomos **is not**:
+From repo root:
 
-- a model or agent framework
-- a replacement for runtime hardening (network policy, identity, container controls)
-- a prompt-only safety system
+```powershell
+go build -o .\bin\nomos.exe .\cmd\nomos
+.\bin\nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
+.\bin\nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
+.\bin\nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+```
 
----
+You should see one deterministic `ALLOW` and one deterministic `DENY`.
+
+## Guarantees
+
+| Deployment mode | Guarantee | Meaning |
+| --- | --- | --- |
+| `ci`, `k8s` with strong controls | `STRONG` | governed side effects are enforceable at runtime boundary |
+| `ci`, `k8s` without full strong profile | `GUARDED` | mediated path is strong, but operator hardening gaps may remain |
+| `remote_dev`, `unmanaged` | `BEST_EFFORT` | mediated path works, but full bypass resistance is not guaranteed |
+
+See `docs/assurance-levels.md` and `docs/guarantees.md`.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A[Agent or MCP Client] --> B[Nomos Gateway]
+  B --> C[Validate and Normalize]
+  C --> D[Policy Engine]
+  D --> E[Executor Layer]
+  E --> F[Redaction]
+  F --> G[Response]
+  F --> H[Audit and Telemetry]
+```
 
 ## Install
 
-### Go (all platforms)
+### Go
 
 ```bash
 go install github.com/safe-agentic-world/nomos/cmd/nomos@latest
 ```
 
-Windows note:
-
-- `nomos.exe` is usually installed to `%USERPROFILE%\go\bin`
-
-### macOS / Linux quick install
+### macOS and Linux installer
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/safe-agentic-world/nomos/main/install.sh | sh
 ```
 
-Optional:
+## Run Nomos
 
-- `NOMOS_VERSION=vX.Y.Z` to pin a version
-- `INSTALL_DIR=$HOME/.local/bin` to avoid sudo
-
-### Direct release downloads
-
-Use GitHub Releases if you prefer manual install. Verify with `nomos-checksums.txt`.
-
----
-
-## 5-Minute Local Check
-
-From repo root:
-
-1. Build:
+### HTTP mode
 
 ```powershell
-go build -o .\bin\nomos.exe .\cmd\nomos
+.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
-2. Run readiness check:
+### MCP stdio mode
 
 ```powershell
+.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+```
+
+## Testing
+
+For full local and release-grade test commands, see `TESTING.md`.
+
+Quick release gate:
+
+```powershell
+go test ./...
+go test -race ./...
+go vet ./...
 .\bin\nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
-3. Verify one allow:
-
-```powershell
-.\bin\nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe-dev-hardened.yaml
-```
-
-4. Verify one deny:
-
-```powershell
-.\bin\nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe-dev-hardened.yaml
-```
-
-If this works, your Nomos setup is healthy.
-
----
-
-## Start Nomos
-
-### HTTP gateway mode
-
-```powershell
-.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe-dev-hardened.yaml
-```
-
-### MCP mode (for coding assistants)
-
-```powershell
-.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe-dev-hardened.yaml
-```
-
----
-
-## Common Commands
-
-```powershell
-.\bin\nomos.exe version
-.\bin\nomos.exe doctor -c .\config.example.json
-.\bin\nomos.exe policy test --action .\action.json --bundle .\policies\safe-dev.yaml
-.\bin\nomos.exe policy explain --action .\action.json --bundle .\policies\safe-dev.yaml
-```
-
----
-
 ## Starter Policies
 
-- `policies/minimal.json`: smallest demo policy
-- `policies/safe-dev.yaml`: safer local dev baseline
-- `policies/safe-dev-hardened.yaml`: stricter local baseline
-- `policies/guarded-prod.yaml`: production-oriented posture
-- `policies/unsafe.yaml`: intentionally permissive (testing only)
+- `policies/safe.{json,yaml}`: secure local baseline
+- `policies/guarded-prod.{json,yaml}`: production-oriented posture
+- `policies/unsafe.{json,yaml}`: intentionally permissive for controlled testing only
+- `policies/all-fields.example.{json,yaml}`: full schema and obligation surface example
 
----
+## Security and Trust Docs
 
-## Where To Go Next
+- `docs/threat-model.md`
+- `docs/security-checklist.md`
+- `docs/release-verification.md`
+- `docs/supply-chain-security.md`
+- `docs/owasp-agentic-mapping.md`
+- `docs/strong-guarantee-deployment.md`
 
-- Quickstart: `docs/quickstart.md`
-- Agent integrations (Codex, Claude Code, OpenClaw, SDK): `docs/integration-kit.md`
-- Deployment guide (includes CI/K8s readiness): `docs/deployment.md`
-- Strong-guarantee reference deployment: `docs/strong-guarantee-deployment.md`
-- Policy language: `docs/policy-language.md`
-- Threat model + security checklist: `docs/threat-model.md`
-- Release verification: `docs/release-verification.md`
+## Operator and Integration Docs
 
----
+- `docs/quickstart.md`
+- `docs/integration-kit.md`
+- `docs/deployment.md`
+- `docs/mcp-compatibility.md`
+- `docs/observability.md`
+- `docs/opa-interop.md`
+- `docs/spiffe-spire.md`
 
-## Container Images
+## Launch Prep
 
-- Standard image: `docker build -t nomos:local .`
-- OPA-enabled image: `docker build --target runtime-opa -t nomos:opa-local .`
+- `TESTING.md` for deterministic test execution and release gating
+- `docs/launch-checklist.md` for HN and Reddit launch-day workflow
 
----
+## Governance
 
-## Project Governance
-
-- Contributing: `CONTRIBUTING.md`
-- Security policy: `SECURITY.md`
-- Code of conduct: `CODE_OF_CONDUCT.md`
-- Changelog: `CHANGELOG.md`
-- License: `LICENSE`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `CODE_OF_CONDUCT.md`
+- `CHANGELOG.md`
+- `LICENSE`

@@ -5,8 +5,8 @@ go build -o ./bin/nomos ./cmd/nomos
 
 ./bin/nomos doctor -c ./examples/quickstart/config.quickstart.json --format json
 
-./bin/nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./policies/safe-dev-hardened.yaml
-./bin/nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./policies/safe-dev-hardened.yaml
+./bin/nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./policies/safe.yaml
+./bin/nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./policies/safe.yaml
 
 cp ./examples/quickstart/config.quickstart.json ./examples/quickstart/config.invalid.json
 python - <<'PY'

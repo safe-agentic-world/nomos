@@ -7,7 +7,7 @@
         "-c",
         ".\\examples\\quickstart\\config.quickstart.json",
         "-p",
-        ".\\policies\\safe-dev-hardened.yaml"
+        ".\\policies\\safe.yaml"
       ]
     }
   }

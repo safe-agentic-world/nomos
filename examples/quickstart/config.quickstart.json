@@ -20,7 +20,7 @@
     "deployment_mode": "unmanaged"
   },
   "policy": {
-    "policy_bundle_path": "../../policies/safe-dev-hardened.yaml",
+    "policy_bundle_path": "../../policies/safe.yaml",
     "verify_signatures": false,
     "signature_path": "",
     "public_key_path": "",

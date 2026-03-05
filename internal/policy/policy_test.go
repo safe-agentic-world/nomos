@@ -160,11 +160,11 @@ func TestPolicyExplainDenyWinsReportsOnlyDenyRules(t *testing.T) {
 }
 
 func TestLoadBundleYAMLJSONParity(t *testing.T) {
-	jsonBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe-dev.json")))
+	jsonBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.json")))
 	if err != nil {
 		t.Fatalf("load json bundle: %v", err)
 	}
-	yamlBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe-dev.yaml")))
+	yamlBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml")))
 	if err != nil {
 		t.Fatalf("load yaml bundle: %v", err)
 	}
@@ -198,11 +198,11 @@ func TestLoadBundleYAMLJSONParity(t *testing.T) {
 
 func TestLoadBundleYMLExtensionSupported(t *testing.T) {
 	dir := t.TempDir()
-	data, err := os.ReadFile(filepath.Clean(filepath.Join("..", "..", "policies", "safe-dev.yaml")))
+	data, err := os.ReadFile(filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml")))
 	if err != nil {
 		t.Fatalf("read source yaml: %v", err)
 	}
-	ymlPath := filepath.Join(dir, "safe-dev.yml")
+	ymlPath := filepath.Join(dir, "safe.yml")
 	if err := os.WriteFile(ymlPath, data, 0o600); err != nil {
 		t.Fatalf("write yml bundle: %v", err)
 	}
@@ -244,12 +244,12 @@ func TestLoadBundleYAMLRejectsDuplicateKeys(t *testing.T) {
 	}
 }
 
-func TestLoadBundleHashGoldenVectorForSafeDev(t *testing.T) {
-	bundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe-dev.yaml")))
+func TestLoadBundleHashGoldenVectorForSafe(t *testing.T) {
+	bundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml")))
 	if err != nil {
 		t.Fatalf("load yaml bundle: %v", err)
 	}
-	const expected = "57392821c713e5623abfe6e6594249e79614a57ae0c2b00123d0bed5132cb785"
+	const expected = "b7e8173c39d43e39188b7544fd27b97bd34800237e9d1afe6bbd9866962b07c9"
 	if bundle.Hash != expected {
 		t.Fatalf("expected hash %s, got %s", expected, bundle.Hash)
 	}

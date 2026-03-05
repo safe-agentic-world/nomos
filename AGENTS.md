@@ -6,7 +6,7 @@ Nomos is a Go codebase with policy bundles, docs, deployment manifests, and test
 Key paths:
 - `cmd/nomos`: CLI entrypoint (`version`, `serve`, `mcp`, `policy`, `doctor`)
 - `internal/`: implementation packages (`action`, `policy`, `gateway`, `service`, `mcp`, `executor`, `audit`, `identity`, `doctor`, etc.)
-- `policies/`: starter policy bundles (`minimal`, `safe-dev`, `safe-dev-hardened`, `guarded-prod`, `unsafe`)
+- `policies/`: starter policy bundles (`safe`, `guarded-prod`, `unsafe`, `all-fields.example`)
 - `docs/`: product, security, and deployment documentation
 - `deploy/`: CI and Kubernetes reference artifacts
 - `testdata/`: corpora, bypass fixtures, and CI config fixtures
@@ -39,7 +39,7 @@ When changing behavior:
 - keep CI smoke checks passing, especially CLI/policy/doctor and MCP compatibility tests
 
 ## Commit & Pull Request Guidelines
-Use short, imperative subject lines (for example, `Add safe-dev-hardened starter bundle`).
+Use short, imperative subject lines (for example, `Add safe starter bundle`).
 
 Pull requests should include:
 - A concise summary of changes.

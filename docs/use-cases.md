@@ -222,7 +222,7 @@ Let’s say a startup wants AI to automatically:
 You would:
 
 1. Deploy Nomos in CI
-2. Load `safe-dev` or `safe-dev-hardened` policy pack
+2. Load `safe` or `safe` policy pack
 3. Deny all exec by default
 4. Allow:
 
