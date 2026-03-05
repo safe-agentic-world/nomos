@@ -131,3 +131,16 @@ jobs:
           tag_name: ${{ steps.meta.outputs.tag }}
           files: dist/*
           generate_release_notes: true
+
+      - name: Update Homebrew and Scoop manifests
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          PACKAGES_REPO_TOKEN: ${{ secrets.PACKAGES_REPO_TOKEN }}
+          PACKAGES_REPO: safe-agentic-world/packages-nomos
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          CHECKSUM_FILE: ${{ github.workspace }}/dist/nomos-checksums.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./scripts/update-packages-repo.sh

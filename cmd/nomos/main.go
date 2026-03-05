@@ -719,7 +719,7 @@ func rootHelpText() string {
 		"  policy     policy test/explain\n" +
 		"  doctor     deterministic preflight checks\n\n" +
 		"example:\n" +
-		"  nomos mcp -c config.example.json -p policies/minimal.json\n"
+		"  nomos mcp -c config.example.json -p policies/safe.json\n"
 }
 
 func serveHelpText() string {
@@ -727,7 +727,7 @@ func serveHelpText() string {
 		"  -c, --config <path>          config json path (or NOMOS_CONFIG)\n" +
 		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n\n" +
 		"example:\n" +
-		"  nomos serve -c config.example.json -p policies/minimal.json\n"
+		"  nomos serve -c config.example.json -p policies/safe.json\n"
 }
 
 func mcpHelpText() string {
@@ -738,7 +738,7 @@ func mcpHelpText() string {
 		"  -q, --quiet                  suppress banner and non-error logs\n" +
 		"      --log-format <format>    text|json\n\n" +
 		"example:\n" +
-		"  nomos mcp -c config.example.json -p policies/minimal.json\n"
+		"  nomos mcp -c config.example.json -p policies/safe.json\n"
 }
 
 func doctorHelpText() string {

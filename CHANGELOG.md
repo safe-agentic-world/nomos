@@ -15,7 +15,7 @@ The format is based on Keep a Changelog and semantic versioning.
 - corpus-backed redaction harness and secret no-leak integration coverage
 - actionable `policy explain` denial context and remediation hints
 - workflow-managed release publishing with multi-arch archives, checksums, Homebrew tap updates, and Scoop manifest updates
-- `safe-dev-hardened` starter policy bundle for safer local file mediation defaults
+- `safe` starter policy bundle for safer local file mediation defaults
 
 ### Changed
 

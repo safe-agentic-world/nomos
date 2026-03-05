@@ -106,8 +106,7 @@ When multiple bundles are supported, they MUST be merged in this explicit order:
 5. local overrides (dev only, loud warnings)
 
 Current starter bundles shipped in-repo:
-- `policies/minimal.{json,yaml}` (minimal demo/allowlist)
-- `policies/safe-dev.{json,yaml}` (broad local development starter)
-- `policies/safe-dev-hardened.{json,yaml}` (safer local starter with secret/code-file read denials)
+- `policies/safe.{json,yaml}` (secure local development starter with deny-by-rule secret/code file protections)
 - `policies/guarded-prod.{json,yaml}` (stricter allowlists and stronger sandbox expectations)
 - `policies/unsafe.{json,yaml}` (explicit opt-in)
+- `policies/all-fields.example.{json,yaml}` (schema and obligation surface reference bundle)

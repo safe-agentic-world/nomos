@@ -107,7 +107,7 @@ func TestLoadConfigFailsClosedWithoutBundle(t *testing.T) {
 func TestHelpTextStability(t *testing.T) {
 	root := rootHelpText()
 	mcp := mcpHelpText()
-	if !strings.Contains(root, "nomos mcp -c config.example.json -p policies/minimal.json") {
+	if !strings.Contains(root, "nomos mcp -c config.example.json -p policies/safe.json") {
 		t.Fatalf("unexpected root help: %q", root)
 	}
 	if !strings.Contains(root, "doctor") {
@@ -180,14 +180,14 @@ func TestDecorateHelpTextPlainForNonTerminalWriters(t *testing.T) {
 func TestDocumentedArtifactsExist(t *testing.T) {
 	required := []string{
 		filepath.Join("..", "..", "docs", "obligations.md"),
-		filepath.Join("..", "..", "policies", "safe-dev.json"),
-		filepath.Join("..", "..", "policies", "safe-dev.yaml"),
-		filepath.Join("..", "..", "policies", "safe-dev-hardened.json"),
-		filepath.Join("..", "..", "policies", "safe-dev-hardened.yaml"),
+		filepath.Join("..", "..", "policies", "safe.json"),
+		filepath.Join("..", "..", "policies", "safe.yaml"),
 		filepath.Join("..", "..", "policies", "guarded-prod.json"),
 		filepath.Join("..", "..", "policies", "guarded-prod.yaml"),
 		filepath.Join("..", "..", "policies", "unsafe.json"),
 		filepath.Join("..", "..", "policies", "unsafe.yaml"),
+		filepath.Join("..", "..", "policies", "all-fields.example.json"),
+		filepath.Join("..", "..", "policies", "all-fields.example.yaml"),
 	}
 	for _, path := range required {
 		if _, err := os.Stat(path); err != nil {
@@ -203,7 +203,7 @@ func TestPolicyCommandsSupportYAMLBundles(t *testing.T) {
 	if err := os.WriteFile(actionPath, []byte(actionBody), 0o600); err != nil {
 		t.Fatalf("write action: %v", err)
 	}
-	bundlePath := filepath.Clean(filepath.Join("..", "..", "policies", "safe-dev.yaml"))
+	bundlePath := filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml"))
 	var testOut bytes.Buffer
 	testSummary, err := executePolicyTest([]string{"--action", actionPath, "--bundle", bundlePath}, &testOut)
 	if err != nil {
@@ -247,11 +247,11 @@ func TestPolicyCommandErrorClassification(t *testing.T) {
 		t.Fatalf("write unknown top-level bundle: %v", err)
 	}
 	unknownNestedPath := filepath.Join(dir, "unknown-nested.yaml")
-	unknownNested := "version: v1\nrules:\n  - id: safe-dev-read-workspace\n    action_type: fs.read\n    resource: file://workspace/**\n    decision: ALLOW\n    principals: [system]\n    agents: [nomos]\n    environments: [dev]\n    extra_nested: true\n"
+	unknownNested := "version: v1\nrules:\n  - id: safe-read-workspace\n    action_type: fs.read\n    resource: file://workspace/**\n    decision: ALLOW\n    principals: [system]\n    agents: [nomos]\n    environments: [dev]\n    extra_nested: true\n"
 	if err := os.WriteFile(unknownNestedPath, []byte(unknownNested), 0o600); err != nil {
 		t.Fatalf("write unknown nested bundle: %v", err)
 	}
-	validBundlePath := filepath.Clean(filepath.Join("..", "..", "policies", "safe-dev.yaml"))
+	validBundlePath := filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml"))
 
 	_, err := executePolicyTest([]string{"--action", validActionPath, "--bundle", unknownTopLevelPath}, &bytes.Buffer{})
 	if code := policyErrorCode(err); code != policyResultValidationError {

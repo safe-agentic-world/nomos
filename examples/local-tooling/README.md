@@ -8,4 +8,4 @@ These are copy-paste-ready registration snippets for local MCP clients.
 Both examples use:
 
 - [config.quickstart.json](../quickstart/config.quickstart.json)
-- [safe-dev-hardened.yaml](../../policies/safe-dev-hardened.yaml)
+- [safe.yaml](../../policies/safe.yaml)

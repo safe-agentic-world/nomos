@@ -11,7 +11,7 @@ go build -o .\bin\nomos.exe .\cmd\nomos
 Shared quickstart assets used below:
 
 - [config.quickstart.json](../examples/quickstart/config.quickstart.json)
-- [safe-dev-hardened.yaml](../policies/safe-dev-hardened.yaml)
+- [safe.yaml](../policies/safe.yaml)
 - [allow-readme.json](../examples/quickstart/actions/allow-readme.json)
 - [deny-env.json](../examples/quickstart/actions/deny-env.json)
 
@@ -26,7 +26,7 @@ Shared quickstart assets used below:
 2. Start the MCP server:
 
 ```powershell
-.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe-dev-hardened.yaml
+.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 3. Register Nomos in Codex MCP configuration with the checked-in example:
@@ -60,7 +60,7 @@ Troubleshooting:
 2. Start the MCP server:
 
 ```powershell
-.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe-dev-hardened.yaml
+.\bin\nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 3. Register Nomos using the checked-in example:
@@ -87,7 +87,7 @@ Use the runnable local HTTP example:
 1. Start Nomos:
 
 ```powershell
-.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe-dev-hardened.yaml
+.\bin\nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 2. In a second terminal, run:
