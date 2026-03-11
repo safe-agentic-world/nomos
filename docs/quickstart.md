@@ -18,7 +18,7 @@ go install ./cmd/nomos
 ## 2. Run Deterministic Preflight
 
 ```powershell
-nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
 Expected result:
@@ -31,7 +31,7 @@ Audit output for the quickstart uses `stdout`, so the same terminal shows readin
 ## 3. Verify One Allowed Action
 
 ```powershell
-nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
+nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
 ```
 
 Expected result:
@@ -41,7 +41,7 @@ Expected result:
 ## 4. Verify One Denied Action
 
 ```powershell
-nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
 ```
 
 Expected result:
@@ -51,7 +51,7 @@ Expected result:
 ## 5. Start The HTTP Gateway
 
 ```powershell
-nomos serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 The gateway listens on `http://127.0.0.1:8080`.

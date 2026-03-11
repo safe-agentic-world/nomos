@@ -20,13 +20,13 @@ Shared quickstart assets used below:
 1. Run a preflight check:
 
 ```powershell
-nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
 2. Start the MCP server:
 
 ```powershell
-nomos mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 3. Register Nomos in Codex MCP configuration with the checked-in example:
@@ -54,13 +54,13 @@ Troubleshooting:
 1. Run the same preflight:
 
 ```powershell
-nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
+nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
 ```
 
 2. Start the MCP server:
 
 ```powershell
-nomos mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 3. Register Nomos using the checked-in example:
@@ -87,7 +87,7 @@ Use the runnable local HTTP example:
 1. Start Nomos:
 
 ```powershell
-nomos serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
 ```
 
 2. In a second terminal, run:
