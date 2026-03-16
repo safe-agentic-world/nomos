@@ -292,6 +292,17 @@ See:
 - [docs/deployment.md](./docs/deployment.md)
 - [examples/openai-compatible/README.md](./examples/openai-compatible/README.md)
 
+## Where Nomos Fits
+
+Nomos is adjacent to several categories, but it is not the same thing as any one of them.
+
+| Category | Primary job | What Nomos adds |
+| --- | --- | --- |
+| Agent framework | planning, tool orchestration, model loop | governed execution boundary |
+| Guardrail library | prompt or response constraints | real side-effect mediation |
+| Sandbox | process or host isolation | policy, approvals, redaction, and audit around actions |
+| Secret manager | store and issue secrets | executor-bound credential use and audit context |
+
 ### 3. Enforce Agent Safety In CI
 
 Use Nomos in CI to validate what the agent is allowed to do before a publish or merge boundary.
@@ -332,30 +343,6 @@ See:
 - [docs/egress-and-identity.md](./docs/egress-and-identity.md)
 - [docs/approvals.md](./docs/approvals.md)
 
-## Documentation Map
-
-Start here:
-
-- [docs/quickstart.md](./docs/quickstart.md)
-- [docs/integration-kit.md](./docs/integration-kit.md)
-- [docs/local-test-plan.md](./docs/local-test-plan.md)
-
-Architecture and guarantees:
-
-- [docs/reference-architecture.md](./docs/reference-architecture.md)
-- [docs/assurance-levels.md](./docs/assurance-levels.md)
-- [docs/audit-schema.md](./docs/audit-schema.md)
-- [docs/observability.md](./docs/observability.md)
-
-Security and Standards:
-
-- [docs/opa-interop.md](./docs/opa-interop.md)
-- [docs/spiffe-spire.md](./docs/spiffe-spire.md)
-- [docs/mcp-compatibility.md](./docs/mcp-compatibility.md)
-- [docs/supply-chain-security.md](./docs/supply-chain-security.md)
-- [docs/release-verification.md](./docs/release-verification.md)
-- [docs/owasp-agentic-mapping.md](./docs/owasp-agentic-mapping.md)
-
 ## Testing
 
 Quick local validation:
@@ -387,23 +374,36 @@ The repository is already opinionated about:
 
 It is intentionally conservative about claims in unmanaged local environments.
 
-## Where Nomos Fits
+## Documentation Map
 
-Nomos is adjacent to several categories, but it is not the same thing as any one of them.
+Start here:
 
-| Category | Primary job | What Nomos adds |
-| --- | --- | --- |
-| Agent framework | planning, tool orchestration, model loop | governed execution boundary |
-| Guardrail library | prompt or response constraints | real side-effect mediation |
-| Sandbox | process or host isolation | policy, approvals, redaction, and audit around actions |
-| Secret manager | store and issue secrets | executor-bound credential use and audit context |
+- [docs/quickstart.md](./docs/quickstart.md)
+- [docs/integration-kit.md](./docs/integration-kit.md)
+- [docs/local-test-plan.md](./docs/local-test-plan.md)
+
+Architecture and guarantees:
+
+- [docs/reference-architecture.md](./docs/reference-architecture.md)
+- [docs/assurance-levels.md](./docs/assurance-levels.md)
+- [docs/audit-schema.md](./docs/audit-schema.md)
+- [docs/observability.md](./docs/observability.md)
+
+Security and Standards:
+
+- [docs/opa-interop.md](./docs/opa-interop.md)
+- [docs/spiffe-spire.md](./docs/spiffe-spire.md)
+- [docs/mcp-compatibility.md](./docs/mcp-compatibility.md)
+- [docs/supply-chain-security.md](./docs/supply-chain-security.md)
+- [docs/release-verification.md](./docs/release-verification.md)
+- [docs/owasp-agentic-mapping.md](./docs/owasp-agentic-mapping.md)
 
 ## Community And Contribution
 
-- If Nomos is solving a problem you care about, a [star](https://github.com/safe-agentic-world/nomos) helps others find it.
+- If Nomos is solving a problem you care about, a [star](https://github.com/safe-agentic-world/nomos) goes a long way and helps more people find it.
 - Open an issue for gaps, deployment questions, or integration requests.
 - Looking for a place to start? Browse [`good first issue`](https://github.com/safe-agentic-world/nomos/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
-- Read [CONTRIBUTING.md](./CONTRIBUTING.md) if you want to contribute code or docs.
+- If you want to help shape Nomos, read [CONTRIBUTING.md](./CONTRIBUTING.md) and jump in with code, docs, feedback, or issues.
 
 Project governance:
 
