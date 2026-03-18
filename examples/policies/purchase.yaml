@@ -1,0 +1,10 @@
+version: v1
+rules:
+  - id: purchase-requires-approval
+    action_type: net.http_request
+    resource: url://shop.example.com/checkout/**
+    decision: REQUIRE_APPROVAL
+    obligations:
+      net_allowlist:
+        - shop.example.com
+      approval_scope_class: action_type_resource

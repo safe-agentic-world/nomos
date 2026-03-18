@@ -19,6 +19,8 @@ If an agent can still read `.env`, run `git push`, call arbitrary APIs, or print
 - calling external APIs
 - retrieving credentials
 
+The checked-in configs and policy bundles in this repo are starter examples only. Nomos is agent-agnostic and runtime policy-agnostic: teams are expected to supply and customize their own policies.
+
 Nomos does **not** try to control model reasoning. It controls **execution authority**.
 
 ## Quick Demo
@@ -30,8 +32,8 @@ From the repo root:
 
 ```bash
 nomos doctor -c ./examples/quickstart/config.quickstart.json --format json
-nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./policies/safe.yaml
-nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./policies/safe.yaml
+nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./examples/policies/safe.yaml
+nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./examples/policies/safe.yaml
 ```
 
 Expected result:
@@ -64,7 +66,7 @@ Register it in Claude Code with:
 }
 ```
 
-Then ask your agent to read `README.md` through Nomos and try reading `.env` through Nomos.
+Then ask your agent to use canonical Nomos file resources, for example `file://workspace/README.md` and `file://workspace/.env`.
 
 Expected result: `README.md` is allowed and `.env` is denied.
 
@@ -290,7 +292,7 @@ with bearer principal auth plus agent HMAC signing.
 See:
 
 - [docs/deployment.md](./docs/deployment.md)
-- [examples/openai-compatible/README.md](./examples/openai-compatible/README.md)
+- [docs/quickstart.md](./docs/quickstart.md)
 
 ## Where Nomos Fits
 
@@ -315,12 +317,12 @@ See:
 
 ## Starter Policy Bundles
 
+These are starter examples, not built-in policy dependencies.
+
 | Bundle | Formats | Purpose |
 | --- | --- | --- |
-| `safe` | [YAML](./policies/safe.yaml), [JSON](./policies/safe.json) | Secure local starter policy |
-| `guarded-prod` | [YAML](./policies/guarded-prod.yaml), [JSON](./policies/guarded-prod.json) | Stricter production-oriented posture |
-| `unsafe` | [YAML](./policies/unsafe.yaml), [JSON](./policies/unsafe.json) | Intentionally permissive for controlled testing only |
-| `all-fields.example` | [YAML](./policies/all-fields.example.yaml), [JSON](./policies/all-fields.example.json) | Full schema and obligations reference |
+| `safe` | [YAML](./examples/policies/safe.yaml), [JSON](./examples/policies/safe.json) | Secure local starter policy |
+| `all-fields.example` | [YAML](./examples/policies/all-fields.example.yaml), [JSON](./examples/policies/all-fields.example.json) | Full schema and obligations reference |
 
 ## Security Model
 
@@ -350,8 +352,8 @@ Quick local validation:
 ```bash
 go test ./...
 nomos doctor -c ./examples/quickstart/config.quickstart.json --format json
-nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./policies/safe.yaml
-nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./policies/safe.yaml
+nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./examples/policies/safe.yaml
+nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./examples/policies/safe.yaml
 ```
 
 For the full operator runbook:

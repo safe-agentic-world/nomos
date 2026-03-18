@@ -33,6 +33,57 @@ func TestRunReady(t *testing.T) {
 	}
 }
 
+func TestRunMultiBundleReportsMergedSources(t *testing.T) {
+	dir := t.TempDir()
+	baseBundlePath := filepath.Join(dir, "base.json")
+	repoBundlePath := filepath.Join(dir, "repo.json")
+	if err := os.WriteFile(baseBundlePath, []byte(`{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
+		t.Fatalf("write base bundle: %v", err)
+	}
+	if err := os.WriteFile(repoBundlePath, []byte(`{"version":"v1","rules":[{"id":"deny-env","action_type":"fs.read","resource":"file://workspace/.env","decision":"DENY","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`), 0o600); err != nil {
+		t.Fatalf("write repo bundle: %v", err)
+	}
+	configPath := filepath.Join(dir, "config.json")
+	cfg := map[string]any{
+		"gateway":     map[string]any{"listen": ":8080", "transport": "http"},
+		"runtime":     map[string]any{"stateless_mode": false, "strong_guarantee": false},
+		"policy":      map[string]any{"policy_bundle_paths": []any{baseBundlePath, repoBundlePath}},
+		"executor":    map[string]any{"sandbox_enabled": false, "workspace_root": dir},
+		"credentials": map[string]any{"enabled": false, "secrets": []any{}},
+		"audit":       map[string]any{"sink": "stdout"},
+		"mcp":         map[string]any{"enabled": true},
+		"upstream":    map[string]any{"routes": []any{}},
+		"approvals":   map[string]any{"enabled": false},
+		"identity": map[string]any{
+			"principal":       "system",
+			"agent":           "nomos",
+			"environment":     "dev",
+			"api_keys":        map[string]any{"dev-api-key": "system"},
+			"service_secrets": map[string]any{},
+			"agent_secrets":   map[string]any{"nomos": "dev-agent-secret"},
+			"oidc":            map[string]any{"enabled": false, "issuer": "", "audience": "", "public_key_path": ""},
+		},
+		"redaction": map[string]any{"patterns": []any{}},
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	report, err := Run(Options{ConfigPath: configPath, Getenv: func(string) string { return "" }})
+	if err != nil {
+		t.Fatalf("doctor run: %v", err)
+	}
+	if report.OverallStatus != "READY" {
+		t.Fatalf("expected READY, got %s", report.OverallStatus)
+	}
+	if len(report.PolicyBundleSources) != 2 {
+		t.Fatalf("expected 2 policy bundle sources, got %+v", report.PolicyBundleSources)
+	}
+}
+
 func TestRunMissingBundleNotReady(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")

@@ -2,6 +2,10 @@
 
 This guide covers local agent integration for Nomos using checked-in quickstart files and MCP stdio mode.
 
+The checked-in configs and policy bundles referenced here are examples only. In real deployments, teams are expected to supply and customize their own configs and policies.
+
+`examples/configs/config.example.json` demonstrates ordered multi-bundle loading with `base.yaml`, `repo.yaml`, `dev.yaml`, and `purchase.yaml`.
+
 If you are starting from a fresh machine, install Nomos first:
 
 ```powershell
@@ -11,7 +15,7 @@ go install ./cmd/nomos
 Shared quickstart assets used below:
 
 - [config.quickstart.json](../examples/quickstart/config.quickstart.json)
-- [safe.yaml](../policies/safe.yaml)
+- [safe.yaml](../examples/policies/safe.yaml)
 - [allow-readme.json](../examples/quickstart/actions/allow-readme.json)
 - [deny-env.json](../examples/quickstart/actions/deny-env.json)
 
@@ -26,7 +30,7 @@ nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
 2. Start the MCP server:
 
 ```powershell
-nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe mcp -c .\examples\quickstart\config.quickstart.json
 ```
 
 3. Register Nomos in Codex MCP configuration with the checked-in example:
@@ -45,7 +49,7 @@ Expected behavior:
 
 Troubleshooting:
 
-- if MCP registration fails, confirm the command uses `mcp -c ... -p ...` and not stale flags
+- if MCP registration fails, confirm the command uses the current `mcp -c ...` example and not stale flags
 - if actions are denied unexpectedly, confirm Codex is targeting `examples/quickstart/workspace`
 - if you see no startup banner, check whether `--quiet` is set
 
@@ -60,22 +64,23 @@ nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json
 2. Start the MCP server:
 
 ```powershell
-nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe mcp -c .\examples\quickstart\config.quickstart.json
 ```
 
 3. Register Nomos using the checked-in example:
 
 - [claude-code-mcp.json](../examples/local-tooling/claude-code-mcp.json)
 
-4. In Claude Code, run the same two requests:
+4. In Claude Code, run the same two requests using canonical Nomos file resources:
 
-- allowed: read `README.md`
-- denied: read `.env`
+- allowed: read `file://workspace/README.md`
+- denied: read `file://workspace/.env`
 
 Troubleshooting:
 
 - if Claude Code cannot connect, verify the MCP command path points to `nomos`
 - if the wrong workspace is used, confirm the config file is [config.quickstart.json](../examples/quickstart/config.quickstart.json)
+- if startup fails while loading `examples/policies/safe.yaml`, your installed `nomos` release may be older than the policy language used by the current repo
 - in unmanaged local sessions, disable direct built-in file tools if you want Nomos to be the practical side-effect boundary
 
 ## OpenAI-Compatible Agent SDK Setup
@@ -87,7 +92,7 @@ Use the runnable local HTTP example:
 1. Start Nomos:
 
 ```powershell
-nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe serve -c .\examples\quickstart\config.quickstart.json
 ```
 
 2. In a second terminal, run:
@@ -112,18 +117,20 @@ Troubleshooting:
 
 OpenClaw uses the same MCP stdio contract.
 
-1. Start Nomos with:
+1. Start Nomos with the checked-in multi-bundle example config:
 
 ```powershell
-nomos mcp -c .\config.example.json -p .\policies\your-policy-bundle.json
+nomos mcp -c .\examples\configs\config.example.json
 ```
 
 2. Register Nomos in OpenClaw MCP server config with command `nomos` and args:
 - `mcp`
 - `-c`
-- `.\config.example.json`
+- `.\examples\configs\config.example.json`
+
+If you want to override the checked-in example policy set, add:
 - `-p`
-- `.\policies\your-policy-bundle.json`
+- `.\examples\policies\your-policy-bundle.json`
 
 ## MCP Runtime UX
 
@@ -162,8 +169,10 @@ Precedence:
 Example:
 
 ```powershell
-nomos mcp -c .\config.example.json -p .\policies\your-policy-bundle.json -l info
+nomos mcp -c .\examples\configs\config.example.json -p .\examples\policies\your-policy-bundle.json -l info
 ```
+
+Use `-p` here only when you intentionally want to override the example config's bundled policy paths.
 
 ## Doctor Preflight
 
@@ -172,8 +181,8 @@ Use `nomos doctor` before connecting MCP clients to validate configuration and r
 Examples:
 
 ```powershell
-nomos doctor -c .\config.example.json
-nomos doctor -c .\config.example.json --format json
+nomos doctor -c .\examples\configs\config.example.json
+nomos doctor -c .\examples\configs\config.example.json --format json
 ```
 
 Exit codes:
@@ -193,9 +202,7 @@ Exit codes:
       "args": [
         "mcp",
         "-c",
-        ".\\config.example.json",
-        "-p",
-        ".\\policies\\your-policy-bundle.json"
+        ".\\examples\\configs\\config.example.json"
       ]
     }
   }
@@ -220,7 +227,14 @@ Exit codes:
 Use `nomos.capabilities` to discover what tools are currently available for a principal/agent/environment under loaded policy.
 
 Response fields:
-- `enabled_tools`: policy-allowed tools (for example `nomos.fs_read`, `nomos.exec`).
+- `enabled_tools`: backward-compatible union of all currently usable or approval-gated tools.
+- `immediate_tools`: tools with at least one policy path callable now without approval.
+- `approval_gated_tools`: tools that are only available through approval-gated policy paths.
+- `mixed_tools`: tools where some policy paths are callable now and others require approval.
+- `unavailable_tools`: tools advertised through MCP but not currently authorized for this identity context.
+- `advertised_tools`: the static MCP `tools/list` surface.
+- `tool_states`: per-tool machine-readable state (`allow`, `require_approval`, `mixed`, `unavailable`) plus immediate-callable and approval-required flags.
+- `tool_advertisement_mode`: how MCP tool advertisement relates to effective policy state. Current value: `mcp_tools_list_static`.
 - `sandbox_modes`: available sandbox mode envelope (`none` or `sandboxed` in current implementation).
 - `network_mode`: `deny` or `allowlist` depending on policy-derived capability.
 - `output_max_bytes`, `output_max_lines`: output caps returned to the client.
@@ -228,7 +242,11 @@ Response fields:
 - `assurance_level`: runtime-derived assurance label for the current mediation environment.
 - `mediation_notice`: human-readable warning when the current runtime is not strong mediation.
 
-The capability envelope is advisory; final authorization is still performed per action with deny-wins semantics.
+MCP surfacing semantics:
+
+- `tools/list` remains static for compatibility and always advertises the full Nomos tool surface.
+- `nomos.capabilities` is the authoritative policy-derived contract for what is callable now, approval-gated, or unavailable in the current session.
+- final authorization is still performed per action with deny-wins semantics.
 
 ## Unmanaged Laptop Limitations And Safe Workflows
 

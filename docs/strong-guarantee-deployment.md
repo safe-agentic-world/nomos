@@ -47,7 +47,7 @@ kubectl get networkpolicy sample-agent-egress
 4. Run doctor against the strong-guarantee config:
 
 ```bash
-go run ./cmd/nomos doctor -c ./config.example.json --format json
+go run ./cmd/nomos doctor -c ./examples/configs/config.example.json --format json
 ```
 
 The strong-guarantee readiness signal is intentionally conservative. For a deployment to be READY, the config should indicate:

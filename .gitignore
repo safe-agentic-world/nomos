@@ -16,8 +16,10 @@ coverage.*
 Thumbs.db
 *.swp
 *.swo
+.claude/
 
 # Local runtime/state artifacts
+.env
 *.db
 *.db-journal
 *.sqlite

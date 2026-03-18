@@ -41,9 +41,9 @@ func TestQuickstartDocsReferenceExistingFilesAndCurrentFlags(t *testing.T) {
 
 	requiredQuickstartCommands := []string{
 		`nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json`,
-		`nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml`,
-		`nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml`,
-		`nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml`,
+		`nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\examples\policies\safe.yaml`,
+		`nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\examples\policies\safe.yaml`,
+		`nomos.exe serve -c .\examples\quickstart\config.quickstart.json`,
 	}
 	for _, snippet := range requiredQuickstartCommands {
 		if !strings.Contains(quickstart, snippet) {
@@ -52,9 +52,9 @@ func TestQuickstartDocsReferenceExistingFilesAndCurrentFlags(t *testing.T) {
 	}
 
 	requiredIntegrationCommands := []string{
-		`nomos.exe mcp -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml`,
+		`nomos.exe mcp -c .\examples\quickstart\config.quickstart.json`,
 		`nomos.exe doctor -c .\examples\quickstart\config.quickstart.json --format json`,
-		`nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml`,
+		`nomos.exe serve -c .\examples\quickstart\config.quickstart.json`,
 	}
 	for _, snippet := range requiredIntegrationCommands {
 		if !strings.Contains(integration, snippet) {
@@ -144,7 +144,7 @@ func TestDockerComposeAndCIArtifactsValidate(t *testing.T) {
 	if len(nomosService.Ports) != 1 || nomosService.Ports[0] != "8080:8080" {
 		t.Fatalf("unexpected compose ports: %+v", nomosService.Ports)
 	}
-	if strings.Join(nomosService.Command, " ") != "nomos serve -c /demo/examples/quickstart/config.quickstart.json -p /demo/policies/safe.yaml" {
+	if strings.Join(nomosService.Command, " ") != "nomos serve -c /demo/examples/quickstart/config.quickstart.json" {
 		t.Fatalf("unexpected compose command: %+v", nomosService.Command)
 	}
 
@@ -165,8 +165,8 @@ func TestDockerComposeAndCIArtifactsValidate(t *testing.T) {
 		"#!/usr/bin/env sh",
 		"set -eu",
 		"./bin/nomos doctor -c ./examples/quickstart/config.quickstart.json --format json",
-		"./bin/nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./policies/safe.yaml",
-		"./bin/nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./policies/safe.yaml",
+		"./bin/nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./examples/policies/safe.yaml",
+		"./bin/nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./examples/policies/safe.yaml",
 	}
 	for _, snippet := range requiredShellSnippets {
 		if !strings.Contains(genericCI, snippet) {

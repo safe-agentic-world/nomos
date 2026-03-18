@@ -240,15 +240,15 @@ jobs:
           }
           EOF
 
-          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-allow-readme.json" --bundle ./policies/safe.json > "${TEST_DIR}/policy-allow.json"
+          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-allow-readme.json" --bundle ./examples/policies/safe.json > "${TEST_DIR}/policy-allow.json"
           cat "${TEST_DIR}/policy-allow.json"
 
-          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-deny-other-file.json" --bundle ./policies/safe.json > "${TEST_DIR}/policy-deny.json"
+          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-deny-other-file.json" --bundle ./examples/policies/safe.json > "${TEST_DIR}/policy-deny.json"
           cat "${TEST_DIR}/policy-deny.json"
 
-          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-allow-readme.json" --bundle ./policies/safe.yaml > "${TEST_DIR}/policy-yaml.json"
-          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-allow-readme.json" --bundle ./policies/safe.json > "${TEST_DIR}/policy-json.json"
-          "${BIN_PATH}" policy explain --action "${TEST_DIR}/action-deny-other-file.json" --bundle ./policies/safe.json > "${TEST_DIR}/policy-explain.json"
+          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-allow-readme.json" --bundle ./examples/policies/safe.yaml > "${TEST_DIR}/policy-yaml.json"
+          "${BIN_PATH}" policy test --action "${TEST_DIR}/action-allow-readme.json" --bundle ./examples/policies/safe.json > "${TEST_DIR}/policy-json.json"
+          "${BIN_PATH}" policy explain --action "${TEST_DIR}/action-deny-other-file.json" --bundle ./examples/policies/safe.json > "${TEST_DIR}/policy-explain.json"
 
           python3 - <<'PY' "${TEST_DIR}"
           import json
@@ -281,9 +281,9 @@ jobs:
           set +e
           missing_bundle_output="$("${BIN_PATH}" policy test --action "${TEST_DIR}/action-allow-readme.json" --bundle "${TEST_DIR}/missing.json" 2>&1)"
           missing_bundle_status=$?
-          invalid_action_output="$("${BIN_PATH}" policy test --action "${TEST_DIR}/action-invalid.json" --bundle ./policies/safe.yaml 2>&1)"
+          invalid_action_output="$("${BIN_PATH}" policy test --action "${TEST_DIR}/action-invalid.json" --bundle ./examples/policies/safe.yaml 2>&1)"
           invalid_action_status=$?
-          traversal_output="$("${BIN_PATH}" policy test --action "${TEST_DIR}/action-traversal.json" --bundle ./policies/safe.yaml 2>&1)"
+          traversal_output="$("${BIN_PATH}" policy test --action "${TEST_DIR}/action-traversal.json" --bundle ./examples/policies/safe.yaml 2>&1)"
           traversal_status=$?
           set -e
 
@@ -324,7 +324,7 @@ jobs:
           source = pathlib.Path(sys.argv[1])
           target = pathlib.Path(sys.argv[2])
           payload = json.loads(source.read_text())
-          payload["policy"]["policy_bundle_path"] = "./policies/missing.yaml"
+          payload["policy"]["policy_bundle_path"] = "./examples/policies/missing.yaml"
           target.write_text(json.dumps(payload, indent=2) + "\n")
           PY
 
@@ -410,7 +410,7 @@ jobs:
           NOMOS_MCP_ENABLED: "true"
         run: |
           set -euo pipefail
-          go run ./cmd/nomos doctor -c ./config.example.json -p ./policies/safe.json --format json > doctor.json
+          go run ./cmd/nomos doctor -c ./examples/configs/config.example.json -p ./examples/policies/safe.json --format json > doctor.json
           cat doctor.json
           grep -q '"overall_status":"READY"' doctor.json
 

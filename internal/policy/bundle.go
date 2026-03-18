@@ -21,9 +21,10 @@ import (
 )
 
 type Bundle struct {
-	Version string `json:"version" yaml:"version"`
-	Rules   []Rule `json:"rules" yaml:"rules"`
-	Hash    string `json:"-" yaml:"-"`
+	Version       string         `json:"version" yaml:"version"`
+	Rules         []Rule         `json:"rules" yaml:"rules"`
+	Hash          string         `json:"-" yaml:"-"`
+	SourceBundles []BundleSource `json:"-" yaml:"-"`
 }
 
 type Rule struct {
@@ -37,10 +38,17 @@ type Rule struct {
 	RiskFlags    []string       `json:"risk_flags,omitempty" yaml:"risk_flags,omitempty"`
 	ExecMatch    *ExecMatch     `json:"exec_match,omitempty" yaml:"exec_match,omitempty"`
 	Obligations  map[string]any `json:"obligations,omitempty" yaml:"obligations,omitempty"`
+	SourcePath   string         `json:"-" yaml:"-"`
+	SourceHash   string         `json:"-" yaml:"-"`
 }
 
 type ExecMatch struct {
 	ArgvPatterns [][]string `json:"argv_patterns,omitempty" yaml:"argv_patterns,omitempty"`
+}
+
+type BundleSource struct {
+	Path string
+	Hash string
 }
 
 type LoadOptions struct {

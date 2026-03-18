@@ -25,8 +25,8 @@ jobs:
 
       - name: Deterministic Allow And Deny
         run: |
-          ./bin/nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./policies/safe.yaml
-          ./bin/nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./policies/safe.yaml
+          ./bin/nomos policy test --action ./examples/quickstart/actions/allow-readme.json --bundle ./examples/policies/safe.yaml
+          ./bin/nomos policy test --action ./examples/quickstart/actions/deny-env.json --bundle ./examples/policies/safe.yaml
 
       - name: Fail Closed On Invalid Config
         run: |

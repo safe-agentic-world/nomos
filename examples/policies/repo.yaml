@@ -1,0 +1,18 @@
+version: v1
+rules:
+  - id: repo-read-workspace
+    action_type: fs.read
+    resource: file://workspace/**
+    decision: ALLOW
+  - id: repo-write-workspace
+    action_type: fs.write
+    resource: file://workspace/**
+    decision: ALLOW
+    obligations:
+      sandbox_mode: local
+  - id: repo-apply-patch
+    action_type: repo.apply_patch
+    resource: repo://local/workspace
+    decision: ALLOW
+    obligations:
+      sandbox_mode: local

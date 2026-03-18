@@ -47,6 +47,26 @@ If your local Claude Code build differs, check the current Claude Code MCP docs 
 C:\Users\prudh\repos\safe-agentic-world\nomos
 ```
 
+## Release Compatibility Note
+
+The current example policy set uses `exec_match` for generic `process.exec` policy matching and the usable example config uses ordered multi-bundle loading.
+
+That means:
+
+- the installed `nomos` binary must include the M29 and M30 implementations
+- older releases that do not understand `exec_match` or multi-bundle loading will fail `doctor`, `serve`, or `mcp` startup with the current example config set
+
+Quick compatibility check:
+
+```powershell
+nomos doctor -c .\examples\configs\config.example.json --format json
+```
+
+Expected result:
+
+- `policy.bundle_parses` passes
+- `policy.bundle_hash` passes
+
 ## Test Philosophy
 
 Run the scenarios in order.
@@ -97,30 +117,44 @@ nomos version
 
 ```powershell
 nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
-nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
-nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\examples\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\examples\policies\safe.yaml
 ```
 
-3. Register Nomos in Claude Code:
+3. Create the local agent config used for Claude Code:
 
 ```powershell
-claude mcp add --transport stdio --scope local nomos-local -- "nomos" mcp -c "C:\Users\prudh\repos\safe-agentic-world\nomos\config.codex.json" -p "C:\Users\prudh\repos\safe-agentic-world\nomos\policies\safe.yaml"
+$Repo = (Resolve-Path .).Path
+$TmpDir = Join-Path $Repo ".tmp\manual-tests"
+$ConfigExample = Join-Path $Repo "examples\configs\config.example.json"
+$ConfigLocalAgent = Join-Path $TmpDir "config-local-agent.json"
+New-Item -ItemType Directory -Force $TmpDir | Out-Null
+$json = Get-Content -Raw $ConfigExample | ConvertFrom-Json
+$json.executor.workspace_root = "C:\Users\prudh\repos\safe-agentic-world\implementation"
+$json | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 $ConfigLocalAgent
+nomos doctor -c $ConfigLocalAgent
 ```
 
-4. Verify the registration:
+4. Register Nomos in Claude Code:
+
+```powershell
+claude mcp add --transport stdio --scope local nomos-local -- "nomos" mcp -c "C:\Users\prudh\repos\safe-agentic-world\nomos\.tmp\manual-tests\config-local-agent.json"
+```
+
+5. Verify the registration:
 
 ```powershell
 claude mcp list
 claude mcp get nomos-local
 ```
 
-5. Start Claude Code:
+6. Start Claude Code:
 
 ```powershell
 claude
 ```
 
-6. In Claude Code, run these prompts in order:
+7. In Claude Code, run these prompts in order:
 
 ```text
 Use nomos.capabilities and show me the raw JSON result.
@@ -134,7 +168,7 @@ Use nomos.fs_read to read file://workspace/README.md and show only the first 5 l
 Use nomos.fs_read to read file://workspace/.env
 ```
 
-7. Remove the MCP server when done:
+8. Remove the MCP server when done:
 
 ```powershell
 claude mcp remove nomos-local
@@ -159,12 +193,17 @@ Run this once in PowerShell from the repo root:
 $Repo = (Resolve-Path .).Path
 $TmpDir = Join-Path $Repo ".tmp\manual-tests"
 $ConfigQuickstart = Join-Path $Repo "examples\quickstart\config.quickstart.json"
-$ConfigCodex = Join-Path $Repo "config.codex.json"
-$ConfigAll = Join-Path $Repo "config.all-fields.example.json"
-$SafeYaml = Join-Path $Repo "policies\safe.yaml"
-$SafeJson = Join-Path $Repo "policies\safe.json"
-$AllFieldsYaml = Join-Path $Repo "policies\all-fields.example.yaml"
+$ConfigExample = Join-Path $Repo "examples\configs\config.example.json"
+$ConfigAll = Join-Path $Repo "examples\configs\config.all-fields.example.json"
+$SafeYaml = Join-Path $Repo "examples\policies\safe.yaml"
+$SafeJson = Join-Path $Repo "examples\policies\safe.json"
+$AllFieldsYaml = Join-Path $Repo "examples\policies\all-fields.example.yaml"
+$ConfigLocalAgent = Join-Path $TmpDir "config-local-agent.json"
 New-Item -ItemType Directory -Force $TmpDir | Out-Null
+
+$json = Get-Content -Raw $ConfigExample | ConvertFrom-Json
+$json.executor.workspace_root = "C:\\Users\\prudh\\repos\\safe-agentic-world\\implementation"
+$json | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 $ConfigLocalAgent
 ```
 
 ## Phase 1: Install And Baseline
@@ -217,7 +256,7 @@ Expected:
 ### Scenario 5: Verify one deterministic allow
 
 ```powershell
-nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\examples\policies\safe.yaml
 ```
 
 Expected:
@@ -227,7 +266,7 @@ Expected:
 ### Scenario 6: Verify one deterministic deny
 
 ```powershell
-nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\examples\policies\safe.yaml
 ```
 
 Expected:
@@ -237,8 +276,8 @@ Expected:
 ### Scenario 7: Verify YAML and JSON bundle parity
 
 ```powershell
-nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
-nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.json
+nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\examples\policies\safe.yaml
+nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\examples\policies\safe.json
 ```
 
 Expected:
@@ -249,7 +288,7 @@ Expected:
 ### Scenario 8: Explain a deny
 
 ```powershell
-nomos policy explain --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+nomos policy explain --action .\examples\quickstart\actions\deny-env.json --bundle .\examples\policies\safe.yaml
 ```
 
 Expected:
@@ -306,7 +345,7 @@ Expected:
 In terminal 1:
 
 ```powershell
-nomos serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos serve -c .\examples\quickstart\config.quickstart.json
 ```
 
 Expected:
@@ -336,7 +375,7 @@ This is the main manual proof for agent mediation.
 ### Scenario 13: Run doctor for the Claude Code config
 
 ```powershell
-nomos doctor -c .\config.codex.json --format json
+nomos doctor -c .\.tmp\manual-tests\config-local-agent.json --format json
 ```
 
 Expected:
@@ -348,12 +387,13 @@ Expected:
 Use absolute paths:
 
 ```powershell
-claude mcp add --transport stdio --scope local nomos-local -- "nomos" mcp -c "C:\Users\prudh\repos\safe-agentic-world\nomos\config.codex.json" -p "C:\Users\prudh\repos\safe-agentic-world\nomos\policies\safe.yaml"
+claude mcp add --transport stdio --scope local nomos-local -- "nomos" mcp -c "C:\Users\prudh\repos\safe-agentic-world\nomos\.tmp\manual-tests\config-local-agent.json"
 ```
 
 Expected:
 
 - the command succeeds without error
+- this works because `config-local-agent.json` is generated from `examples/configs/config.example.json` and already sets `policy.policy_bundle_paths`
 
 ### Scenario 15: Verify the MCP registration
 
@@ -365,7 +405,7 @@ claude mcp get nomos-local
 Expected:
 
 - `nomos-local` is listed
-- the command points to `nomos.exe mcp -c ... -p ...`
+- the command points to `nomos.exe mcp -c ...`
 
 ### Scenario 16: Start Claude Code in the repo
 
@@ -388,8 +428,11 @@ Use nomos.capabilities and show me the raw JSON result.
 
 Expected:
 
-- `enabled_tools` includes `nomos.fs_read`, `nomos.fs_write`, and `nomos.apply_patch`
-- under `safe`, `nomos.exec` and `nomos.http_request` should not be enabled
+- `enabled_tools` includes `nomos.fs_read`, `nomos.fs_write`, `nomos.apply_patch`, `nomos.exec`, and `nomos.http_request`
+- `tool_advertisement_mode` is `mcp_tools_list_static`
+- `immediate_tools` includes `nomos.fs_read`, `nomos.fs_write`, `nomos.apply_patch`, and `nomos.exec`
+- `approval_gated_tools` includes `nomos.http_request`
+- `tool_states.nomos.http_request.state` is `require_approval`
 - response includes `assurance_level`
 - on a local unmanaged machine, response should include a mediation notice
 
@@ -464,7 +507,7 @@ Expected:
 - allowed
 - file content is replaced
 
-### Scenario 23: Exec denied under `safe`
+### Scenario 23: Git exec allowed under `safe`
 
 Prompt:
 
@@ -474,14 +517,16 @@ Use nomos.exec to run ["git","status"] in the workspace.
 
 Expected:
 
-- denied by policy
+- allowed
+- `git status` output is returned
+- the allow comes from the `safe-allow-git-exec` rule
 
 ### Scenario 24: HTTP denied under `safe`
 
 Prompt:
 
 ```text
-Use nomos.http_request to fetch https://example.com
+Use nomos.http_request to fetch resource url://example.com/
 ```
 
 Expected:
@@ -579,7 +624,7 @@ This validates Nomos MCP behavior directly, without Claude Code in the loop.
 ### Scenario 29: Start Nomos MCP directly
 
 ```powershell
-nomos mcp -c .\config.codex.json -p .\policies\safe.yaml
+nomos mcp -c .\.tmp\manual-tests\config-local-agent.json
 ```
 
 Expected:
@@ -587,13 +632,14 @@ Expected:
 - process starts
 - startup banner goes to stderr
 - stdout remains reserved for MCP protocol bytes
+- this works because `config-local-agent.json` already sets `policy.policy_bundle_paths`
 
 Stop it with `Ctrl+C`.
 
 ### Scenario 30: Quiet mode
 
 ```powershell
-nomos mcp -c .\config.codex.json -p .\policies\safe.yaml --quiet
+nomos mcp -c .\.tmp\manual-tests\config-local-agent.json --quiet
 ```
 
 Expected:
@@ -608,7 +654,7 @@ Expected:
 In terminal 1:
 
 ```powershell
-nomos serve -c .\config.codex.json -p .\policies\safe.yaml
+nomos serve -c .\.tmp\manual-tests\config-local-agent.json
 ```
 
 ### Scenario 32: Check health and version endpoints
@@ -906,7 +952,7 @@ rules:
 '@ | Set-Content -Encoding UTF8 $CredsBundle
 
 $CredsConfig = Join-Path $TmpDir "config-creds.json"
-$json = Get-Content -Raw $ConfigCodex | ConvertFrom-Json
+$json = Get-Content -Raw $ConfigLocalAgent | ConvertFrom-Json
 $json.credentials.enabled = $true
 $json.credentials.secrets = @(
   @{

@@ -160,7 +160,7 @@ func runMCP(args []string) {
 	}
 	assuranceLevel := assurance.Derive(cfg.Runtime.DeploymentMode, cfg.Runtime.StrongGuarantee)
 	cliSuccessf("MCP stdio server ready (assurance=%s)", assuranceLevel)
-	if err := mcp.RunStdioWithRuntimeOptionsAndRecorder(cfg.Policy.BundlePath, id, cfg.Executor.WorkspaceRoot, cfg.Executor.MaxOutputBytes, cfg.Executor.MaxOutputLines, cfg.Approvals.Enabled, cfg.Executor.SandboxEnabled, cfg.Executor.SandboxProfile, runtimeOptions, recorder, assuranceLevel); err != nil {
+	if err := mcp.RunStdioForBundlesWithRuntimeOptionsAndRecorder(cfg.Policy.EffectiveBundlePaths(), id, cfg.Executor.WorkspaceRoot, cfg.Executor.MaxOutputBytes, cfg.Executor.MaxOutputLines, cfg.Approvals.Enabled, cfg.Executor.SandboxEnabled, cfg.Executor.SandboxProfile, runtimeOptions, recorder, assuranceLevel); err != nil {
 		cliFatalf("mcp server error: %v", err)
 	}
 }
@@ -268,7 +268,7 @@ func executePolicyTest(args []string, stdout io.Writer) (policyCommandSummary, e
 	if err != nil {
 		return policyCommandSummary{}, wrapPolicyError(policyResultValidationError, "decode action", err)
 	}
-	bundle, err := policy.LoadBundle(bundlePath)
+	bundle, err := policy.LoadBundles([]string{bundlePath})
 	if err != nil {
 		return policyCommandSummary{}, wrapPolicyError(classifyBundleLoadError(err), "load bundle", err)
 	}
@@ -314,7 +314,7 @@ func executePolicyExplain(args []string, stdout io.Writer, getenv func(string) s
 	if err != nil {
 		return policyCommandSummary{}, wrapPolicyError(policyResultValidationError, "decode action", err)
 	}
-	bundle, err := policy.LoadBundle(bundlePath)
+	bundle, err := policy.LoadBundles([]string{bundlePath})
 	if err != nil {
 		return policyCommandSummary{}, wrapPolicyError(classifyBundleLoadError(err), "load bundle", err)
 	}
@@ -357,6 +357,9 @@ func buildPolicyExplainPayload(explanation policy.ExplainDetails, normalized nor
 		"engine_version":      version.Current().Version,
 		"assurance_level":     settings.AssuranceLevel,
 		"obligations_preview": explanation.ObligationsPreview,
+	}
+	if len(explanation.Decision.PolicyBundleSources) > 1 {
+		payload["policy_bundle_sources"] = explanation.Decision.PolicyBundleSources
 	}
 	if explanation.Decision.Decision != policy.DecisionAllow {
 		whyDenied := map[string]any{
@@ -424,11 +427,15 @@ func deriveExplainAssurance(configPath, bundlePath string, getenv func(string) s
 func buildDeniedRulePayload(rules []policy.DeniedRuleExplanation) []map[string]any {
 	out := make([]map[string]any, 0, len(rules))
 	for _, rule := range rules {
-		out = append(out, map[string]any{
+		item := map[string]any{
 			"rule_id":            rule.RuleID,
 			"reason_code":        rule.ReasonCode,
 			"matched_conditions": rule.MatchedConditions,
-		})
+		}
+		if rule.BundleSource != "" {
+			item["bundle_source"] = rule.BundleSource
+		}
+		out = append(out, item)
 	}
 	return out
 }
@@ -719,7 +726,7 @@ func rootHelpText() string {
 		"  policy     policy test/explain\n" +
 		"  doctor     deterministic preflight checks\n\n" +
 		"example:\n" +
-		"  nomos mcp -c config.example.json -p policies/safe.json\n"
+		"  nomos mcp -c ./examples/configs/config.example.json -p ./examples/policies/your-policy-bundle.json\n"
 }
 
 func serveHelpText() string {
@@ -727,7 +734,7 @@ func serveHelpText() string {
 		"  -c, --config <path>          config json path (or NOMOS_CONFIG)\n" +
 		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n\n" +
 		"example:\n" +
-		"  nomos serve -c config.example.json -p policies/safe.json\n"
+		"  nomos serve -c ./examples/configs/config.example.json -p ./examples/policies/your-policy-bundle.json\n"
 }
 
 func mcpHelpText() string {
@@ -738,7 +745,7 @@ func mcpHelpText() string {
 		"  -q, --quiet                  suppress banner and non-error logs\n" +
 		"      --log-format <format>    text|json\n\n" +
 		"example:\n" +
-		"  nomos mcp -c config.example.json -p policies/safe.json\n"
+		"  nomos mcp -c ./examples/configs/config.example.json -p ./examples/policies/your-policy-bundle.json\n"
 }
 
 func doctorHelpText() string {
@@ -747,7 +754,7 @@ func doctorHelpText() string {
 		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n" +
 		"      --format <format>        text|json\n\n" +
 		"example:\n" +
-		"  nomos doctor -c config.example.json --format json\n"
+		"  nomos doctor -c ./examples/configs/config.example.json --format json\n"
 }
 
 func writeRedactedLine(w io.Writer, value string) {

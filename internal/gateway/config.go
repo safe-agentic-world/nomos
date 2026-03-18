@@ -54,8 +54,10 @@ type RuntimeConfig struct {
 
 type PolicyConfig struct {
 	BundlePath         string    `json:"policy_bundle_path"`
+	BundlePaths        []string  `json:"policy_bundle_paths"`
 	VerifySignatures   bool      `json:"verify_signatures"`
 	SignaturePath      string    `json:"signature_path"`
+	SignaturePaths     []string  `json:"signature_paths"`
 	PublicKeyPath      string    `json:"public_key_path"`
 	ExplainSuggestions *bool     `json:"explain_suggestions,omitempty"`
 	OPA                OPAConfig `json:"opa"`
@@ -200,6 +202,7 @@ func LoadConfig(path string, getenv func(string) string, policyBundleOverride st
 	ApplyEnvOverrides(&cfg, getenv)
 	if policyBundleOverride != "" {
 		cfg.Policy.BundlePath = policyBundleOverride
+		cfg.Policy.BundlePaths = nil
 	}
 	if err := cfg.ResolveRelativePaths(filepath.Dir(path)); err != nil {
 		return Config{}, err
@@ -384,21 +387,44 @@ func (c Config) Validate() error {
 			return errors.New("approvals.ttl_seconds must be > 0 when approvals are enabled")
 		}
 	}
-	if c.Policy.BundlePath == "" {
-		return errors.New("policy.policy_bundle_path is required")
+	if strings.TrimSpace(c.Policy.BundlePath) != "" && len(c.Policy.BundlePaths) > 0 {
+		return errors.New("policy.policy_bundle_path and policy.policy_bundle_paths are mutually exclusive")
 	}
-	if _, err := os.Stat(c.Policy.BundlePath); err != nil {
-		return fmt.Errorf("policy bundle path invalid: %w", err)
+	effectiveBundlePaths := c.Policy.BundlePaths
+	if strings.TrimSpace(c.Policy.BundlePath) != "" {
+		effectiveBundlePaths = []string{c.Policy.BundlePath}
+	}
+	if len(effectiveBundlePaths) == 0 {
+		return errors.New("policy.policy_bundle_path or policy.policy_bundle_paths is required")
+	}
+	for _, path := range effectiveBundlePaths {
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("policy bundle path invalid: %w", err)
+		}
 	}
 	if c.Policy.VerifySignatures {
-		if c.Policy.SignaturePath == "" || c.Policy.PublicKeyPath == "" {
-			return errors.New("policy.signature_path and policy.public_key_path are required when policy.verify_signatures is true")
-		}
-		if _, err := os.Stat(c.Policy.SignaturePath); err != nil {
-			return fmt.Errorf("policy signature path invalid: %w", err)
+		if c.Policy.PublicKeyPath == "" {
+			return errors.New("policy.public_key_path is required when policy.verify_signatures is true")
 		}
 		if _, err := os.Stat(c.Policy.PublicKeyPath); err != nil {
 			return fmt.Errorf("policy public key path invalid: %w", err)
+		}
+		if len(effectiveBundlePaths) > 1 {
+			if len(c.Policy.SignaturePaths) != len(effectiveBundlePaths) {
+				return errors.New("policy.signature_paths must have the same length as policy.policy_bundle_paths when policy.verify_signatures is true")
+			}
+			for _, path := range c.Policy.SignaturePaths {
+				if _, err := os.Stat(path); err != nil {
+					return fmt.Errorf("policy signature path invalid: %w", err)
+				}
+			}
+		} else {
+			if c.Policy.SignaturePath == "" {
+				return errors.New("policy.signature_path is required when policy.verify_signatures is true")
+			}
+			if _, err := os.Stat(c.Policy.SignaturePath); err != nil {
+				return fmt.Errorf("policy signature path invalid: %w", err)
+			}
 		}
 	}
 	if c.Policy.OPA.Enabled {
@@ -481,6 +507,11 @@ func ApplyEnvOverrides(cfg *Config, getenv func(string) string) {
 	}
 	if v := getenv("NOMOS_POLICY_BUNDLE_PATH"); v != "" {
 		cfg.Policy.BundlePath = v
+		cfg.Policy.BundlePaths = nil
+	}
+	if v := getenv("NOMOS_POLICY_BUNDLE_PATHS"); v != "" {
+		cfg.Policy.BundlePaths = splitList(v)
+		cfg.Policy.BundlePath = ""
 	}
 	if v := getenv("NOMOS_POLICY_VERIFY_SIGNATURES"); v != "" {
 		if parsed, ok := parseBool(v); ok {
@@ -489,6 +520,10 @@ func ApplyEnvOverrides(cfg *Config, getenv func(string) string) {
 	}
 	if v := getenv("NOMOS_POLICY_SIGNATURE_PATH"); v != "" {
 		cfg.Policy.SignaturePath = v
+	}
+	if v := getenv("NOMOS_POLICY_SIGNATURE_PATHS"); v != "" {
+		cfg.Policy.SignaturePaths = splitList(v)
+		cfg.Policy.SignaturePath = ""
 	}
 	if v := getenv("NOMOS_POLICY_PUBLIC_KEY_PATH"); v != "" {
 		cfg.Policy.PublicKeyPath = v
@@ -666,7 +701,9 @@ func (c *Config) ResolveRelativePaths(baseDir string) error {
 	c.Gateway.TLS.KeyFile = resolveRelativePath(absBase, c.Gateway.TLS.KeyFile)
 	c.Gateway.TLS.ClientCAFile = resolveRelativePath(absBase, c.Gateway.TLS.ClientCAFile)
 	c.Policy.BundlePath = resolveRelativePath(absBase, c.Policy.BundlePath)
+	c.Policy.BundlePaths = resolveRelativePaths(absBase, c.Policy.BundlePaths)
 	c.Policy.SignaturePath = resolveRelativePath(absBase, c.Policy.SignaturePath)
+	c.Policy.SignaturePaths = resolveRelativePaths(absBase, c.Policy.SignaturePaths)
 	c.Policy.PublicKeyPath = resolveRelativePath(absBase, c.Policy.PublicKeyPath)
 	c.Policy.OPA.PolicyPath = resolveRelativePath(absBase, c.Policy.OPA.PolicyPath)
 	c.Executor.WorkspaceRoot = resolveRelativePath(absBase, c.Executor.WorkspaceRoot)
@@ -711,6 +748,46 @@ func resolveAuditSinkPaths(baseDir, sink string) string {
 		return sink
 	}
 	return strings.Join(out, ",")
+}
+
+func resolveRelativePaths(baseDir string, values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, resolveRelativePath(baseDir, value))
+	}
+	return out
+}
+
+func (p PolicyConfig) EffectiveBundlePaths() []string {
+	if strings.TrimSpace(p.BundlePath) != "" {
+		return []string{p.BundlePath}
+	}
+	out := make([]string, 0, len(p.BundlePaths))
+	for _, value := range p.BundlePaths {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func (p PolicyConfig) EffectiveSignaturePaths() []string {
+	if len(p.BundlePaths) > 1 {
+		out := make([]string, 0, len(p.SignaturePaths))
+		for _, value := range p.SignaturePaths {
+			if trimmed := strings.TrimSpace(value); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	}
+	if strings.TrimSpace(p.SignaturePath) == "" {
+		return nil
+	}
+	return []string{p.SignaturePath}
 }
 
 func normalizeConfigPathSeparators(value string) string {

@@ -40,6 +40,12 @@ func TestCapabilitiesDifferByIdentity(t *testing.T) {
 	if !found {
 		t.Fatal("expected fs_read to be enabled")
 	}
+	if state := tools.ToolStates["nomos.fs_read"].State; state != service.ToolStateAllow {
+		t.Fatalf("expected fs_read allow state, got %+v", tools.ToolStates["nomos.fs_read"])
+	}
+	if mode := tools.ToolAdvertisementMode; mode != "mcp_tools_list_static" {
+		t.Fatalf("expected static tool advertisement mode, got %+v", tools)
+	}
 
 	serverOther, err := NewServer(bundlePath, identity.VerifiedIdentity{
 		Principal:   "other",
@@ -114,5 +120,113 @@ func TestCapabilitiesSurfaceAssuranceLevelAndNotice(t *testing.T) {
 	}
 	if tools.MediationNotice == "" {
 		t.Fatalf("expected mediation notice for non-strong assurance, got %+v", tools)
+	}
+}
+
+func TestCapabilitiesExposeExecWhenSafeBundleUsesExecMatch(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	data := `{"version":"v1","rules":[{"id":"deny-git-push","action_type":"process.exec","resource":"file://workspace/","decision":"DENY","principals":["system"],"agents":["nomos"],"environments":["dev"],"exec_match":{"argv_patterns":[["git","push","**"],["git","push"]]}},{"id":"allow-git","action_type":"process.exec","resource":"file://workspace/","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"],"exec_match":{"argv_patterns":[["git","**"],["git"]]},"obligations":{"sandbox_mode":"local","exec_allowlist":[["git"]]}}]}`
+	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	server, err := NewServer(bundlePath, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	}, dir, 64, 10, false, true, "local")
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	resp := server.handleCapabilities(Request{ID: "1", Method: "nomos.capabilities"})
+	tools, ok := resp.Result.(service.CapabilityEnvelope)
+	if !ok {
+		t.Fatalf("expected capability envelope")
+	}
+	found := false
+	for _, tool := range tools.EnabledTools {
+		if tool == "nomos.exec" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected nomos.exec enabled, got %+v", tools.EnabledTools)
+	}
+}
+
+func TestCapabilitiesExposeHTTPWhenPolicyRequiresApproval(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	data := `{"version":"v1","rules":[{"id":"purchase-approval","action_type":"net.http_request","resource":"url://shop.example.com/checkout/**","decision":"REQUIRE_APPROVAL","principals":["system"],"agents":["nomos"],"environments":["dev"],"obligations":{"net_allowlist":["shop.example.com"],"approval_scope_class":"action_type_resource"}}]}`
+	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	server, err := NewServer(bundlePath, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	}, dir, 64, 10, true, true, "local")
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	resp := server.handleCapabilities(Request{ID: "1", Method: "nomos.capabilities"})
+	tools, ok := resp.Result.(service.CapabilityEnvelope)
+	if !ok {
+		t.Fatalf("expected capability envelope")
+	}
+	found := false
+	for _, tool := range tools.EnabledTools {
+		if tool == "nomos.http_request" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected nomos.http_request enabled, got %+v", tools.EnabledTools)
+	}
+	if !tools.ApprovalsEnabled {
+		t.Fatalf("expected approvals enabled, got %+v", tools)
+	}
+	if state := tools.ToolStates["nomos.http_request"].State; state != service.ToolStateRequireApproval {
+		t.Fatalf("expected nomos.http_request require_approval state, got %+v", tools.ToolStates["nomos.http_request"])
+	}
+	if len(tools.ApprovalGatedTools) != 1 || tools.ApprovalGatedTools[0] != "nomos.http_request" {
+		t.Fatalf("expected approval-gated http tool, got %+v", tools.ApprovalGatedTools)
+	}
+}
+
+func TestCapabilitiesExposeReadToolForNarrowAllowedResource(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	data := `{"version":"v1","rules":[{"id":"allow-readme-only","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
+	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	server, err := NewServer(bundlePath, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	}, dir, 64, 10, false, true, "local")
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	resp := server.handleCapabilities(Request{ID: "1", Method: "nomos.capabilities"})
+	tools, ok := resp.Result.(service.CapabilityEnvelope)
+	if !ok {
+		t.Fatalf("expected capability envelope")
+	}
+	found := false
+	for _, tool := range tools.EnabledTools {
+		if tool == "nomos.fs_read" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected nomos.fs_read enabled, got %+v", tools.EnabledTools)
+	}
+	if state := tools.ToolStates["nomos.fs_read"].State; state != service.ToolStateAllow {
+		t.Fatalf("expected nomos.fs_read allow state, got %+v", tools.ToolStates["nomos.fs_read"])
 	}
 }

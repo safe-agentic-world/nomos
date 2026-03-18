@@ -10,5 +10,3 @@ services:
       - "serve"
       - "-c"
       - "/demo/examples/quickstart/config.quickstart.json"
-      - "-p"
-      - "/demo/policies/safe.yaml"

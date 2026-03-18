@@ -70,7 +70,13 @@ This variant includes the OPA binary at `/opa` so `policy.opa.enabled=true` can 
 Run:
 
 ```powershell
-docker run --rm -p 8080:8080 -v ${PWD}:/workspace nomos:local serve -c /workspace/config.example.json -p /workspace/policies/your-policy-bundle.json
+docker run --rm -p 8080:8080 -v ${PWD}:/workspace nomos:local serve -c /workspace/examples/configs/config.example.json
+```
+
+If you want to override the checked-in example policy set, add:
+
+```powershell
+docker run --rm -p 8080:8080 -v ${PWD}:/workspace nomos:local serve -c /workspace/examples/configs/config.example.json -p /workspace/examples/policies/your-policy-bundle.json
 ```
 
 Validate OPA binary presence in the OPA-enabled image:

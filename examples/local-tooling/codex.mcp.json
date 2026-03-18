@@ -5,9 +5,7 @@
       "args": [
         "mcp",
         "-c",
-        ".\\examples\\quickstart\\config.quickstart.json",
-        "-p",
-        ".\\policies\\safe.yaml"
+        ".\\examples\\quickstart\\config.quickstart.json"
       ]
     }
   }

@@ -106,10 +106,14 @@ func NewServerWithRuntimeOptions(bundlePath string, identity identity.VerifiedId
 }
 
 func NewServerWithRuntimeOptionsAndRecorder(bundlePath string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string, runtimeOptions RuntimeOptions, recorder audit.Recorder) (*Server, error) {
+	return NewServerForBundlesWithRuntimeOptionsAndRecorder([]string{bundlePath}, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile, runtimeOptions, recorder)
+}
+
+func NewServerForBundlesWithRuntimeOptionsAndRecorder(bundlePaths []string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string, runtimeOptions RuntimeOptions, recorder audit.Recorder) (*Server, error) {
 	if identity.Principal == "" || identity.Agent == "" || identity.Environment == "" {
 		return nil, errors.New("identity is required")
 	}
-	bundle, err := policy.LoadBundle(bundlePath)
+	bundle, err := policy.LoadBundles(bundlePaths)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +259,9 @@ func (s *Server) handleRPCPayload(payload []byte) *rpcResponse {
 			Result: map[string]any{
 				"protocolVersion": SupportedProtocolVersion,
 				"capabilities": map[string]any{
-					"tools": map[string]any{},
+					"tools": map[string]any{
+						"listChanged": false,
+					},
 				},
 				"serverInfo": map[string]any{
 					"name":    "nomos",
@@ -321,11 +327,7 @@ func (s *Server) handleToolsCall(req rpcRequest) (string, error) {
 	if legacyResp.Error != "" {
 		return "", errors.New(legacyResp.Error)
 	}
-	data, err := json.Marshal(legacyResp.Result)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return formatToolResult(name, legacyResp.Result)
 }
 
 func parseToolCallParams(raw json.RawMessage) (string, json.RawMessage, error) {
@@ -357,13 +359,13 @@ func parseToolCallParams(raw json.RawMessage) (string, json.RawMessage, error) {
 
 func (s *Server) toolsList() []map[string]any {
 	return []map[string]any{
-		{"name": "nomos.capabilities", "description": "Return policy-derived capability envelope", "inputSchema": map[string]any{"type": "object", "additionalProperties": false}},
-		{"name": "nomos.fs_read", "description": "Read a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}}, "required": []string{"resource"}, "additionalProperties": false}},
-		{"name": "nomos.fs_write", "description": "Write a workspace file", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"resource", "content"}, "additionalProperties": false}},
-		{"name": "nomos.apply_patch", "description": "Apply deterministic patch payload", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}, "additionalProperties": false}},
-		{"name": "nomos.exec", "description": "Run a bounded process action", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"argv": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "cwd": map[string]any{"type": "string"}, "env_allowlist_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"argv"}, "additionalProperties": false}},
-		{"name": "nomos.http_request", "description": "Run a policy-gated HTTP request", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "method": map[string]any{"type": "string"}, "body": map[string]any{"type": "string"}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}}, "required": []string{"resource"}, "additionalProperties": false}},
-		{"name": "repo.validate_change_set", "description": "Validate changed repo paths against policy", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"paths": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"paths"}, "additionalProperties": false}},
+		{"name": "nomos.capabilities", "description": "Return the policy-derived capability contract for this session", "inputSchema": map[string]any{"type": "object", "additionalProperties": false}},
+		{"name": "nomos.fs_read", "description": "Read a workspace file. Check nomos.capabilities for current allow versus approval state.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}}, "required": []string{"resource"}, "additionalProperties": false}},
+		{"name": "nomos.fs_write", "description": "Write a workspace file. Check nomos.capabilities for current allow versus approval state.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"resource", "content"}, "additionalProperties": false}},
+		{"name": "nomos.apply_patch", "description": "Apply deterministic patch payload. Check nomos.capabilities for current allow versus approval state.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}, "additionalProperties": false}},
+		{"name": "nomos.exec", "description": "Run a bounded process action. Check nomos.capabilities for current allow versus approval state.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"argv": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "cwd": map[string]any{"type": "string"}, "env_allowlist_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"argv"}, "additionalProperties": false}},
+		{"name": "nomos.http_request", "description": "Run a policy-gated HTTP request. Check nomos.capabilities for current allow versus approval state.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"resource": map[string]any{"type": "string"}, "method": map[string]any{"type": "string"}, "body": map[string]any{"type": "string"}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}}, "required": []string{"resource"}, "additionalProperties": false}},
+		{"name": "repo.validate_change_set", "description": "Validate changed repo paths against policy before attempting a patch action.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"paths": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"paths"}, "additionalProperties": false}},
 	}
 }
 
@@ -604,28 +606,23 @@ func (s *Server) handleHTTPRequest(req Request) Response {
 }
 
 func (s *Server) handleCapabilities(req Request) Response {
-	tools := s.service.EnabledTools(s.identity)
+	toolStates := s.service.ToolCapabilities(s.identity)
+	result := service.CapabilityEnvelopeFromToolStates(toolStates)
 	networkMode := "deny"
-	for _, tool := range tools {
-		if tool == "nomos.http_request" {
-			networkMode = "allowlist"
-			break
-		}
+	if capability, ok := toolStates["nomos.http_request"]; ok && capability.State != service.ToolStateUnavailable {
+		networkMode = "allowlist"
 	}
 	sandboxModes := []string{"none"}
 	if s.sandboxEnabled {
 		sandboxModes = []string{"sandboxed"}
 	}
-	result := service.CapabilityEnvelope{
-		EnabledTools:     tools,
-		SandboxModes:     sandboxModes,
-		NetworkMode:      networkMode,
-		OutputMaxBytes:   s.outputMaxBytes,
-		OutputMaxLines:   s.outputMaxLines,
-		ApprovalsEnabled: s.approvalsEnabled,
-		AssuranceLevel:   s.assuranceLevel,
-		MediationNotice:  capabilityMediationNotice(s.assuranceLevel),
-	}
+	result.SandboxModes = sandboxModes
+	result.NetworkMode = networkMode
+	result.OutputMaxBytes = s.outputMaxBytes
+	result.OutputMaxLines = s.outputMaxLines
+	result.ApprovalsEnabled = s.approvalsEnabled
+	result.AssuranceLevel = s.assuranceLevel
+	result.MediationNotice = capabilityMediationNotice(s.assuranceLevel)
 	return Response{ID: req.ID, Result: result}
 }
 
@@ -648,13 +645,12 @@ func (s *Server) handleValidateChangeSet(req Request) Response {
 }
 
 func (s *Server) toolEnabled(tool string) bool {
-	tools := s.service.EnabledTools(s.identity)
-	for _, candidate := range tools {
-		if candidate == tool {
-			return true
-		}
+	capabilities := s.service.ToolCapabilities(s.identity)
+	capability, ok := capabilities[tool]
+	if !ok {
+		return false
 	}
-	return false
+	return capability.State != service.ToolStateUnavailable
 }
 
 func RunStdio(bundlePath string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string) error {
@@ -666,7 +662,11 @@ func RunStdioWithRuntimeOptions(bundlePath string, identity identity.VerifiedIde
 }
 
 func RunStdioWithRuntimeOptionsAndRecorder(bundlePath string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string, runtimeOptions RuntimeOptions, recorder audit.Recorder, assuranceLevel string) error {
-	server, err := NewServerWithRuntimeOptionsAndRecorder(bundlePath, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile, runtimeOptions, recorder)
+	return RunStdioForBundlesWithRuntimeOptionsAndRecorder([]string{bundlePath}, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile, runtimeOptions, recorder, assuranceLevel)
+}
+
+func RunStdioForBundlesWithRuntimeOptionsAndRecorder(bundlePaths []string, identity identity.VerifiedIdentity, workspaceRoot string, maxBytes, maxLines int, approvalsEnabled bool, sandboxEnabled bool, sandboxProfile string, runtimeOptions RuntimeOptions, recorder audit.Recorder, assuranceLevel string) error {
+	server, err := NewServerForBundlesWithRuntimeOptionsAndRecorder(bundlePaths, identity, workspaceRoot, maxBytes, maxLines, approvalsEnabled, sandboxEnabled, sandboxProfile, runtimeOptions, recorder)
 	if err != nil {
 		return err
 	}

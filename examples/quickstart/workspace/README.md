@@ -1,3 +1,3 @@
 # Nomos Quickstart Workspace
 
-This file is intentionally readable under `policies/safe.yaml`.
+This file is intentionally readable under `examples/policies/safe.yaml`.
