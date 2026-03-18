@@ -64,10 +64,10 @@ func New(cfg Config) (*Gateway, error) {
 	if err != nil {
 		return nil, err
 	}
-	bundle, err := policy.LoadBundleWithOptions(cfg.Policy.BundlePath, policy.LoadOptions{
-		VerifySignature: cfg.Policy.VerifySignatures,
-		SignaturePath:   cfg.Policy.SignaturePath,
-		PublicKeyPath:   cfg.Policy.PublicKeyPath,
+	bundle, err := policy.LoadBundlesWithOptions(cfg.Policy.EffectiveBundlePaths(), policy.MultiLoadOptions{
+		VerifySignatures: cfg.Policy.VerifySignatures,
+		SignaturePaths:   cfg.Policy.EffectiveSignaturePaths(),
+		PublicKeyPath:    cfg.Policy.PublicKeyPath,
 	})
 	if err != nil {
 		return nil, err
@@ -160,10 +160,10 @@ func NewWithRecorder(cfg Config, recorder audit.Recorder, now func() time.Time) 
 	if now == nil {
 		now = time.Now
 	}
-	bundle, err := policy.LoadBundleWithOptions(cfg.Policy.BundlePath, policy.LoadOptions{
-		VerifySignature: cfg.Policy.VerifySignatures,
-		SignaturePath:   cfg.Policy.SignaturePath,
-		PublicKeyPath:   cfg.Policy.PublicKeyPath,
+	bundle, err := policy.LoadBundlesWithOptions(cfg.Policy.EffectiveBundlePaths(), policy.MultiLoadOptions{
+		VerifySignatures: cfg.Policy.VerifySignatures,
+		SignaturePaths:   cfg.Policy.EffectiveSignaturePaths(),
+		PublicKeyPath:    cfg.Policy.PublicKeyPath,
 	})
 	if err != nil {
 		return nil, err

@@ -28,10 +28,11 @@ type Check struct {
 }
 
 type Report struct {
-	OverallStatus    string  `json:"overall_status"`
-	Checks           []Check `json:"checks"`
-	PolicyBundleHash string  `json:"policy_bundle_hash,omitempty"`
-	EngineVersion    string  `json:"engine_version"`
+	OverallStatus       string   `json:"overall_status"`
+	Checks              []Check  `json:"checks"`
+	PolicyBundleHash    string   `json:"policy_bundle_hash,omitempty"`
+	PolicyBundleSources []string `json:"policy_bundle_sources,omitempty"`
+	EngineVersion       string   `json:"engine_version"`
 }
 
 type Options struct {
@@ -81,28 +82,55 @@ func Run(options Options) (Report, error) {
 	configPathOK, configPathMsg := pathResolves(options.ConfigPath)
 	mark("config.path_resolves", configPathOK, configPathMsg, "ensure --config points to a valid path")
 
-	bundlePath := ""
+	bundlePaths := []string{}
 	if cfgErr == nil {
-		bundlePath = cfg.Policy.BundlePath
+		bundlePaths = cfg.Policy.EffectiveBundlePaths()
 	}
-	bundlePathOK, bundlePathMsg := pathResolves(bundlePath)
+	bundlePathOK := len(bundlePaths) > 0
+	bundlePathMsg := "path missing"
+	if len(bundlePaths) > 0 {
+		bundlePathMsg = "path resolves deterministically"
+		for _, bundlePath := range bundlePaths {
+			ok, msg := pathResolves(bundlePath)
+			if !ok {
+				bundlePathOK = false
+				bundlePathMsg = msg
+				break
+			}
+		}
+	}
 	mark("config.bundle_path_resolves", bundlePathOK, bundlePathMsg, "set --policy-bundle/-p or NOMOS_POLICY_BUNDLE")
 
-	bundleExists := false
-	if bundlePath != "" {
-		_, err := os.Stat(bundlePath)
-		bundleExists = err == nil
+	bundleExists := len(bundlePaths) > 0
+	for _, bundlePath := range bundlePaths {
+		if _, err := os.Stat(bundlePath); err != nil {
+			bundleExists = false
+			break
+		}
 	}
 	mark("policy.bundle_exists", bundleExists, "policy bundle exists", "verify policy bundle path exists on disk")
 
 	var bundle policy.Bundle
 	bundleLoaded := false
 	if bundleExists {
-		loaded, err := policy.LoadBundle(bundlePath)
+		signaturePaths := []string(nil)
+		publicKeyPath := ""
+		verify := false
+		if cfgErr == nil {
+			signaturePaths = cfg.Policy.EffectiveSignaturePaths()
+			publicKeyPath = cfg.Policy.PublicKeyPath
+			verify = cfg.Policy.VerifySignatures
+		}
+		loaded, err := policy.LoadBundlesWithOptions(bundlePaths, policy.MultiLoadOptions{
+			VerifySignatures: verify,
+			SignaturePaths:   signaturePaths,
+			PublicKeyPath:    publicKeyPath,
+		})
 		if err == nil {
 			bundle = loaded
 			bundleLoaded = true
 			report.PolicyBundleHash = loaded.Hash
+			report.PolicyBundleSources = policy.BundleSourceLabels(loaded)
 		}
 	}
 	mark("policy.bundle_parses", bundleLoaded, "policy bundle parsed", "fix bundle JSON/schema so policy.LoadBundle succeeds")

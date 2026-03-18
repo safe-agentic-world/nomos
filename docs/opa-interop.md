@@ -63,7 +63,7 @@ Example:
 ```json
 {
   "policy": {
-    "policy_bundle_path": "./policies/safe.json",
+    "policy_bundle_path": "./examples/policies/safe.json",
     "opa": {
       "enabled": true,
       "binary_path": "opa",

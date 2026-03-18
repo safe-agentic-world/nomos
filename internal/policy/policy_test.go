@@ -254,11 +254,11 @@ func TestPolicyExecMatchRejectsInvalidExecParams(t *testing.T) {
 }
 
 func TestLoadBundleYAMLJSONParity(t *testing.T) {
-	jsonBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.json")))
+	jsonBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "examples", "policies", "safe.json")))
 	if err != nil {
 		t.Fatalf("load json bundle: %v", err)
 	}
-	yamlBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml")))
+	yamlBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "examples", "policies", "safe.yaml")))
 	if err != nil {
 		t.Fatalf("load yaml bundle: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestLoadBundleYAMLJSONParity(t *testing.T) {
 
 func TestLoadBundleYMLExtensionSupported(t *testing.T) {
 	dir := t.TempDir()
-	data, err := os.ReadFile(filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml")))
+	data, err := os.ReadFile(filepath.Clean(filepath.Join("..", "..", "examples", "policies", "safe.yaml")))
 	if err != nil {
 		t.Fatalf("read source yaml: %v", err)
 	}
@@ -351,12 +351,57 @@ func TestLoadBundleRejectsInvalidExecMatch(t *testing.T) {
 }
 
 func TestLoadBundleHashGoldenVectorForSafe(t *testing.T) {
-	bundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml")))
+	bundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "examples", "policies", "safe.yaml")))
 	if err != nil {
 		t.Fatalf("load yaml bundle: %v", err)
 	}
 	const expected = "83ae9188b182370f33876f1f7143b29f0a16cef05df4a48b697c78869feec104"
 	if bundle.Hash != expected {
 		t.Fatalf("expected hash %s, got %s", expected, bundle.Hash)
+	}
+}
+
+func TestLoadBundlesDeterministicMergedIdentity(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "base.json")
+	repo := filepath.Join(dir, "repo.json")
+	if err := os.WriteFile(base, []byte(`{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write base bundle: %v", err)
+	}
+	if err := os.WriteFile(repo, []byte(`{"version":"v1","rules":[{"id":"deny-env","action_type":"fs.read","resource":"file://workspace/.env","decision":"DENY"}]}`), 0o600); err != nil {
+		t.Fatalf("write repo bundle: %v", err)
+	}
+	first, err := LoadBundles([]string{base, repo})
+	if err != nil {
+		t.Fatalf("load merged bundles #1: %v", err)
+	}
+	second, err := LoadBundles([]string{base, repo})
+	if err != nil {
+		t.Fatalf("load merged bundles #2: %v", err)
+	}
+	if first.Hash == "" || second.Hash == "" {
+		t.Fatal("expected merged bundle hash")
+	}
+	if first.Hash != second.Hash {
+		t.Fatalf("expected stable merged hash, got %s vs %s", first.Hash, second.Hash)
+	}
+	if len(first.SourceBundles) != 2 {
+		t.Fatalf("expected 2 source bundles, got %+v", first.SourceBundles)
+	}
+}
+
+func TestLoadBundlesRejectsDuplicateRuleIDsAcrossBundles(t *testing.T) {
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "first.json")
+	secondPath := filepath.Join(dir, "second.json")
+	data := `{"version":"v1","rules":[{"id":"shared","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW"}]}`
+	if err := os.WriteFile(firstPath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write first bundle: %v", err)
+	}
+	if err := os.WriteFile(secondPath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write second bundle: %v", err)
+	}
+	if _, err := LoadBundles([]string{firstPath, secondPath}); err == nil || !strings.Contains(err.Error(), `duplicate rule id "shared"`) {
+		t.Fatalf("expected duplicate rule rejection, got %v", err)
 	}
 }

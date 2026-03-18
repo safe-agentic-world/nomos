@@ -103,7 +103,7 @@ rules:
 
 ## Policy Pack Merge Order (Explicit)
 
-When multiple bundles are supported, they MUST be merged in this explicit order:
+When multiple bundles are loaded, they should be merged in this explicit order:
 
 1. built-in baseline pack (deny-biased)
 2. org/global packs (ordered list)
@@ -112,10 +112,47 @@ When multiple bundles are supported, they MUST be merged in this explicit order:
 5. local overrides (dev only, loud warnings)
 
 Current starter bundles shipped in-repo:
-- `policies/safe.{json,yaml}` (secure local development starter with deny-by-rule secret/code file protections)
-- `policies/guarded-prod.{json,yaml}` (stricter allowlists and stronger sandbox expectations)
-- `policies/unsafe.{json,yaml}` (explicit opt-in)
-- `policies/all-fields.example.{json,yaml}` (schema and obligation surface reference bundle)
+- `examples/policies/safe.{json,yaml}` (secure local development starter with deny-by-rule secret/code file protections)
+- `examples/policies/all-fields.example.{json,yaml}` (schema and obligation surface reference bundle)
+
+These shipped bundles are examples and starter packs only.
+
+Nomos does not depend on any specific checked-in bundle at runtime. Operators can provide their own policy bundles and Nomos evaluates them through the same deterministic policy model.
+
+## Multi-Bundle Loading
+
+Nomos now supports loading multiple policy bundles from a single config with deterministic ordered merge.
+
+Config shape:
+
+```json
+{
+  "policy": {
+    "policy_bundle_paths": [
+      "./examples/policies/base.yaml",
+      "./examples/policies/repo.yaml",
+      "./examples/policies/dev.yaml"
+    ],
+    "verify_signatures": false,
+    "signature_paths": [],
+    "public_key_path": ""
+  }
+}
+```
+
+Rules:
+
+- use either `policy_bundle_path` or `policy_bundle_paths`, never both
+- bundle order is significant and operator-controlled
+- every configured bundle must load successfully or Nomos fails closed
+- duplicate rule IDs across bundles are rejected
+- the effective merged policy state gets its own deterministic `policy_bundle_hash`
+- for multi-bundle loads, explain and doctor surfaces expose ordered `policy_bundle_sources`
+
+If signature verification is enabled for multi-bundle configs:
+
+- `signature_paths` must align one-for-one with `policy_bundle_paths`
+- each bundle is verified independently before merge
 
 ## Process Exec Matching
 

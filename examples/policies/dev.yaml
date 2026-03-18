@@ -1,0 +1,22 @@
+version: v1
+rules:
+  - id: dev-deny-git-push
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["git", "push", "**"]
+        - ["git", "push"]
+  - id: dev-allow-git-exec
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["git", "**"]
+        - ["git"]
+    obligations:
+      sandbox_mode: local
+      exec_allowlist:
+        - ["git"]

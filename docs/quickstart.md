@@ -31,7 +31,7 @@ Audit output for the quickstart uses `stdout`, so the same terminal shows readin
 ## 3. Verify One Allowed Action
 
 ```powershell
-nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\policies\safe.yaml
+nomos.exe policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\examples\policies\safe.yaml
 ```
 
 Expected result:
@@ -41,7 +41,7 @@ Expected result:
 ## 4. Verify One Denied Action
 
 ```powershell
-nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\policies\safe.yaml
+nomos.exe policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\examples\policies\safe.yaml
 ```
 
 Expected result:
@@ -51,7 +51,7 @@ Expected result:
 ## 5. Start The HTTP Gateway
 
 ```powershell
-nomos.exe serve -c .\examples\quickstart\config.quickstart.json -p .\policies\safe.yaml
+nomos.exe serve -c .\examples\quickstart\config.quickstart.json
 ```
 
 The gateway listens on `http://127.0.0.1:8080`.
@@ -76,7 +76,7 @@ The example prints both responses so you can see the policy-gated behavior direc
 - `load config:`:
   Confirm [config.quickstart.json](../examples/quickstart/config.quickstart.json) is being used from the repository root.
 - `policy bundle path invalid`:
-  Use the checked-in bundle [safe.yaml](../policies/safe.yaml).
+  Use the checked-in bundle [safe.yaml](../examples/policies/safe.yaml).
 - `connection refused` from the Python example:
   Start `nomos serve` first and keep that terminal open.
 - `python` not found:

@@ -13,12 +13,13 @@ const (
 )
 
 type Decision struct {
-	Decision         string
-	ReasonCode       string
-	Message          string
-	MatchedRuleIDs   []string
-	Obligations      map[string]any
-	PolicyBundleHash string
+	Decision            string
+	ReasonCode          string
+	Message             string
+	MatchedRuleIDs      []string
+	Obligations         map[string]any
+	PolicyBundleHash    string
+	PolicyBundleSources []string
 }
 
 type ExplainDetails struct {
@@ -33,6 +34,12 @@ type DeniedRuleExplanation struct {
 	RuleID            string
 	ReasonCode        string
 	MatchedConditions map[string]bool
+	BundleSource      string
+}
+
+type ActionCapability struct {
+	Allow           bool
+	RequireApproval bool
 }
 
 type Engine struct {
@@ -41,6 +48,55 @@ type Engine struct {
 
 func NewEngine(bundle Bundle) *Engine {
 	return &Engine{bundle: bundle}
+}
+
+func (c ActionCapability) Available() bool {
+	return c.Allow || c.RequireApproval
+}
+
+func (c ActionCapability) State() string {
+	switch {
+	case c.Allow && c.RequireApproval:
+		return "mixed"
+	case c.Allow:
+		return "allow"
+	case c.RequireApproval:
+		return "require_approval"
+	default:
+		return "unavailable"
+	}
+}
+
+func (e *Engine) CapabilityForActionType(actionType, principal, agent, environment string) ActionCapability {
+	capability := ActionCapability{}
+	for _, rule := range e.bundle.Rules {
+		if rule.Decision != DecisionAllow && rule.Decision != DecisionRequireApproval {
+			continue
+		}
+		if !matchField(rule.ActionType, actionType) {
+			continue
+		}
+		if !matchList(rule.Principals, principal) {
+			continue
+		}
+		if !matchList(rule.Agents, agent) {
+			continue
+		}
+		if !matchList(rule.Environments, environment) {
+			continue
+		}
+		if rule.Decision == DecisionAllow {
+			capability.Allow = true
+		}
+		if rule.Decision == DecisionRequireApproval {
+			capability.RequireApproval = true
+		}
+	}
+	return capability
+}
+
+func (e *Engine) SupportsActionType(actionType, principal, agent, environment string) bool {
+	return e.CapabilityForActionType(actionType, principal, agent, environment).Available()
 }
 
 func (e *Engine) Evaluate(action normalize.NormalizedAction) Decision {
@@ -85,11 +141,12 @@ func (e *Engine) Explain(action normalize.NormalizedAction) ExplainDetails {
 	if len(matched) == 0 {
 		return ExplainDetails{
 			Decision: Decision{
-				Decision:         DecisionDeny,
-				ReasonCode:       "deny_by_default",
-				MatchedRuleIDs:   []string{},
-				Obligations:      map[string]any{},
-				PolicyBundleHash: e.bundle.Hash,
+				Decision:            DecisionDeny,
+				ReasonCode:          "deny_by_default",
+				MatchedRuleIDs:      []string{},
+				Obligations:         map[string]any{},
+				PolicyBundleHash:    e.bundle.Hash,
+				PolicyBundleSources: policyBundleSources(e.bundle),
 			},
 			DenyRules:              []DeniedRuleExplanation{},
 			AllowRuleIDs:           []string{},
@@ -101,8 +158,9 @@ func (e *Engine) Explain(action normalize.NormalizedAction) ExplainDetails {
 		if rule.Decision == DecisionDeny {
 			denyIDs = append(denyIDs, rule.ID)
 			denyExplanations = append(denyExplanations, DeniedRuleExplanation{
-				RuleID:     rule.ID,
-				ReasonCode: "deny_by_rule",
+				RuleID:       rule.ID,
+				ReasonCode:   "deny_by_rule",
+				BundleSource: ruleBundleSource(rule),
 				MatchedConditions: map[string]bool{
 					"action_type": true,
 					"resource":    true,
@@ -130,11 +188,12 @@ func (e *Engine) Explain(action normalize.NormalizedAction) ExplainDetails {
 	if len(denyIDs) > 0 {
 		return ExplainDetails{
 			Decision: Decision{
-				Decision:         DecisionDeny,
-				ReasonCode:       "deny_by_rule",
-				MatchedRuleIDs:   denyIDs,
-				Obligations:      denyObligations,
-				PolicyBundleHash: e.bundle.Hash,
+				Decision:            DecisionDeny,
+				ReasonCode:          "deny_by_rule",
+				MatchedRuleIDs:      denyIDs,
+				Obligations:         denyObligations,
+				PolicyBundleHash:    e.bundle.Hash,
+				PolicyBundleSources: policyBundleSources(e.bundle),
 			},
 			DenyRules:              denyExplanations,
 			AllowRuleIDs:           append([]string{}, allowIDs...),
@@ -145,11 +204,12 @@ func (e *Engine) Explain(action normalize.NormalizedAction) ExplainDetails {
 	if len(requireIDs) > 0 {
 		return ExplainDetails{
 			Decision: Decision{
-				Decision:         DecisionRequireApproval,
-				ReasonCode:       "require_approval_by_rule",
-				MatchedRuleIDs:   requireIDs,
-				Obligations:      requireObligations,
-				PolicyBundleHash: e.bundle.Hash,
+				Decision:            DecisionRequireApproval,
+				ReasonCode:          "require_approval_by_rule",
+				MatchedRuleIDs:      requireIDs,
+				Obligations:         requireObligations,
+				PolicyBundleHash:    e.bundle.Hash,
+				PolicyBundleSources: policyBundleSources(e.bundle),
 			},
 			DenyRules:              []DeniedRuleExplanation{},
 			AllowRuleIDs:           append([]string{}, allowIDs...),
@@ -159,17 +219,36 @@ func (e *Engine) Explain(action normalize.NormalizedAction) ExplainDetails {
 	}
 	return ExplainDetails{
 		Decision: Decision{
-			Decision:         DecisionAllow,
-			ReasonCode:       "allow_by_rule",
-			MatchedRuleIDs:   allowIDs,
-			Obligations:      allowObligations,
-			PolicyBundleHash: e.bundle.Hash,
+			Decision:            DecisionAllow,
+			ReasonCode:          "allow_by_rule",
+			MatchedRuleIDs:      allowIDs,
+			Obligations:         allowObligations,
+			PolicyBundleHash:    e.bundle.Hash,
+			PolicyBundleSources: policyBundleSources(e.bundle),
 		},
 		DenyRules:              []DeniedRuleExplanation{},
 		AllowRuleIDs:           append([]string{}, allowIDs...),
 		RequireApprovalRuleIDs: []string{},
 		ObligationsPreview:     copyObligations(allowObligations),
 	}
+}
+
+func policyBundleSources(bundle Bundle) []string {
+	if len(bundle.SourceBundles) <= 1 {
+		return nil
+	}
+	out := make([]string, 0, len(bundle.SourceBundles))
+	for _, source := range bundle.SourceBundles {
+		out = append(out, source.Path+"#"+source.Hash)
+	}
+	return out
+}
+
+func ruleBundleSource(rule Rule) string {
+	if rule.SourcePath == "" || rule.SourceHash == "" {
+		return ""
+	}
+	return rule.SourcePath + "#" + rule.SourceHash
 }
 
 func copyObligations(input map[string]any) map[string]any {

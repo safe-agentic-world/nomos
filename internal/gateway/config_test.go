@@ -119,6 +119,80 @@ func TestLoadConfigRequiresPolicyBundlePath(t *testing.T) {
 	}
 }
 
+func TestLoadConfigSupportsPolicyBundlePaths(t *testing.T) {
+	dir := t.TempDir()
+	firstBundle := filepath.Join(dir, "base.json")
+	secondBundle := filepath.Join(dir, "repo.json")
+	for _, path := range []string{firstBundle, secondBundle} {
+		if err := os.WriteFile(path, []byte(`{"version":"v1","rules":[{"id":"`+filepath.Base(path)+`","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+			t.Fatalf("write bundle %s: %v", path, err)
+		}
+	}
+	path := filepath.Join(dir, "config.json")
+	configJSON := mustMarshal(map[string]any{
+		"gateway": map[string]any{"listen": ":8080", "transport": "http"},
+		"policy":  map[string]any{"policy_bundle_paths": []any{firstBundle, secondBundle}},
+		"executor": map[string]any{
+			"sandbox_enabled": true,
+		},
+		"audit":     map[string]any{"sink": "stdout"},
+		"mcp":       map[string]any{"enabled": false},
+		"upstream":  map[string]any{"routes": []any{}},
+		"approvals": map[string]any{"enabled": false},
+		"identity": map[string]any{
+			"principal":     "system",
+			"agent":         "nomos",
+			"environment":   "dev",
+			"api_keys":      map[string]any{"key1": "system"},
+			"agent_secrets": map[string]any{"nomos": "secret"},
+		},
+	})
+	if err := os.WriteFile(path, configJSON, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := LoadConfig(path, os.Getenv, "")
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if len(cfg.Policy.EffectiveBundlePaths()) != 2 {
+		t.Fatalf("expected 2 effective bundle paths, got %+v", cfg.Policy.EffectiveBundlePaths())
+	}
+}
+
+func TestLoadConfigRejectsAmbiguousPolicyBundleConfig(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	if err := os.WriteFile(bundlePath, []byte(`{"version":"v1","rules":[{"id":"allow","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW"}]}`), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	path := filepath.Join(dir, "config.json")
+	configJSON := mustMarshal(map[string]any{
+		"gateway": map[string]any{"listen": ":8080", "transport": "http"},
+		"policy": map[string]any{
+			"policy_bundle_path":  bundlePath,
+			"policy_bundle_paths": []any{bundlePath},
+		},
+		"executor":  map[string]any{"sandbox_enabled": true},
+		"audit":     map[string]any{"sink": "stdout"},
+		"mcp":       map[string]any{"enabled": false},
+		"upstream":  map[string]any{"routes": []any{}},
+		"approvals": map[string]any{"enabled": false},
+		"identity": map[string]any{
+			"principal":     "system",
+			"agent":         "nomos",
+			"environment":   "dev",
+			"api_keys":      map[string]any{"key1": "system"},
+			"agent_secrets": map[string]any{"nomos": "secret"},
+		},
+	})
+	if err := os.WriteFile(path, configJSON, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if _, err := LoadConfig(path, os.Getenv, ""); err == nil {
+		t.Fatal("expected ambiguous bundle config error")
+	}
+}
+
 func TestLoadConfigApprovalsValidationAndDefaults(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "bundle.json")

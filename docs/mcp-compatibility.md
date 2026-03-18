@@ -8,6 +8,12 @@ This document defines the MCP compatibility contract implemented by Nomos.
 
 Nomos returns this version from the `initialize` response.
 
+The `initialize` response currently advertises:
+
+- `capabilities.tools.listChanged = false`
+
+Nomos therefore treats MCP `tools/list` as a static advertised surface for the life of a server session.
+
 ## Supported Transports
 
 - stdio
@@ -47,6 +53,20 @@ Exposed tools:
 - `nomos.http_request`
 - `repo.validate_change_set`
 
+Tool surfacing semantics:
+
+- `tools/list` is static and returns the full advertised Nomos MCP surface
+- current policy state is exposed through `nomos.capabilities`
+- clients should use `nomos.capabilities` to distinguish:
+  - tools callable now
+  - tools available only with approval
+  - tools currently unavailable for the active identity/environment
+
+For `tools/call`:
+
+- action tools return text content with a concise decision line (`ALLOW`, `APPROVAL`, or `DENY`) and relevant output details when present
+- non-action utility responses such as `nomos.capabilities` and `repo.validate_change_set` remain JSON text payloads
+
 ## Stdout / Stderr Guarantees
 
 - stdout is reserved for MCP protocol bytes only
@@ -59,4 +79,3 @@ Exposed tools:
 - MCP over HTTP transport
 - optional protocol features not explicitly listed above
 - arbitrary non-protocol stdout output
-

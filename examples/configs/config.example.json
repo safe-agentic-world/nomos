@@ -20,16 +20,21 @@
     "deployment_mode": "unmanaged"
   },
   "policy": {
-    "policy_bundle_path": "C:\\Users\\prudh\\repos\\safe-agentic-world\\nomos\\policies\\safe.yaml",
+    "policy_bundle_paths": [
+      "../policies/base.yaml",
+      "../policies/repo.yaml",
+      "../policies/dev.yaml",
+      "../policies/purchase.yaml"
+    ],
     "verify_signatures": false,
-    "signature_path": "",
+    "signature_paths": [],
     "public_key_path": "",
     "explain_suggestions": true
   },
   "executor": {
     "sandbox_enabled": true,
     "sandbox_profile": "local",
-    "workspace_root": "C:\\Users\\prudh\\repos\\safe-agentic-world\\implementation"
+    "workspace_root": ""
   },
   "credentials": {
     "enabled": false,
@@ -52,8 +57,8 @@
     "routes": []
   },
   "approvals": {
-    "enabled": false,
-    "store_path": ".\\nomos-approvals.db",
+    "enabled": true,
+    "store_path": "",
     "ttl_seconds": 900,
     "webhook_token": "",
     "slack_token": "",

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/service"
 )
 
 func TestFramedInitializeAndToolsList(t *testing.T) {
@@ -67,6 +68,11 @@ func TestFramedInitializeAndToolsList(t *testing.T) {
 	if result1["protocolVersion"] == "" {
 		t.Fatalf("missing protocolVersion: %+v", result1)
 	}
+	capabilities := result1["capabilities"].(map[string]any)
+	toolsCapability := capabilities["tools"].(map[string]any)
+	if listChanged, ok := toolsCapability["listChanged"].(bool); !ok || listChanged {
+		t.Fatalf("expected static MCP tools/list contract, got %+v", toolsCapability)
+	}
 	serverInfo := result1["serverInfo"].(map[string]any)
 	if serverInfo["name"] != "nomos" {
 		t.Fatalf("unexpected server name: %+v", serverInfo)
@@ -80,6 +86,44 @@ func TestFramedInitializeAndToolsList(t *testing.T) {
 	tools := result2["tools"].([]any)
 	if len(tools) == 0 {
 		t.Fatal("expected tools from tools/list")
+	}
+}
+
+func TestToolsListRemainsStaticWhenPolicyDoesNotEnableAListedTool(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	bundle := `{"version":"v1","rules":[{"id":"allow-read","action_type":"fs.read","resource":"file://workspace/**","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
+	if err := os.WriteFile(bundlePath, []byte(bundle), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	server, err := NewServer(bundlePath, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	}, dir, 1024, 10, false, false, "local")
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	tools := server.toolsList()
+	foundHTTP := false
+	for _, tool := range tools {
+		if tool["name"] == "nomos.http_request" {
+			foundHTTP = true
+			break
+		}
+	}
+	if !foundHTTP {
+		t.Fatalf("expected static tools/list to advertise nomos.http_request, got %+v", tools)
+	}
+
+	resp := server.handleCapabilities(Request{ID: "1", Method: "nomos.capabilities"})
+	caps, ok := resp.Result.(service.CapabilityEnvelope)
+	if !ok {
+		t.Fatalf("expected typed capability envelope, got %+T", resp.Result)
+	}
+	if caps.ToolStates["nomos.http_request"].State != service.ToolStateUnavailable {
+		t.Fatalf("expected http_request unavailable in capability contract, got %+v", caps.ToolStates["nomos.http_request"])
 	}
 }
 
@@ -211,8 +255,8 @@ func TestFramedToolsCallFsRead(t *testing.T) {
 		t.Fatalf("expected tools/call content: %+v", result)
 	}
 	text := content[0].(map[string]any)["text"].(string)
-	if !strings.Contains(text, "\"decision\":\"ALLOW\"") {
-		t.Fatalf("expected ALLOW action response in tools/call content: %s", text)
+	if !strings.Contains(text, "ALLOW") || !strings.Contains(text, "fs.read") || !strings.Contains(text, "hello") {
+		t.Fatalf("expected formatted ALLOW action response in tools/call content: %s", text)
 	}
 }
 
@@ -264,8 +308,8 @@ func TestFramedToolsCallFsReadWithInputField(t *testing.T) {
 		t.Fatalf("expected tools/call content: %+v", result)
 	}
 	text := content[0].(map[string]any)["text"].(string)
-	if !strings.Contains(text, "\"decision\":\"ALLOW\"") {
-		t.Fatalf("expected ALLOW action response in tools/call content: %s", text)
+	if !strings.Contains(text, "ALLOW") || !strings.Contains(text, "fs.read") || !strings.Contains(text, "hello") {
+		t.Fatalf("expected formatted ALLOW action response in tools/call content: %s", text)
 	}
 }
 

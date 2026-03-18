@@ -20,7 +20,7 @@
     "deployment_mode": "unmanaged"
   },
   "policy": {
-    "policy_bundle_path": ".\\policies\\all-fields.example.yaml",
+    "policy_bundle_path": "../policies/all-fields.example.yaml",
     "verify_signatures": false,
     "signature_path": "",
     "public_key_path": "",
@@ -28,7 +28,7 @@
   },
   "executor": {
     "sandbox_enabled": true,
-    "workspace_root": ".",
+    "workspace_root": "../..",
     "max_output_bytes": 65536,
     "max_output_lines": 200,
     "sandbox_profile": "local"
@@ -64,7 +64,7 @@
   },
   "approvals": {
     "enabled": false,
-    "store_path": ".\\nomos-approvals.db",
+    "store_path": "../../nomos-approvals.db",
     "ttl_seconds": 900,
     "webhook_token": "replace-me",
     "slack_token": "replace-me",

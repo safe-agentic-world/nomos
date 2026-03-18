@@ -1,0 +1,42 @@
+version: v1
+rules:
+  - id: base-deny-root-env
+    action_type: fs.read
+    resource: file://workspace/.env
+    decision: DENY
+  - id: base-deny-nested-env
+    action_type: fs.read
+    resource: file://workspace/**/.env
+    decision: DENY
+  - id: base-deny-root-env-variants
+    action_type: fs.read
+    resource: file://workspace/.env.*
+    decision: DENY
+  - id: base-deny-nested-env-variants
+    action_type: fs.read
+    resource: file://workspace/**/.env.*
+    decision: DENY
+  - id: base-deny-root-pem
+    action_type: fs.read
+    resource: file://workspace/*.pem
+    decision: DENY
+  - id: base-deny-nested-pem
+    action_type: fs.read
+    resource: file://workspace/**/*.pem
+    decision: DENY
+  - id: base-deny-root-key
+    action_type: fs.read
+    resource: file://workspace/*.key
+    decision: DENY
+  - id: base-deny-nested-key
+    action_type: fs.read
+    resource: file://workspace/**/*.key
+    decision: DENY
+  - id: base-deny-root-python
+    action_type: fs.read
+    resource: file://workspace/*.py
+    decision: DENY
+  - id: base-deny-nested-python
+    action_type: fs.read
+    resource: file://workspace/**/*.py
+    decision: DENY
