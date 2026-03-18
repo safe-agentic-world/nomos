@@ -29,7 +29,7 @@
   "executor": {
     "sandbox_enabled": true,
     "sandbox_profile": "local",
-    "workspace_root": "C:\\Users\\prudh\\repos\\safe-agentic-world\\nomos"
+    "workspace_root": "C:\\Users\\prudh\\repos\\safe-agentic-world\\implementation"
   },
   "credentials": {
     "enabled": false,

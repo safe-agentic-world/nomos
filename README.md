@@ -21,23 +21,7 @@ If an agent can still read `.env`, run `git push`, call arbitrary APIs, or print
 
 Nomos does **not** try to control model reasoning. It controls **execution authority**.
 
-## Before / After
-
-Without Nomos:
-
-- the agent has direct file, shell, network, or credential access
-- prompt guardrails are advisory
-- denials are inconsistent or absent
-- audit is partial or bolted on afterward
-
-With Nomos:
-
-- risky actions pass through a single deterministic execution boundary
-- policy decides `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`
-- outputs are redacted before they leave the system
-- every action can emit replayable audit events
-
-## First Success In 5 Minutes
+## Quick Demo
 
 This path uses only checked-in files and gives you one `ALLOW` and one `DENY`.
 If you are evaluating Nomos for Claude Code or Codex, start with MCP mode first.
@@ -100,6 +84,22 @@ That HTTP example sends:
 - one denied `fs.read` for `.env`
 
 Windows users can translate `./path` to `.\path` directly.
+
+## Before / After
+
+Without Nomos:
+
+- the agent has direct file, shell, network, or credential access
+- prompt guardrails are advisory
+- denials are inconsistent or absent
+- audit is partial or bolted on afterward
+
+With Nomos:
+
+- risky actions pass through a single deterministic execution boundary
+- policy decides `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`
+- outputs are redacted before they leave the system
+- every action can emit replayable audit events
 
 ## What You Get
 

@@ -13,6 +13,10 @@ rules:
     risk_flags:
       - risk.exec
       - risk.secrets
+    exec_match:
+      argv_patterns:
+        - ["git", "status"]
+        - ["go", "test", "**"]
     obligations:
       sandbox_mode: local
       net_allowlist:

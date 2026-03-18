@@ -159,6 +159,100 @@ func TestPolicyExplainDenyWinsReportsOnlyDenyRules(t *testing.T) {
 	}
 }
 
+func TestPolicyExecMatchAllowsBroadCommandFamilyAndDeniesNarrowerPattern(t *testing.T) {
+	bundle := Bundle{
+		Version: "v1",
+		Hash:    "bundle-hash",
+		Rules: []Rule{
+			{
+				ID:         "allow-git",
+				ActionType: "process.exec",
+				Resource:   "file://workspace/",
+				Decision:   DecisionAllow,
+				ExecMatch: &ExecMatch{
+					ArgvPatterns: [][]string{{"git", "**"}},
+				},
+			},
+			{
+				ID:         "deny-protected-branch-push",
+				ActionType: "process.exec",
+				Resource:   "file://workspace/",
+				Decision:   DecisionDeny,
+				ExecMatch: &ExecMatch{
+					ArgvPatterns: [][]string{
+						{"git", "push", "**", "main"},
+						{"git", "push", "**", "master"},
+					},
+				},
+			},
+		},
+	}
+	engine := NewEngine(bundle)
+
+	allowed := engine.Evaluate(normalize.NormalizedAction{
+		ActionType:  "process.exec",
+		Resource:    "file://workspace/",
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+		Params:      []byte(`{"argv":["git","status"],"cwd":"","env_allowlist_keys":[]}`),
+	})
+	if allowed.Decision != DecisionAllow {
+		t.Fatalf("expected allow for git status, got %+v", allowed)
+	}
+
+	denied := engine.Explain(normalize.NormalizedAction{
+		ActionType:  "process.exec",
+		Resource:    "file://workspace/",
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+		Params:      []byte(`{"argv":["git","push","origin","main"],"cwd":"","env_allowlist_keys":[]}`),
+	})
+	if denied.Decision.Decision != DecisionDeny {
+		t.Fatalf("expected deny for protected branch push, got %+v", denied.Decision)
+	}
+	if len(denied.DenyRules) != 1 || denied.DenyRules[0].RuleID != "deny-protected-branch-push" {
+		t.Fatalf("expected deny explanation for protected branch rule, got %+v", denied.DenyRules)
+	}
+	if !denied.DenyRules[0].MatchedConditions["exec_match"] {
+		t.Fatalf("expected exec_match condition recorded, got %+v", denied.DenyRules[0].MatchedConditions)
+	}
+	if len(denied.AllowRuleIDs) != 1 || denied.AllowRuleIDs[0] != "allow-git" {
+		t.Fatalf("expected broad allow retained in preview, got %+v", denied.AllowRuleIDs)
+	}
+}
+
+func TestPolicyExecMatchRejectsInvalidExecParams(t *testing.T) {
+	bundle := Bundle{
+		Version: "v1",
+		Hash:    "bundle-hash",
+		Rules: []Rule{
+			{
+				ID:         "allow-git",
+				ActionType: "process.exec",
+				Resource:   "file://workspace/",
+				Decision:   DecisionAllow,
+				ExecMatch: &ExecMatch{
+					ArgvPatterns: [][]string{{"git", "**"}},
+				},
+			},
+		},
+	}
+	engine := NewEngine(bundle)
+	decision := engine.Evaluate(normalize.NormalizedAction{
+		ActionType:  "process.exec",
+		Resource:    "file://workspace/",
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+		Params:      []byte(`{"cwd":"","env_allowlist_keys":[]}`),
+	})
+	if decision.Decision != DecisionDeny {
+		t.Fatalf("expected deny when argv is missing, got %+v", decision)
+	}
+}
+
 func TestLoadBundleYAMLJSONParity(t *testing.T) {
 	jsonBundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.json")))
 	if err != nil {
@@ -244,12 +338,24 @@ func TestLoadBundleYAMLRejectsDuplicateKeys(t *testing.T) {
 	}
 }
 
+func TestLoadBundleRejectsInvalidExecMatch(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bad.json")
+	data := `{"version":"v1","rules":[{"id":"bad-exec-match","action_type":"fs.read","resource":"file://workspace/README.md","decision":"ALLOW","exec_match":{"argv_patterns":[["git","**"]]}}]}`
+	if err := os.WriteFile(bundlePath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	if _, err := LoadBundle(bundlePath); err == nil || !strings.Contains(err.Error(), "exec_match requires action_type process.exec or *") {
+		t.Fatalf("expected invalid exec_match action type error, got %v", err)
+	}
+}
+
 func TestLoadBundleHashGoldenVectorForSafe(t *testing.T) {
 	bundle, err := LoadBundle(filepath.Clean(filepath.Join("..", "..", "policies", "safe.yaml")))
 	if err != nil {
 		t.Fatalf("load yaml bundle: %v", err)
 	}
-	const expected = "b7e8173c39d43e39188b7544fd27b97bd34800237e9d1afe6bbd9866962b07c9"
+	const expected = "83ae9188b182370f33876f1f7143b29f0a16cef05df4a48b697c78869feec104"
 	if bundle.Hash != expected {
 		t.Fatalf("expected hash %s, got %s", expected, bundle.Hash)
 	}

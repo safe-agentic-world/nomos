@@ -515,7 +515,52 @@ Expected:
 - the file is created
 - no direct non-Nomos tool use is needed for the task
 
-### Scenario 27: Remove the MCP server when you are done
+### Scenario 27: Git push to `main` is denied through Nomos
+
+This is a higher-signal local demo because it shows a realistic dangerous action:
+
+- safe repo inspection is allowed
+- `git push origin main` is denied
+
+The shipped `safe` bundle now allows general git usage through Nomos, but it has an explicit deny rule for `git push`.
+
+Start Claude Code again if needed:
+
+```powershell
+claude
+```
+
+In Claude Code, using your existing `nomos-local` MCP server, run this prompt first:
+
+```text
+Use only Nomos tools. Run nomos.exec with ["git","status"] in the workspace and show me the result.
+```
+
+Expected:
+
+- allowed
+- Claude Code shows repo status through Nomos
+- the allow comes from the `safe-allow-git-exec` rule
+
+Then run this prompt:
+
+```text
+Use only Nomos tools. Run nomos.exec with ["git","push","origin","main"] in the workspace.
+```
+
+Expected:
+
+- denied by Nomos
+- the effective reason should be `deny_by_rule`
+- this demonstrates that general git usage can be allowed while pushes remain blocked by policy
+
+For a cleaner one-shot demo, you can also use:
+
+```text
+Use only Nomos tools. First run ["git","status"], then try ["git","push","origin","main"], and explain which action Nomos allowed and which it denied.
+```
+
+### Scenario 28: Remove the MCP server when you are done
 
 Exit Claude Code, then run:
 
@@ -531,7 +576,7 @@ Expected:
 
 This validates Nomos MCP behavior directly, without Claude Code in the loop.
 
-### Scenario 28: Start Nomos MCP directly
+### Scenario 29: Start Nomos MCP directly
 
 ```powershell
 nomos mcp -c .\config.codex.json -p .\policies\safe.yaml
@@ -545,7 +590,7 @@ Expected:
 
 Stop it with `Ctrl+C`.
 
-### Scenario 29: Quiet mode
+### Scenario 30: Quiet mode
 
 ```powershell
 nomos mcp -c .\config.codex.json -p .\policies\safe.yaml --quiet
@@ -558,7 +603,7 @@ Expected:
 
 ## Phase 6: Direct HTTP Gateway Validation
 
-### Scenario 30: Start the HTTP gateway
+### Scenario 31: Start the HTTP gateway
 
 In terminal 1:
 
@@ -566,7 +611,7 @@ In terminal 1:
 nomos serve -c .\config.codex.json -p .\policies\safe.yaml
 ```
 
-### Scenario 31: Check health and version endpoints
+### Scenario 32: Check health and version endpoints
 
 In terminal 2:
 
@@ -580,7 +625,7 @@ Expected:
 - `/healthz` returns `200`
 - `/version` returns JSON
 
-### Scenario 32: Create a helper to sign agent requests
+### Scenario 33: Create a helper to sign agent requests
 
 Run this once in terminal 2:
 
@@ -600,7 +645,7 @@ function New-NomosAgentSignature {
 }
 ```
 
-### Scenario 33: Allowed HTTP `fs.read`
+### Scenario 34: Allowed HTTP `fs.read`
 
 ```powershell
 $Body = @'
@@ -633,7 +678,7 @@ Expected:
 - `decision` is `ALLOW`
 - content is returned
 
-### Scenario 34: Allowed HTTP `fs.write`
+### Scenario 35: Allowed HTTP `fs.write`
 
 ```powershell
 $Body = @'
@@ -666,7 +711,7 @@ Expected:
 - `decision` is `ALLOW`
 - `bytes_written` is present
 
-### Scenario 35: Missing auth is rejected
+### Scenario 36: Missing auth is rejected
 
 ```powershell
 Invoke-WebRequest `
@@ -680,7 +725,7 @@ Expected:
 
 - HTTP `401`
 
-### Scenario 36: Bad agent signature is rejected
+### Scenario 37: Bad agent signature is rejected
 
 Repeat Scenario 34, but set:
 
@@ -692,7 +737,7 @@ Expected:
 
 - HTTP `401`
 
-### Scenario 37: `/run` behaves like `/action`
+### Scenario 38: `/run` behaves like `/action`
 
 Repeat Scenario 34 and post to:
 
@@ -708,7 +753,7 @@ Stop the gateway with `Ctrl+C` before moving on.
 
 ## Phase 7: Approval Flow
 
-### Scenario 38: Create an approvals-enabled config
+### Scenario 39: Create an approvals-enabled config
 
 ```powershell
 $ApprovalsConfig = Join-Path $TmpDir "config-approvals.json"
@@ -719,7 +764,7 @@ $json.audit.sink = "stdout"
 $json | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 $ApprovalsConfig
 ```
 
-### Scenario 39: Run doctor on the approvals config
+### Scenario 40: Run doctor on the approvals config
 
 ```powershell
 nomos doctor -c $ApprovalsConfig
@@ -729,13 +774,13 @@ Expected:
 
 - `READY`
 
-### Scenario 40: Start the approvals-enabled gateway
+### Scenario 41: Start the approvals-enabled gateway
 
 ```powershell
 nomos serve -c $ApprovalsConfig -p $AllFieldsYaml
 ```
 
-### Scenario 41: Submit a request that requires approval
+### Scenario 42: Submit a request that requires approval
 
 In a second terminal:
 
@@ -771,7 +816,7 @@ Expected:
 - `approval_id` is present
 - `approval_fingerprint` is present
 
-### Scenario 42: Approve the pending request
+### Scenario 43: Approve the pending request
 
 ```powershell
 $ApprovalId = $Resp.approval_id
@@ -786,7 +831,7 @@ Expected:
 
 - response reason is `approval_recorded`
 
-### Scenario 43: Replay the same request with the approval ID
+### Scenario 44: Replay the same request with the approval ID
 
 ```powershell
 $BodyReplay = @"
@@ -819,7 +864,7 @@ Expected:
 - approval gate is satisfied
 - the request is no longer blocked at `REQUIRE_APPROVAL`
 
-### Scenario 44: Deny flow
+### Scenario 45: Deny flow
 
 Repeat Scenario 42 to get a fresh approval, then:
 
@@ -839,7 +884,7 @@ Stop the gateway before moving on.
 
 ## Phase 8: Credentials And Redaction
 
-### Scenario 45: Create a temporary credentials policy and config
+### Scenario 46: Create a temporary credentials policy and config
 
 ```powershell
 $CredsBundle = Join-Path $TmpDir "policy-creds.yaml"
@@ -875,13 +920,13 @@ $json.policy.policy_bundle_path = $CredsBundle
 $json | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 $CredsConfig
 ```
 
-### Scenario 46: Start the gateway with the credentials config
+### Scenario 47: Start the gateway with the credentials config
 
 ```powershell
 nomos serve -c $CredsConfig -p $CredsBundle
 ```
 
-### Scenario 47: Checkout a secret lease
+### Scenario 48: Checkout a secret lease
 
 ```powershell
 $Body = @'
@@ -914,7 +959,7 @@ Expected:
 - `credential_lease_id` is returned
 - the secret value is not returned
 
-### Scenario 48: Use the lease in exec and verify redaction
+### Scenario 49: Use the lease in exec and verify redaction
 
 ```powershell
 $LeaseId = $LeaseResp.credential_lease_id
@@ -953,7 +998,7 @@ Expected:
 - output does not contain `manual-secret-token`
 - output contains a redacted replacement instead
 
-### Scenario 49: Invalid lease binding fails
+### Scenario 50: Invalid lease binding fails
 
 Repeat Scenario 49, but change only `trace_id` to a new value.
 
@@ -968,14 +1013,14 @@ Stop the gateway before moving on.
 
 These are useful, but not required for the basic local proof.
 
-### Scenario 50: OIDC auth path
+### Scenario 51: OIDC auth path
 
 Set up a local RSA keypair, configure `identity.oidc.enabled = true`, mint a valid RS256 JWT, and verify:
 
 - invalid token is rejected
 - valid token is accepted
 
-### Scenario 51: mTLS gateway path
+### Scenario 52: mTLS gateway path
 
 Create local TLS materials, enable:
 
@@ -987,7 +1032,7 @@ Then verify:
 - request without client cert is rejected
 - request with valid client cert is accepted
 
-### Scenario 52: Redirect policy
+### Scenario 53: Redirect policy
 
 Use a policy that allows `net.http_request` with:
 

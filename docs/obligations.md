@@ -23,6 +23,23 @@ They are part of the authorization result and MUST remain deterministic for the 
 - `approval_scope_class`
 - `credential_lease_ids`
 
+## Exec Match vs Exec Allowlist
+
+`exec_match` is not an obligation.
+
+It is a rule-level policy matcher described in [policy-language.md](./policy-language.md) for `process.exec`.
+
+Use the two together like this:
+
+- `exec_match` decides which exec requests a rule applies to
+- `exec_allowlist` constrains which allowed exec requests the executor may actually run
+
+This separation lets operators express:
+
+- broad allow for a command family
+- narrower deny or approval rules for dangerous subcommands
+- executor-side bounding for any allowed command family
+
 ## Deterministic Merge Rules
 
 - LIMITS choose the most restrictive numeric value
