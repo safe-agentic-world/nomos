@@ -70,6 +70,9 @@ func (e *Engine) Explain(action normalize.NormalizedAction) ExplainDetails {
 		if !matchRisk(rule.RiskFlags, risk) {
 			continue
 		}
+		if !matchExec(rule, action) {
+			continue
+		}
 		matched = append(matched, rule)
 	}
 	denyIDs := make([]string, 0)
@@ -107,6 +110,7 @@ func (e *Engine) Explain(action normalize.NormalizedAction) ExplainDetails {
 					"agent":       true,
 					"environment": true,
 					"risk_flags":  true,
+					"exec_match":  true,
 				},
 			})
 		}

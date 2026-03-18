@@ -262,6 +262,85 @@ func TestServiceExecRequiresAllowlist(t *testing.T) {
 	}
 }
 
+func TestServiceExecPolicyCanDenyProtectedBranchPush(t *testing.T) {
+	dir := t.TempDir()
+	bundle := policy.Bundle{
+		Version: "v1",
+		Rules: []policy.Rule{
+			{
+				ID:           "allow-git",
+				ActionType:   "process.exec",
+				Resource:     "file://workspace/",
+				Decision:     policy.DecisionAllow,
+				Principals:   []string{"system"},
+				Agents:       []string{"nomos"},
+				Environments: []string{"dev"},
+				ExecMatch: &policy.ExecMatch{
+					ArgvPatterns: [][]string{{"git", "**"}},
+				},
+				Obligations: map[string]any{
+					"sandbox_mode":   "local",
+					"exec_allowlist": []any{[]any{"git"}},
+				},
+			},
+			{
+				ID:           "deny-protected-branch-push",
+				ActionType:   "process.exec",
+				Resource:     "file://workspace/",
+				Decision:     policy.DecisionDeny,
+				Principals:   []string{"system"},
+				Agents:       []string{"nomos"},
+				Environments: []string{"dev"},
+				ExecMatch: &policy.ExecMatch{
+					ArgvPatterns: [][]string{
+						{"git", "push", "**", "main"},
+						{"git", "push", "**", "master"},
+					},
+				},
+			},
+		},
+		Hash: "test",
+	}
+	engine := policy.NewEngine(bundle)
+	reader := executor.NewFSReader(dir, 32, 10)
+	writer := executor.NewFSWriter(dir, 32)
+	patcher := executor.NewPatchApplier(dir, 32)
+	execRunner := executor.NewExecRunner(dir, 32)
+	httpRunner := executor.NewHTTPRunner(32)
+	recorder := &recordSink{}
+	svc := New(engine, reader, writer, patcher, execRunner, httpRunner, recorder, redact.DefaultRedactor(), nil, nil, "local", func() time.Time { return time.Unix(0, 0) })
+
+	act, err := action.ToAction(action.Request{
+		SchemaVersion: "v1",
+		ActionID:      "act4b",
+		ActionType:    "process.exec",
+		Resource:      "file://workspace/",
+		Params:        []byte(`{"argv":["git","push","origin","main"],"cwd":"","env_allowlist_keys":[]}`),
+		TraceID:       "trace4b",
+		Context:       action.Context{Extensions: map[string]json.RawMessage{}},
+	}, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	})
+	if err != nil {
+		t.Fatalf("to action: %v", err)
+	}
+	resp, err := svc.Process(act)
+	if err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if resp.Decision != policy.DecisionDeny {
+		t.Fatalf("expected deny, got %s", resp.Decision)
+	}
+	if resp.Reason != "deny_by_rule" {
+		t.Fatalf("expected deny_by_rule, got %s", resp.Reason)
+	}
+	if len(resp.Obligations) != 0 {
+		t.Fatalf("expected deny response to avoid allow obligations, got %+v", resp.Obligations)
+	}
+}
+
 func TestServiceSandboxRequired(t *testing.T) {
 	dir := t.TempDir()
 	bundle := policy.Bundle{

@@ -62,6 +62,12 @@ rules:
   - empty list means “any”.
   - `*` matches any.
 - `risk_flags` is an optional list of required flags; all must be present.
+- `exec_match` is an optional `process.exec` matcher over normalized `argv` tokens:
+  - it applies only to `action_type: process.exec` or `action_type: *`
+  - `argv_patterns` is an array of token patterns; any matching pattern is sufficient
+  - tokens match exactly unless the token is `*` or `**`
+  - `*` matches exactly one argv token
+  - `**` matches zero or more argv tokens
 - `id` is required and must be stable across bundle versions.
 
 ## Determinism
@@ -110,3 +116,50 @@ Current starter bundles shipped in-repo:
 - `policies/guarded-prod.{json,yaml}` (stricter allowlists and stronger sandbox expectations)
 - `policies/unsafe.{json,yaml}` (explicit opt-in)
 - `policies/all-fields.example.{json,yaml}` (schema and obligation surface reference bundle)
+
+## Process Exec Matching
+
+Nomos now supports rule-level argv matching for `process.exec` without introducing tool-specific action types.
+
+Rule-level `exec_match` is part of authorization matching.
+
+Executor-side `exec_allowlist` remains an obligation that constrains what an allowed `process.exec` action may actually run.
+
+These are complementary:
+
+- use `exec_match` to express broad allow / narrow deny / approval patterns in policy
+- use `exec_allowlist` to bound actual execution at enforcement time
+
+Example:
+
+```yaml
+version: v1
+rules:
+  - id: allow-git
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["git", "**"]
+    obligations:
+      sandbox_mode: local
+      exec_allowlist:
+        - ["git"]
+
+  - id: deny-push-main
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["git", "push", "**", "main"]
+        - ["git", "push", "**", "master"]
+```
+
+With deny-wins semantics:
+
+- `git status` matches `allow-git` and can proceed if the obligations permit it
+- `git push origin main` matches both rules, but the narrower `DENY` wins
+
+This matching model is generic and works for any CLI with normalized argv tokens.

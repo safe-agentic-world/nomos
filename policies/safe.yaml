@@ -56,3 +56,23 @@ rules:
     decision: ALLOW
     obligations:
       sandbox_mode: local
+  - id: safe-deny-git-push
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["git", "push", "**"]
+        - ["git", "push"]
+  - id: safe-allow-git-exec
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["git", "**"]
+        - ["git"]
+    obligations:
+      sandbox_mode: local
+      exec_allowlist:
+        - ["git"]

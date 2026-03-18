@@ -35,7 +35,12 @@ type Rule struct {
 	Agents       []string       `json:"agents,omitempty" yaml:"agents,omitempty"`
 	Environments []string       `json:"environments,omitempty" yaml:"environments,omitempty"`
 	RiskFlags    []string       `json:"risk_flags,omitempty" yaml:"risk_flags,omitempty"`
+	ExecMatch    *ExecMatch     `json:"exec_match,omitempty" yaml:"exec_match,omitempty"`
 	Obligations  map[string]any `json:"obligations,omitempty" yaml:"obligations,omitempty"`
+}
+
+type ExecMatch struct {
+	ArgvPatterns [][]string `json:"argv_patterns,omitempty" yaml:"argv_patterns,omitempty"`
 }
 
 type LoadOptions struct {
@@ -232,6 +237,24 @@ func (b Bundle) Validate() error {
 		}
 		if rule.Decision != DecisionAllow && rule.Decision != DecisionDeny && rule.Decision != DecisionRequireApproval {
 			return fmt.Errorf("rule %s has invalid decision", rule.ID)
+		}
+		if rule.ExecMatch != nil {
+			if rule.ActionType != "process.exec" && rule.ActionType != "*" {
+				return fmt.Errorf("rule %s exec_match requires action_type process.exec or *", rule.ID)
+			}
+			if len(rule.ExecMatch.ArgvPatterns) == 0 {
+				return fmt.Errorf("rule %s exec_match.argv_patterns is required", rule.ID)
+			}
+			for idx, pattern := range rule.ExecMatch.ArgvPatterns {
+				if len(pattern) == 0 {
+					return fmt.Errorf("rule %s exec_match.argv_patterns[%d] must not be empty", rule.ID, idx)
+				}
+				for tokenIdx, token := range pattern {
+					if token == "" {
+						return fmt.Errorf("rule %s exec_match.argv_patterns[%d][%d] must not be empty", rule.ID, idx, tokenIdx)
+					}
+				}
+			}
 		}
 	}
 	return nil
