@@ -22,7 +22,7 @@ Nomos is **agent-agnostic** and **model-agnostic**. You can put it in front of d
 
 Agents can be useful, but they are still one bad tool call away from:
 
-- refunding money, booking something for free, or taking the wrong business action
+- wrong and unwanted business actions like refunding money, booking something for free due to prompt injection. 
 - pushing code, shipping changes, or running destructive commands like `terraform destroy`, `git push origin main`, or `kubectl delete`
 - changing or deleting files you did not ask it to touch
 - using powerful credentials in ways you never intended
