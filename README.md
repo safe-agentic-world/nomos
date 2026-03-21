@@ -20,25 +20,22 @@ Nomos is agent-agnostic and model-agnostic. You can put it in front of different
 
 ## Why Nomos Exists
 
-Agents can be genuinely useful, but they are still one bad tool call away from:
+Agents can be useful, but they are still one bad tool call away from:
 
 - refunding money, booking something for free, or taking the wrong business action
-- pushing code, shipping changes, or running destructive commands like `terraform destroy`, or run `git push origin main`, or `kubectl delete`
+- pushing code, shipping changes, or running destructive commands like `terraform destroy`, `git push origin main`, or `kubectl delete`
 - changing or deleting files you did not ask it to touch
 - using powerful credentials in ways you never intended
 
-If your agent can still call arbitrary APIs, leak customer data, your safety boundary is at risk. Prompt injection, tool misuse, and over-broad credentials are real-world side effects with current day AI agents. 
-Nomos is exactly built to enforce that boundary based on Zero trust security principles. Nomos does not restrict or control what the model thinks or its reasoining capabilities. It controls what the agent is actually allowed to do.
+If your agent can still call arbitrary APIs or leak customer data, your safety boundary is at risk. Prompt injection, tool misuse, and over-broad credentials turn into real side effects fast. Nomos applies zero-trust controls at the moment an agent tries to do something real. It does not control the model's reasoning. It controls what the agent is actually allowed to do.
 
 With Nomos:
 
 - routed actions hit one control point before they happen
 - the same normalized action gets the same decision under the same identity, environment, and policy bundle
 - sensitive actions can be routed to manual approval
-- approvals are bound to action fingerprints, so they cannot be replayed onto different inputs on the mediated path
 - agents do not need to hold long-lived enterprise credentials on the Nomos-governed path
-- output can be redacted before it leaves the Nomos-mediated path
-- governed actions produce audit evidence and replayable traces
+- outputs can be redacted and governed actions produce audit evidence
 - the same control model works across MCP and HTTP integrations
 - behavior stays flexible because you shape it with your own policies and configs
 
