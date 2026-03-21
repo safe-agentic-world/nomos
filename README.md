@@ -350,6 +350,10 @@ Security and standards:
 - browse [`good first issue`](https://github.com/safe-agentic-world/nomos/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) if you want a place to start
 - read [CONTRIBUTING.md](./CONTRIBUTING.md) if you want to help shape the project
 
+## Project Status
+
+Nomos is still **pre-v1.0.0**. The core model is usable today, but interfaces, policy surface, and integrations may still evolve before a stable `v1`.
+
 Project governance:
 
 - [SECURITY.md](./SECURITY.md)
