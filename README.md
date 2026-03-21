@@ -15,7 +15,7 @@ It sits between agents and real actions such as reading files, changing code, ru
 - `DENY`
 - `REQUIRE_APPROVAL`
 
-If an agent can still read `.env`, run `git push`, call arbitrary APIs, issue refunds, book free tickets, leak customer data, or trigger `terraform destroy`, your safety boundary is advisory. Prompt injection, tool misuse, and over-broad credentials turn into real-world side effects fast. Nomos is built to make that boundary explicit.
+If your agent can still call arbitrary APIs, issue unwanted refunds, book free tickets, leak customer data, trigger `terraform destroy`, or run `git push origin main`, your safety boundary is at risk. Prompt injection, tool misuse, and over-broad credentials turn into real-world side effects fast. Nomos is built to enforce that boundary.
 
 ## Why It Exists
 
@@ -29,6 +29,18 @@ Agents can be genuinely useful, but they are still one bad tool call away from:
 - using powerful credentials in ways you never intended
 
 Nomos does not try to control what the model thinks. It controls what the agent is actually allowed to do.
+
+With Nomos:
+
+- risky actions hit one control point before they happen
+- policy returns `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`
+- sensitive actions can be routed to manual approval
+- actions are normalized before policy evaluation, so decisions are deterministic
+- approvals are bound to action fingerprints, so they cannot be replayed onto different inputs
+- output can be redacted before it leaves the boundary
+- audit evidence is produced for governed actions
+- the same action can be tested, explained, and replayed against policy in a repeatable way
+- the same boundary works across MCP and HTTP integrations
 
 ## Demo First
 
