@@ -24,27 +24,21 @@ Agents can be genuinely useful, but they are still one bad tool call away from:
 
 - refunding money, booking something for free, or taking the wrong business action
 - pushing code, shipping changes, or running destructive commands like `terraform destroy`, or run `git push origin main`, or `kubectl delete`
-- changing or deleting files you did not ask them to touch
-- sending private data to the wrong place
+- changing or deleting files you did not ask it to touch
 - using powerful credentials in ways you never intended
 
-If your agent can still call arbitrary APIs, leak customer data, your safety boundary is at risk. Prompt injection, tool misuse, and over-broad credentials are real-world side effects with current day AI agents. Nomos is exactly built to enforce that boundary based on Zero trust security principles.
-
-Nomos does not restrict or control what the model thinks or its reasoining capabilities. It controls what the agent is actually allowed to do.
+If your agent can still call arbitrary APIs, leak customer data, your safety boundary is at risk. Prompt injection, tool misuse, and over-broad credentials are real-world side effects with current day AI agents. 
+Nomos is exactly built to enforce that boundary based on Zero trust security principles. Nomos does not restrict or control what the model thinks or its reasoining capabilities. It controls what the agent is actually allowed to do.
 
 With Nomos:
 
 - risky actions hit one control point before they happen
-- policy returns `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`
 - the same normalized action gets the same decision under the same identity, environment, and policy bundle
 - sensitive actions can be routed to manual approval
 - approvals are bound to action fingerprints, so they cannot be replayed onto different inputs
 - agents do not need to hold long-lived enterprise credentials
-- credentials can be brokered with least privilege and short-lived bindings
 - output can be redacted before it leaves the boundary
 - governed actions produce audit evidence and replayable traces
-- the same action can be tested, explained, and replayed against policy in a repeatable way
-- budgets, limits, and circuit breakers can bound runaway behavior
 - the same boundary works across MCP and HTTP integrations
 - behavior stays flexible because you shape it with your own policies and configs
 
@@ -103,10 +97,6 @@ go install github.com/safe-agentic-world/nomos/cmd/nomos@latest
 ```bash
 curl -fsSL https://raw.githubusercontent.com/safe-agentic-world/nomos/main/install.sh | sh
 ```
-
-## How Nomos Fits
-
-Nomos is agent-agnostic. You can put it in front of different agent frameworks and clients through two main integration paths:
 
 ### MCP
 
@@ -187,9 +177,7 @@ See:
 - [docs/approvals.md](./docs/approvals.md)
 - [docs/audit-schema.md](./docs/audit-schema.md)
 
-Nomos is not an agent framework, a prompt guardrail library, a sandbox runtime by itself, or a secrets manager. It is the layer that decides whether an agent gets to carry out a real action.
-
-## Real-World Use Cases
+## Few More Use Cases
 
 ### Coding Agents
 
@@ -220,30 +208,35 @@ See:
 
 ```mermaid
 flowchart LR
-  A[Agent or MCP Client] --> B[HTTP or MCP Ingress]
+  A[Agent or MCP Client] --> B[HTTP or MCP Boundary]
   subgraph N[Nomos Execution Boundary]
-    B --> C[Authenticate Identity]
-    C --> D[Validate and Normalize]
-    D --> E[Policy Engine]
-    E --> F[Approval Check When Required]
-    F --> G[Executor Layer]
-    G --> H[Redaction and Output Caps]
-    H --> I[Response]
-    E -.-> J[Audit and Telemetry]
+    B --> C[Verify Identity]
+    C --> D[Validate and Normalize Action]
+    D --> E[Evaluate Policy]
+    E --> F{Decision}
+    F -->|ALLOW| G[Execute]
+    F -->|REQUIRE_APPROVAL| H[Create Approval]
+    F -->|DENY| I[Return Denial]
+    G --> J[Redact and Cap Output]
+    H --> I
+    J --> K[Return Response]
+    E -.-> L[Audit and Telemetry]
+    G -.-> L
+    H -.-> L
+    I -.-> L
   end
 ```
 
-Core path:
+The flow is simple:
 
-1. authenticate identity
-2. validate and normalize the action
-3. evaluate policy deterministically
-4. require approval when policy says so
-5. execute only if allowed
-6. redact before returning output
-7. emit audit evidence
+1. an agent tries to do something real
+2. Nomos verifies who is asking and normalizes the action
+3. policy returns `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`
+4. only allowed actions execute
+5. outputs are redacted before they come back
+6. audit evidence is recorded for the whole path
 
-Placeholder: add an architecture diagram image here if you want a branded version instead of Mermaid.
+That same model works whether the agent reaches Nomos through MCP or HTTP.
 
 ## Guarantees And Deployment Modes
 
