@@ -18,6 +18,8 @@ This is the 2026 MCP-native architecture path where:
 ## What v1 Supports
 
 - configured upstream MCP servers over `stdio`
+- standards-compatible upstream stdio interoperability with common newline-delimited JSON MCP server implementations
+- compatibility fallback for framed upstream MCP responses when encountered
 - deterministic downstream naming: `upstream.<server>.<tool>`
 - policy-visible forwarded action identity:
   - `action_type`: `mcp.call`
@@ -105,5 +107,7 @@ Nomos then re-evaluates and only forwards on a valid approved retry.
 ## Notes
 
 - Upstream tool enumeration fails closed. If Nomos cannot initialize an upstream server or list its tools, startup fails.
+- Upstream stdio compatibility failures are reported with stage-aware errors such as launch, initialize, tool enumeration, or tool invocation.
+- Nomos expects real upstream MCP stdio servers to follow ecosystem-standard newline-delimited JSON messaging. Framed upstream responses are also accepted for compatibility.
 - Direct Nomos MCP tools still work unchanged. Upstream gateway mode is additive.
 - `nomos.capabilities` includes a `forwarded_tools` section when upstream MCP servers are configured.

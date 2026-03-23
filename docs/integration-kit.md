@@ -163,6 +163,7 @@ What this mode does:
 - Nomos acts as the MCP server to the agent
 - Nomos acts as an MCP client to configured upstream `stdio` servers
 - forwarded upstream tools appear downstream as `upstream.<server>.<tool>`
+- upstream `stdio` compatibility is hardened for ecosystem-standard newline-delimited JSON MCP servers, while framed upstream responses are still accepted for compatibility
 - each forwarded call is evaluated as:
   - `action_type`: `mcp.call`
   - `resource`: `mcp://<server>/<tool>`
