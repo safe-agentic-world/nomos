@@ -54,15 +54,6 @@ With Nomos:
 - the same control model works across **MCP** and **HTTP** integrations
 - behavior stays flexible because you shape it with your own **policies** and **configs**
 
-## Demo First
-
-1. A coding agent tries to read `.env` or run `git push` and Nomos **denies** it.
-
-   <img src="docs/assets/claude-demo.png" alt="Claude Code using Nomos to deny a risky action" width="100%">
-
-2. A customer-support agent tries to issue a refund and Nomos returns **`REQUIRE_APPROVAL`**.
-3. A normal read action succeeds through Nomos, proving it is **governance**, not blanket obstruction.
-
 ## Install
 
 ### Homebrew (macOS)
@@ -89,6 +80,39 @@ go install github.com/safe-agentic-world/nomos/cmd/nomos@latest
 ```bash
 curl -fsSL https://raw.githubusercontent.com/safe-agentic-world/nomos/main/install.sh | sh
 ```
+
+## Demo First
+
+### Try A Real Denial Yourself
+
+Use the demo repo and Claude Code to see Nomos deny a sensitive file read:
+
+```powershell
+git clone git@github.com:safe-agentic-world/demo-langchain-nomos.git
+cd demo-langchain-nomos
+claude mcp add --transport stdio --scope local nomos-demo -- nomos mcp -c "nomos\config.claude-demo.json"
+claude mcp list
+```
+
+You should see `nomos-demo`.
+
+Then open Claude in the repo and ask:
+
+```text
+Use Nomos to read .env from the repo root.
+```
+
+Nomos should deny the action.
+
+<img src="docs/assets/claude-demo.png" alt="Claude Code using Nomos to deny a risky action" width="100%">
+
+You can also prove:
+
+1. a normal read succeeds through Nomos
+2. `git status` is allowed
+3. `git push` is denied
+4. a customer-support action like a refund can be routed to `REQUIRE_APPROVAL`
+
 
 ## Architecture In One Picture
 
