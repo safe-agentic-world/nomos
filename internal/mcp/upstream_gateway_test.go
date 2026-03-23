@@ -156,6 +156,57 @@ func TestNewServerFailsClosedWhenUpstreamRegistryCannotLoad(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected upstream registry load failure")
 	}
+	if !strings.Contains(err.Error(), `upstream mcp server "broken"`) {
+		t.Fatalf("expected upstream server name in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "load upstream mcp server") {
+		t.Fatalf("expected stage-aware upstream load failure, got %v", err)
+	}
+}
+
+func TestUpstreamGatewaySupportsFramedServerResponses(t *testing.T) {
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	bundle := `{"version":"v1","rules":[{"id":"allow-refund","action_type":"mcp.call","resource":"mcp://retail/refund.request","decision":"ALLOW","principals":["system"],"agents":["nomos"],"environments":["dev"]}]}`
+	if err := os.WriteFile(bundlePath, []byte(bundle), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	server, err := NewServerWithRuntimeOptions(bundlePath, identity.VerifiedIdentity{
+		Principal:   "system",
+		Agent:       "nomos",
+		Environment: "dev",
+	}, dir, 1024, 10, false, false, "local", RuntimeOptions{
+		LogLevel:  "error",
+		LogFormat: "text",
+		ErrWriter: io.Discard,
+		UpstreamServers: []UpstreamServerConfig{{
+			Name:      "retail",
+			Transport: "stdio",
+			Command:   os.Args[0],
+			Args:      []string{"-test.run=TestUpstreamMCPHelperProcess", "--", "framed-retail"},
+			Env: map[string]string{
+				"GO_WANT_UPSTREAM_MCP_HELPER": "1",
+			},
+			Workdir: dir,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+
+	resp := server.handleRequest(Request{
+		ID:     "allow-framed",
+		Method: "upstream.retail.refund.request",
+		Params: mustJSONBytes(map[string]any{"order_id": "ORD-1001", "reason": "damaged"}),
+	})
+	if resp.Error != "" {
+		t.Fatalf("unexpected error: %+v", resp)
+	}
+	result := resp.Result.(action.Response)
+	if result.Decision != "ALLOW" || result.ExecutionMode != "mcp_forwarded" {
+		t.Fatalf("expected framed forwarded ALLOW response, got %+v", result)
+	}
 }
 
 func newUpstreamGatewayTestServer(t *testing.T, dir, bundle string, approvals bool) *Server {
@@ -198,13 +249,17 @@ func TestUpstreamMCPHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_UPSTREAM_MCP_HELPER") != "1" {
 		return
 	}
-	if len(os.Args) < 4 || os.Args[3] != "retail" {
+	if len(os.Args) < 4 {
+		os.Exit(2)
+	}
+	mode := os.Args[3]
+	if mode != "retail" && mode != "framed-retail" {
 		os.Exit(2)
 	}
 	reader := bufio.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
 	for {
-		body, err := readFramedPayload(reader)
+		body, err := readMCPPayload(reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return
@@ -220,7 +275,7 @@ func TestUpstreamMCPHelperProcess(t *testing.T) {
 		method, _ := req["method"].(string)
 		switch method {
 		case "initialize":
-			writeUpstreamHelperResponse(writer, req["id"], map[string]any{
+			writeUpstreamHelperResponse(writer, mode, req["id"], map[string]any{
 				"protocolVersion": SupportedProtocolVersion,
 				"capabilities": map[string]any{
 					"tools": map[string]any{"listChanged": false},
@@ -233,7 +288,7 @@ func TestUpstreamMCPHelperProcess(t *testing.T) {
 		case "notifications/initialized":
 			continue
 		case "tools/list":
-			writeUpstreamHelperResponse(writer, req["id"], map[string]any{
+			writeUpstreamHelperResponse(writer, mode, req["id"], map[string]any{
 				"tools": []map[string]any{{
 					"name":        "refund.request",
 					"description": "Submit a retail refund request.",
@@ -253,7 +308,7 @@ func TestUpstreamMCPHelperProcess(t *testing.T) {
 			args, _ := params["arguments"].(map[string]any)
 			orderID, _ := args["order_id"].(string)
 			reason, _ := args["reason"].(string)
-			writeUpstreamHelperResponse(writer, req["id"], map[string]any{
+			writeUpstreamHelperResponse(writer, mode, req["id"], map[string]any{
 				"content": []map[string]any{{
 					"type": "text",
 					"text": fmt.Sprintf("refund accepted for %s\nreason: %s", orderID, reason),
@@ -261,12 +316,12 @@ func TestUpstreamMCPHelperProcess(t *testing.T) {
 				"isError": false,
 			}, nil)
 		default:
-			writeUpstreamHelperResponse(writer, req["id"], nil, &rpcError{Code: -32601, Message: "method not found"})
+			writeUpstreamHelperResponse(writer, mode, req["id"], nil, &rpcError{Code: -32601, Message: "method not found"})
 		}
 	}
 }
 
-func writeUpstreamHelperResponse(writer *bufio.Writer, id any, result any, rpcErr *rpcError) {
+func writeUpstreamHelperResponse(writer *bufio.Writer, mode string, id any, result any, rpcErr *rpcError) {
 	resp := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
@@ -277,8 +332,13 @@ func writeUpstreamHelperResponse(writer *bufio.Writer, id any, result any, rpcEr
 		resp["result"] = result
 	}
 	data, _ := json.Marshal(resp)
-	_, _ = fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(data))
-	_, _ = writer.Write(data)
+	if mode == "framed-retail" {
+		_, _ = fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(data))
+		_, _ = writer.Write(data)
+	} else {
+		_, _ = writer.Write(data)
+		_ = writer.WriteByte('\n')
+	}
 	_ = writer.Flush()
 }
 
@@ -306,14 +366,14 @@ func TestHelperCommandCanStart(t *testing.T) {
 	}()
 	writer := bufio.NewWriter(stdin)
 	reader := bufio.NewReader(stdout)
-	if err := writeRPCRequest(writer, "initialize", map[string]any{
+	if err := writeUpstreamRPCRequest(writer, "initialize", "1", map[string]any{
 		"protocolVersion": SupportedProtocolVersion,
 		"capabilities":    map[string]any{},
 		"clientInfo":      map[string]any{"name": "test", "version": "v1"},
 	}); err != nil {
 		t.Fatalf("write initialize: %v", err)
 	}
-	resp, err := readRPCResponse(reader)
+	resp, err := readUpstreamRPCResponse(reader)
 	if err != nil {
 		t.Fatalf("read initialize: %v", err)
 	}

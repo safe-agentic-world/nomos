@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 type upstreamTool struct {
@@ -139,18 +140,30 @@ func callUpstreamRPC(config UpstreamServerConfig, method string, params map[stri
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	var stderrBuf bytes.Buffer
+	var stderrReadErr error
+	var stderrWG sync.WaitGroup
+	stderrWG.Add(1)
+	go func() {
+		defer stderrWG.Done()
+		if stderr == nil {
+			return
+		}
+		_, stderrReadErr = io.Copy(&stderrBuf, stderr)
+	}()
 	defer func() {
 		_ = stdin.Close()
 		_ = stdout.Close()
-		_ = stderr.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 			_, _ = cmd.Process.Wait()
 		}
+		_ = stderr.Close()
+		stderrWG.Wait()
 	}()
 	reader := bufio.NewReader(stdout)
 	writer := bufio.NewWriter(stdin)
-	if err := writeRPCRequest(writer, "initialize", map[string]any{
+	if err := writeUpstreamRPCRequest(writer, "initialize", "initialize", map[string]any{
 		"protocolVersion": SupportedProtocolVersion,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
@@ -158,35 +171,35 @@ func callUpstreamRPC(config UpstreamServerConfig, method string, params map[stri
 			"version": "v1",
 		},
 	}); err != nil {
-		return nil, err
+		return nil, upstreamStageError(config, "initialize", err, stderrSnapshot(&stderrBuf, stderrReadErr))
 	}
-	initResp, err := readRPCResponse(reader)
+	initResp, err := readUpstreamRPCResponse(reader)
 	if err != nil {
-		return nil, err
+		return nil, upstreamStageError(config, "initialize", err, stderrSnapshot(&stderrBuf, stderrReadErr))
 	}
 	if initResp.Error != nil {
-		return nil, errors.New(initResp.Error.Message)
+		return nil, upstreamStageError(config, "initialize", errors.New(initResp.Error.Message), stderrSnapshot(&stderrBuf, stderrReadErr))
 	}
-	if err := writeRPCNotification(writer, "notifications/initialized", map[string]any{}); err != nil {
-		return nil, err
+	if err := writeUpstreamRPCNotification(writer, "notifications/initialized", map[string]any{}); err != nil {
+		return nil, upstreamStageError(config, "initialize", err, stderrSnapshot(&stderrBuf, stderrReadErr))
 	}
-	if err := writeRPCRequest(writer, method, params); err != nil {
-		return nil, err
+	if err := writeUpstreamRPCRequest(writer, method, "2", params); err != nil {
+		return nil, upstreamStageError(config, method, err, stderrSnapshot(&stderrBuf, stderrReadErr))
 	}
-	resp, err := readRPCResponse(reader)
+	resp, err := readUpstreamRPCResponse(reader)
 	if err != nil {
-		return nil, err
+		return nil, upstreamStageError(config, method, err, stderrSnapshot(&stderrBuf, stderrReadErr))
 	}
 	if resp.Error != nil {
-		return nil, errors.New(resp.Error.Message)
+		return nil, upstreamStageError(config, method, errors.New(resp.Error.Message), stderrSnapshot(&stderrBuf, stderrReadErr))
 	}
 	return resp.Result, nil
 }
 
-func writeRPCRequest(writer *bufio.Writer, method string, params map[string]any) error {
+func writeUpstreamRPCRequest(writer *bufio.Writer, method, id string, params map[string]any) error {
 	req := map[string]any{
 		"jsonrpc": "2.0",
-		"id":      "1",
+		"id":      id,
 		"method":  method,
 		"params":  params,
 	}
@@ -194,16 +207,16 @@ func writeRPCRequest(writer *bufio.Writer, method string, params map[string]any)
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(data)); err != nil {
+	if _, err := writer.Write(data); err != nil {
 		return err
 	}
-	if _, err := writer.Write(data); err != nil {
+	if err := writer.WriteByte('\n'); err != nil {
 		return err
 	}
 	return writer.Flush()
 }
 
-func writeRPCNotification(writer *bufio.Writer, method string, params map[string]any) error {
+func writeUpstreamRPCNotification(writer *bufio.Writer, method string, params map[string]any) error {
 	req := map[string]any{
 		"jsonrpc": "2.0",
 		"method":  method,
@@ -213,17 +226,17 @@ func writeRPCNotification(writer *bufio.Writer, method string, params map[string
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(data)); err != nil {
+	if _, err := writer.Write(data); err != nil {
 		return err
 	}
-	if _, err := writer.Write(data); err != nil {
+	if err := writer.WriteByte('\n'); err != nil {
 		return err
 	}
 	return writer.Flush()
 }
 
-func readRPCResponse(reader *bufio.Reader) (*rpcResponse, error) {
-	body, err := readFramedPayload(reader)
+func readUpstreamRPCResponse(reader *bufio.Reader) (*rpcResponse, error) {
+	body, err := readMCPPayload(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -234,6 +247,33 @@ func readRPCResponse(reader *bufio.Reader) (*rpcResponse, error) {
 		return nil, err
 	}
 	return &resp, nil
+}
+
+func readMCPPayload(reader *bufio.Reader) ([]byte, error) {
+	for {
+		peek, err := reader.Peek(1)
+		if err != nil {
+			return nil, err
+		}
+		switch peek[0] {
+		case '\r', '\n', ' ', '\t':
+			if _, err := reader.ReadByte(); err != nil {
+				return nil, err
+			}
+			continue
+		case '{', '[':
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				if errors.Is(err, io.EOF) && len(bytes.TrimSpace(line)) > 0 {
+					return bytes.TrimSpace(line), nil
+				}
+				return nil, err
+			}
+			return bytes.TrimSpace(line), nil
+		default:
+			return readFramedPayload(reader)
+		}
+	}
 }
 
 func stringifyUpstreamCallResult(result any) (string, error) {
@@ -301,4 +341,33 @@ func readAllStderr(r io.Reader) ([]byte, error) {
 		return nil, nil
 	}
 	return io.ReadAll(r)
+}
+
+func stderrSnapshot(buf *bytes.Buffer, readErr error) string {
+	if readErr != nil || buf == nil {
+		return ""
+	}
+	return strings.TrimSpace(buf.String())
+}
+
+func upstreamStageError(config UpstreamServerConfig, stage string, err error, stderr string) error {
+	if err == nil {
+		return nil
+	}
+	msg := fmt.Sprintf("upstream server %q failed during %s: %v", config.Name, stage, err)
+	if stderr != "" {
+		msg += "; stderr=" + summarizeStderr(stderr)
+	}
+	return errors.New(msg)
+}
+
+func summarizeStderr(stderr string) string {
+	stderr = strings.TrimSpace(stderr)
+	if stderr == "" {
+		return ""
+	}
+	if len(stderr) > 240 {
+		return stderr[:240] + "..."
+	}
+	return stderr
 }

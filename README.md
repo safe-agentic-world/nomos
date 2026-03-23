@@ -179,7 +179,7 @@ See:
 - [examples/local-tooling/claude-code-mcp.json](./examples/local-tooling/claude-code-mcp.json)
 - [examples/local-tooling/codex.mcp.json](./examples/local-tooling/codex.mcp.json)
 
-Nomos can also run as an additive MCP governance gateway in front of configured upstream MCP servers. In that mode, downstream agents keep their MCP client architecture while Nomos governs forwarded tools as `mcp.call` actions.
+Nomos can also run as an additive MCP governance gateway in front of configured upstream MCP servers. In that mode, downstream agents keep their MCP client architecture while Nomos governs forwarded tools as `mcp.call` actions. Upstream `stdio` compatibility is hardened for real newline-delimited JSON MCP servers, with framed upstream responses still accepted for compatibility.
 
 ### HTTP
 
