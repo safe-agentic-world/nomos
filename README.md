@@ -12,7 +12,7 @@
 </div>
 
 <div align="center">
-  <h3>The zero-trust control plane for AI agent side effects.</h3>
+  <h3>Nomos is an execution firewall for AI agents.</h3>
 </div>
 
 <div align="center">
@@ -22,15 +22,14 @@
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/safe-agentic-world/nomos" alt="License"></a>
 </div>
 
-**Nomos is an execution firewall for AI agents.**
 
-It sits between agents and **real actions** such as reading files, changing code, running commands, calling APIs, and using credentials. Instead of trusting prompts or hoping the agent behaves, Nomos makes one explicit decision at the **execution boundary**:
+Nomos is an **agent-agnostic** and **model-agnostic** firewall built based on zero trust security principles. It sits between agents and real actions. Instead of trusting prompts or hoping the agent behaves, Nomos makes one explicit decision at the **execution boundary**:
 
 - `ALLOW`
 - `DENY`
 - `REQUIRE_APPROVAL`
 
-Nomos is **agent-agnostic** and **model-agnostic**. You can put it in front of different agent frameworks, different model providers, and different tool runtimes, then shape its behavior with your own **policies** and **configs**.
+ You can put it in front of different agent frameworks, different model providers, and different tool runtimes, then shape its behavior with your own **policies** and **configs**.
 
 
 ## Why Nomos Exists
@@ -42,7 +41,7 @@ Agents can be useful, but they are still one bad tool call away from:
 - changing or deleting files you did not ask it to touch
 - using powerful credentials in ways you never intended
 
-If your agent can still call arbitrary APIs or leak customer data, your safety boundary is **at risk**. **Prompt injection**, tool misuse, and over-broad credentials turn into real side effects fast. Nomos applies **zero-trust controls** at the moment an agent tries to do something real. It does not control the model's reasoning. It controls what the agent is actually allowed to do.
+If you do not govern agent actions your safety boundary is at risk. **Prompt injection**, tool misuse, and over-broad credentials turn into real side effects fast. Nomos applies **zero-trust controls** at the moment an agent tries to do something real. It does not restrict the model's reasoning. It controls what the agent is actually allowed to do.
 
 With Nomos:
 
@@ -56,9 +55,10 @@ With Nomos:
 
 ## Demo First
 
-The fastest way to understand Nomos is to watch the **same agent** attempt the **same action** with and without Nomos in front of it.
-
 1. A coding agent tries to read `.env` or run `git push` and Nomos **denies** it.
+
+   <img src="docs/assets/claude-demo.png" alt="Claude Code using Nomos to deny a risky action" width="100%">
+
 2. A customer-support agent tries to issue a refund and Nomos returns **`REQUIRE_APPROVAL`**.
 3. A normal read action succeeds through Nomos, proving it is **governance**, not blanket obstruction.
 
