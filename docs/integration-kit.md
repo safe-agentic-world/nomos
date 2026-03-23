@@ -78,11 +78,18 @@ nomos.exe mcp -c .\examples\quickstart\config.quickstart.json
 - allowed: read `file://workspace/README.md`
 - denied: read `file://workspace/.env`
 
+M41 shorthand note:
+
+- for `nomos.fs_read` and `nomos.fs_write`, common workspace-relative inputs such as `README.md`, `./README.md`, `.env`, or `src/app.py` are now accepted and adapted to canonical `file://workspace/...` resources
+- policy, explain, and audit still operate on the canonical normalized resource
+- absolute host paths and traversal attempts remain rejected
+
 Troubleshooting:
 
 - if Claude Code cannot connect, verify the MCP command path points to `nomos`
 - if the wrong workspace is used, confirm the config file is [config.quickstart.json](../examples/quickstart/config.quickstart.json)
 - if startup fails while loading `examples/policies/safe.yaml`, your installed `nomos` release may be older than the policy language used by the current repo
+- if a file read still returns `normalization_error`, retry with a workspace-relative path like `README.md` or the explicit canonical form `file://workspace/README.md`
 - in unmanaged local sessions, disable direct built-in file tools if you want Nomos to be the practical side-effect boundary
 
 ## OpenAI-Compatible Agent SDK Setup
