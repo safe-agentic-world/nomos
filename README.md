@@ -30,7 +30,7 @@ Nomos is an **agent-agnostic** and **model-agnostic** firewall built based on ze
 - `DENY`
 - `REQUIRE_APPROVAL`
 
- You can put it in front of different agent frameworks, different model providers, and different tool runtimes, then shape its behavior with your own **policies** and **configs**.
+You can put it in front of different agent frameworks, different model providers, and different tool runtimes, then shape its behavior with your own **policies** and **configs**.
 
 
 ## Why Nomos Exists
@@ -54,34 +54,27 @@ With Nomos:
 - the same control model works across **MCP** and **HTTP** integrations
 - behavior stays flexible because you shape it with your own **policies** and **configs**
 
-## Install
+## Demo - See Nomos in Action
 
-### Homebrew (macOS)
+The fastest way to understand Nomos is to compare the same MCP-native retail support agent before and after governance.
 
-```bash
-brew install safe-agentic-world/nomos/nomos
-```
+Before Nomos, the agent follows the customer request directly. A damaged-item refund plus extra compensation goes through with no execution boundary enforcing policy.
 
-### Scoop (Windows)
+<img src="docs/assets/before_nomos.png" alt="Retail support demo before Nomos where the agent approves refund and extra compensation" width="100%">
 
-```powershell
-scoop bucket add nomos https://github.com/safe-agentic-world/scoop-nomos
-scoop install nomos
-```
+After Nomos, the exact same agent is routed through Nomos over MCP. Order lookup is still allowed, but refund handling is policy-governed and extra compensation can be denied or approval-gated based on your policy bundle.
 
-### Build From Source (Go)
+<img src="docs/assets/after_nomos.png" alt="Retail support demo after Nomos where the same agent is governed by policy" width="100%">
 
-```bash
-go install github.com/safe-agentic-world/nomos/cmd/nomos@latest
-```
+This is the product story in one comparison:
 
-### Shell Installer (macOS And Linux)
+- same agent
+- same user request
+- different outcome at the execution boundary
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/safe-agentic-world/nomos/main/install.sh | sh
-```
+If you want to run this yourself, use the companion demo repo and follow its before/after Nomos runbook:
 
-## Demo First
+- [demo-langchain-nomos](https://github.com/safe-agentic-world/demo-langchain-nomos)
 
 ### Try A Real Denial Yourself
 
@@ -112,7 +105,32 @@ You can also prove:
 2. `git status` is allowed
 3. `git push` is denied
 
-### A customer-support action like a refund can be routed to `REQUIRE_APPROVAL`
+## Install
+
+### Homebrew (macOS)
+
+```bash
+brew install safe-agentic-world/nomos/nomos
+```
+
+### Scoop (Windows)
+
+```powershell
+scoop bucket add nomos https://github.com/safe-agentic-world/scoop-nomos
+scoop install nomos
+```
+
+### Build From Source (Go)
+
+```bash
+go install github.com/safe-agentic-world/nomos/cmd/nomos@latest
+```
+
+### Shell Installer (macOS And Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/safe-agentic-world/nomos/main/install.sh | sh
+```
 
 
 ## Architecture In One Picture
@@ -163,11 +181,13 @@ Good fit for:
 
 Nomos exposes governed tools such as:
 
-- `nomos.fs_read`
-- `nomos.fs_write`
-- `nomos.apply_patch`
-- `nomos.exec`
-- `nomos.http_request`
+- `nomos_fs_read`
+- `nomos_fs_write`
+- `nomos_apply_patch`
+- `nomos_exec`
+- `nomos_http_request`
+
+Nomos advertises MCP tool names using a conservative cross-vendor-safe character set. Canonical policy and audit identity remains unchanged behind the tool surface, and legacy dotted tool names are still accepted for backward compatibility.
 
 For MCP file tools, Nomos accepts canonical resources like `file://workspace/README.md` and now also accepts common workspace-relative shorthands like `README.md` or `./README.md`, which are adapted safely into the canonical internal form.
 
@@ -224,7 +244,6 @@ See:
 - redaction: strip sensitive output before it reaches the agent, logs, or audit sinks
 - capability contract: surface what is immediately allowed, approval-gated, or unavailable
 - multi-bundle policy loading: compose layered policy packs with deterministic merge behavior
-
 
 ## What Nomos Governs
 
@@ -364,7 +383,6 @@ See:
 See:
 
 - [docs/use-cases.md](./docs/use-cases.md)
-
 
 ## Docs Map
 
