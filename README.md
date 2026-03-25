@@ -62,7 +62,7 @@ Before Nomos, the agent follows the customer request directly. A damaged-item re
 
 <br>
 
-<img src="docs/assets/before_nomos.png" alt="Retail support demo before Nomos where the agent approves refund and extra compensation" width="100%">
+<img src="docs/assets/before_nomos.png" alt="Retail support demo before Nomos where the agent approves refund and extra compensation" width="100%" style="border: 1px solid #d0d7de; border-radius: 8px;">
 
 <br>
 <br>
@@ -70,7 +70,7 @@ After Nomos, the exact same agent is routed through Nomos over MCP. Order lookup
 
 <br>
 
-<img src="docs/assets/after_nomos.png" alt="Retail support demo after Nomos where the same agent is governed by policy" width="100%">
+<img src="docs/assets/after_nomos.png" alt="Retail support demo after Nomos where the same agent is governed by policy" width="100%" style="border: 1px solid #d0d7de; border-radius: 8px;">
 
 This is the product story in one comparison:
 
