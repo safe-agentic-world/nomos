@@ -1,11 +1,11 @@
 # Nomos
 
-**Test permissions. Review risky actions. Keep your agent tools.**
+**Test AI tool permissions in CI. Require approval before execution.**
 
 [![CI](https://github.com/safe-agentic-world/nomos/actions/workflows/ci.yml/badge.svg)](https://github.com/safe-agentic-world/nomos/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-[Quickstart](#quickstart) · [Python Guide](docs/http-sdk.md) · [Examples](examples/README.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
+[Install](#install) · [Quickstart](#quickstart) · [Python Guide](docs/http-sdk.md) · [Examples](examples/README.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
 
 Nomos is an open-source permission layer for custom AI agent tools.
 Your agent proposes an action; your application checks whether it is
@@ -14,6 +14,17 @@ allowed, denied, or needs human approval **before calling the tool**.
 Write permission tests in Git. Wrap a Python tool. Pause a LangGraph
 workflow for review. Start with a working local example—no account,
 model API key, Docker, or cloud service required.
+
+From the included [permission suite](examples/local-inbox/permissions.json)
+(actual output, abbreviated):
+
+```text
+PASS draft is allowed: expected ALLOW, got ALLOW (rules: [inbox-allow-draft])
+PASS delivery needs review: expected REQUIRE_APPROVAL, got REQUIRE_APPROVAL (rules: [inbox-review-send])
+PASS deny wins over review: expected DENY, got DENY (rules: [inbox-deny-external-recipient])
+...
+6 passed, 0 failed | policy 170e4b90b50ea8a22b0d899292ba86c88e9f195a978d44cf5b106f37cfd46697
+```
 
 ## Why Nomos?
 
@@ -36,31 +47,77 @@ Use it when you own the application exposing the tools and want testable
 permissions outside the prompt. It complements your framework and runtime
 controls; it is not a sandbox or a prompt-injection detector.
 
+## Install
+
+Install a prebuilt CLI—no Go toolchain or compilation needed.
+
+### macOS — Homebrew
+
+With [Homebrew](https://brew.sh/) installed:
+
+```bash
+brew install safe-agentic-world/nomos/nomos
+nomos version
+```
+
+### Windows — Scoop
+
+With [Scoop](https://scoop.sh/) installed, run in PowerShell:
+
+```powershell
+scoop bucket add nomos https://github.com/safe-agentic-world/scoop-nomos
+scoop install nomos/nomos
+nomos version
+```
+
+### Linux Or Direct Download
+
+Download the archive for your OS and architecture from
+[GitHub Releases](https://github.com/safe-agentic-world/nomos/releases/latest),
+extract it, and place `nomos` (or `nomos.exe`) in a directory on your `PATH`.
+Linux, macOS, and Windows binaries are available for x86-64 and ARM64.
+See [release verification](docs/release-verification.md) for checksums and
+signature verification. The Homebrew formula currently supports macOS only.
+
+To upgrade, run `brew update` then `brew upgrade safe-agentic-world/nomos/nomos`,
+or `scoop update` then `scoop update nomos`.
+
+The quickstart requires **Nomos v0.13.3 or newer**. If `nomos test --help`
+is unavailable, upgrade your installation before continuing.
+
+Working on Nomos itself? See [building from source](docs/quickstart.md#build-from-source).
+
 ## Quickstart
 
-### 1. Test Permissions Without Running An Agent
+Choose either path: **test a policy** with just the CLI, or **run a tool
+with human review** using Python and LangGraph. You do not need LangGraph
+for permission tests.
 
-You need Git and Go 1.25+. Go automatically selects the patched toolchain
-pinned in [go.mod](go.mod); the first run may download it and dependencies.
+Install Nomos above, then use Git to download the example files and Python
+SDK. Cloning the repository does not require building the CLI.
 
 ```bash
 git clone https://github.com/safe-agentic-world/nomos.git
 cd nomos
-go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
+```
+
+### Test A Policy
+
+From the checkout:
+
+```bash
+nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
 ```
 
 All six cases should pass: allowed drafts, reviewed sends, blocked
 recipients, denied exports, unknown tools, and out-of-scope resources.
 The suite evaluates policy locally—no server, Python, or tool execution.
 
-### 2. Run A Tool With Human Review
+### Run A Tool With Human Review
 
 The demo uses Python 3.10+, real LangGraph, and a local SQLite inbox.
-Build the Go gateway from the same checkout:
-
-```bash
-go build ./cmd/nomos
-```
+It can use the installed `nomos` binary on your `PATH`; no Go build is needed.
+Run these commands from the checkout above.
 
 **macOS / Linux**
 
@@ -140,24 +197,51 @@ decision. Retry the saved request with its approval ID; the default
 fingerprint binding rejects changed arguments, rejected approvals, and
 expired approvals.
 
-`CustomTool` reports execution outcomes automatically. If delivery
-succeeds but reporting fails, it raises `OutcomeReportError` with the
-result retained—retry the report, not the side effect.
-
 See the [complete Python and LangGraph guide](docs/http-sdk.md) for client
 setup, review/resume, and failure handling. The inbox is the runnable
 reference; other domain action names are not prebuilt provider connectors.
 
 ## Catch Permission Regressions In CI
 
-Keep a [permission suite](examples/local-inbox/permissions.json) beside
-your [policy](examples/local-inbox/policy.yaml). After checkout and Go
-setup, add this step to your workflow:
+Copy the [permission suite](examples/local-inbox/permissions.json) and
+[policy](examples/local-inbox/policy.yaml) into your repository, preserving
+those paths or changing the final command below. Save this complete workflow
+as `.github/workflows/permissions.yml`. It installs a pinned release and
+checks the archive's pinned SHA-256 before running tests—no Go or Python needed.
 
 ```yaml
-- name: Test tool permissions
-  run: go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml --format json
+name: Tool permissions
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  permissions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install Nomos
+        env:
+          NOMOS_VERSION: v0.13.3
+          NOMOS_SHA256: d0de367cfc407595530cf7bb8862b4b6bf52698a929ff7ec79ed2ac2d26596f2
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_dir="$(mktemp -d "${RUNNER_TEMP}/nomos.XXXXXX")"
+          cd "${install_dir}"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/safe-agentic-world/nomos/releases/download/${NOMOS_VERSION}/nomos-linux-amd64.tar.gz" \
+            --output nomos.tar.gz
+          echo "${NOMOS_SHA256}  nomos.tar.gz" | sha256sum --check --strict
+          tar -xzf nomos.tar.gz nomos
+          echo "${install_dir}" >> "${GITHUB_PATH}"
+      - name: Test tool permissions
+        run: nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml --format json
 ```
+
+This example targets Linux x86-64 runners. When upgrading, update both the
+version and checksum from the [verified release](docs/release-verification.md).
 
 Exit codes: `0` for a passing suite, `1` for a decision or rule mismatch,
 and `2` for invalid input or a loading error. JSON output includes

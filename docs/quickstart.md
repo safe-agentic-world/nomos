@@ -3,13 +3,15 @@
 Run a permission-controlled tool workflow locally. Nothing is sent to an
 email provider; requests are scripted, but Nomos and LangGraph are real.
 
-## Build And Test Permissions
+## Install And Test Permissions
 
-From the repository root, with Go 1.25+:
+Install Nomos v0.13.3+ using [Homebrew, Scoop, or a release binary](../README.md#install).
+Get the examples and SDK with Git, then run the offline permission suite:
 
 ```bash
-go build ./cmd/nomos
-go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
+git clone https://github.com/safe-agentic-world/nomos.git
+cd nomos
+nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
 ```
 
 All six cases should pass. An unexpected decision exits 1; malformed input
@@ -52,6 +54,11 @@ Answer `y` to approve; any other answer rejects. `--auto-approve` and
 `--reject` are explicit scripted test modes, not production review flows.
 Use `--nomos /path/to/nomos` if your binary is elsewhere.
 
+The demo checks for a repository-root `nomos` or `nomos.exe` before searching
+`PATH`. If an old local build shadows your installed release, pass `--nomos`
+with the installed binary's full path. Use `nomos version` and
+`nomos test --help` to check the CLI selected by your shell.
+
 The printed temporary directory retains `inbox.db`, `approvals.db`,
 `audit.db`, and logs for inspection. It also contains development
 credentials in `config.json`; do not publish it. Delete that specific
@@ -82,4 +89,19 @@ nomos serve -c .\examples\quickstart\config.quickstart.json
 
 These are separate compatibility fixtures, not the isolated inbox demo.
 See [the compatibility guide](integration-kit.md).
+
+## Build From Source
+
+Only contributors and users testing unreleased changes need Go. From a
+checkout, with Go 1.25+:
+
+```bash
+go install ./cmd/nomos
+```
+
+Go selects the patched toolchain pinned in [go.mod](../go.mod); the first
+build may download it and dependencies. Add Go's binary directory
+(`go env GOBIN`, or `bin` under `go env GOPATH` when unset) to `PATH`.
+Put it before other Nomos installations if you want to run your source build.
+Verify with `nomos version` and `nomos test --help`.
 
