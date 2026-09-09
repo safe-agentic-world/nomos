@@ -5,7 +5,41 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
+
+func TestAutoTagReleaseTracksCIWorkflow(t *testing.T) {
+	root := repoRoot(t)
+	var ci struct {
+		Name string `yaml:"name"`
+	}
+	if err := yaml.Unmarshal([]byte(mustReadFile(t, filepath.Join(root, ".github", "workflows", "ci.yml"))), &ci); err != nil {
+		t.Fatalf("parse CI workflow: %v", err)
+	}
+	if ci.Name == "" {
+		t.Fatal("CI workflow must have a name for the release trigger")
+	}
+
+	var autoTag struct {
+		On struct {
+			WorkflowRun struct {
+				Workflows []string `yaml:"workflows"`
+				Types     []string `yaml:"types"`
+			} `yaml:"workflow_run"`
+		} `yaml:"on"`
+	}
+	if err := yaml.Unmarshal([]byte(mustReadFile(t, filepath.Join(root, ".github", "workflows", "auto-tag-release.yml"))), &autoTag); err != nil {
+		t.Fatalf("parse auto-tag workflow: %v", err)
+	}
+	trigger := autoTag.On.WorkflowRun
+	if len(trigger.Workflows) != 1 || trigger.Workflows[0] != ci.Name {
+		t.Fatalf("auto-tag workflow must listen only to %q; got %v", ci.Name, trigger.Workflows)
+	}
+	if len(trigger.Types) != 1 || trigger.Types[0] != "completed" {
+		t.Fatalf("auto-tag workflow must wait for CI completion; got %v", trigger.Types)
+	}
+}
 
 func TestReleaseWorkflowAndDocsStayInSync(t *testing.T) {
 	root := repoRoot(t)
