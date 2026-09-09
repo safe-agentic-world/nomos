@@ -1,0 +1,36 @@
+{
+  "schema_version": "v1",
+  "identity": {"principal": "developer", "agent": "inbox-demo", "environment": "dev"},
+  "cases": [
+    {
+      "name": "draft is allowed",
+      "action": {"action_type": "email.draft", "resource": "inbox://local/messages/welcome", "params": {}},
+      "expect": "ALLOW", "rules": ["inbox-allow-draft"]
+    },
+    {
+      "name": "delivery needs review",
+      "action": {"action_type": "email.send", "resource": "inbox://local/messages/welcome", "params": {"recipient": "reader@example.test"}},
+      "expect": "REQUIRE_APPROVAL", "rules": ["inbox-review-send"]
+    },
+    {
+      "name": "deny wins over review",
+      "action": {"action_type": "email.send", "resource": "inbox://local/messages/welcome", "params": {"recipient": "blocked@example.net"}},
+      "expect": "DENY"
+    },
+    {
+      "name": "bulk export is blocked",
+      "action": {"action_type": "email.export", "resource": "inbox://local/messages/all", "params": {}},
+      "expect": "DENY", "rules": ["inbox-deny-export"]
+    },
+    {
+      "name": "unknown tool defaults to deny",
+      "action": {"action_type": "email.delete", "resource": "inbox://local/messages/welcome", "params": {}},
+      "expect": "DENY", "rules": []
+    },
+    {
+      "name": "other inbox defaults to deny",
+      "action": {"action_type": "email.draft", "resource": "inbox://other/messages/welcome", "params": {}},
+      "expect": "DENY", "rules": []
+    }
+  ]
+}

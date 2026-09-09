@@ -1,25 +1,32 @@
 # Examples
 
-The `examples/` tree contains runnable fixtures and integration references. These files are part of the validation surface, not scratch space.
+## Start Here
 
-## Directory Map
+[Local inbox](local-inbox/README.md) is the complete Python + LangGraph
+example: an allowed draft, a denied recipient, a human-reviewed send, and
+an audited local SQLite delivery. It runs without a model or service account.
 
-- `quickstart/` contains the deterministic local allow/deny workspace used by quickstart docs and smoke tests.
-- `policies/` contains starter and reference policy bundles used by docs, CI, and policy compatibility tests.
-- `configs/` contains gateway, MCP, layered-policy, and upstream gateway config examples.
-- `ci/` contains CI boundary smoke fixtures for GitHub Actions and GitLab CI.
-- `http-contract/` contains request and response examples validated against the HTTP contract schemas.
-- `http-sdk/` contains minimal Go, Python, and TypeScript SDK usage examples.
-- `openai-compatible/` contains the small HTTP loop used by the quickstart gateway demo.
+Its `permissions.json` is also a standalone CI regression suite:
 
-## Maintenance Rules
+```bash
+go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
+```
 
-- Keep examples deterministic and runnable from the repository root.
-- Prefer relative paths in checked-in configs.
-- Do not add generated caches, local binaries, session files, or copied workspace state.
-- Do not add duplicate default profile YAML under `examples/`; default profiles live in `../profiles/`.
-- Do not add static Claude or Codex MCP client snippets. Use `nomos run claude` and `nomos run codex` for local agent launcher workflows.
-- If a doc references an example path, add or keep a test that proves the path exists.
+## Compatibility Examples
 
-Before removing an example, search for references in `README.md`, `docs/`, `cmd/`, `internal/`, `.github/`, and `testdata/`, then run `go test ./...`.
+- [Quickstart configuration](quickstart/config.quickstart.json):
+  existing direct HTTP/MCP smoke fixtures, with development-only credentials.
+- [Go HTTP client](http-sdk/go/main.go), [Python HTTP client](http-sdk/python/quickstart.py),
+  and [TypeScript HTTP client](http-sdk/typescript/quickstart.ts):
+  direct built-in actions executed by the Go gateway.
+- [OpenAI-compatible loop](openai-compatible/nomos_http_loop.py):
+  an existing HTTP integration, not required for the account-free demo.
+- [Policy samples](policies/): existing YAML/JSON policy formats.
+
+Built-in callback-wrapper examples were removed because they could confuse
+gateway execution with local execution. Use [CustomTool](../docs/http-sdk.md)
+for a local callback, or the direct client for a built-in action.
+
+Launcher and MCP configuration remain documented in the
+[compatibility integration guide](../docs/integration-kit.md).
 

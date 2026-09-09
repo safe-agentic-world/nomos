@@ -1,183 +1,110 @@
-# HTTP SDKs
+# Custom Tools With Python
 
-Nomos now ships a small official HTTP adoption layer for runtimes that do not speak MCP directly.
+Install from the repository root:
 
-This surface is intentionally narrow. It is not a second control plane and it does not change the gateway contract. It removes repetitive client glue while preserving the existing execution boundary:
-
-- `ALLOW`
-- `DENY`
-- `REQUIRE_APPROVAL`
-
-## Current SDK Surfaces
-
-- Go: [`pkg/sdk`](../pkg/sdk)
-- Python: [`sdk/python/nomos_sdk.py`](../sdk/python/nomos_sdk.py)
-- TypeScript: [`sdk/typescript/nomos_sdk.ts`](../sdk/typescript/nomos_sdk.ts)
-
-The SDKs also include a small framework-neutral wrapper layer for existing tools and side-effecting functions. See [`docs/integration-patterns.md`](./integration-patterns.md).
-
-For application-defined side effects and external execution reporting, see [`docs/custom-actions.md`](./custom-actions.md).
-
-The supported HTTP contract remains additive and backward-compatible:
-
-- `POST /action`
-- `POST /approvals/decide`
-- `POST /explain`
-
-All SDKs use:
-
-- bearer principal auth
-- `X-Nomos-Agent-Id`
-- `X-Nomos-Agent-Signature`
-
-## Security Defaults
-
-The SDKs are opinionated in a few ways:
-
-- auth and signing are mandatory
-- request envelopes are generated for you, but callers may override `action_id` and `trace_id`
-- missing auth configuration fails closed
-- `REQUIRE_APPROVAL` is surfaced explicitly and is not treated as success-with-side-effects
-- debug logging excludes bearer tokens, signing secrets, and request payload bodies
-- the SDK layer does not bypass the raw HTTP path; handwritten integrations continue to work
-
-The first client surfaces intentionally do not retry side-effecting `POST /action` calls automatically. If a caller wants replay semantics, it should make that decision explicitly at the application layer.
-
-## Explain Semantics
-
-`POST /explain` is explain-only. It uses the same request envelope and auth model as `POST /action`, but it does not execute side effects and it does not write execution audit events.
-
-Use it for:
-
-- integration testing
-- safer operator or developer previews
-- policy troubleshooting inside application code
-
-Do not confuse `POST /explain` with authorization to execute. Live execution still happens only through `POST /action`.
-
-## Go Quickstart
-
-```go
-package main
-
-import (
-  "context"
-  "fmt"
-  "log"
-
-  "github.com/safe-agentic-world/nomos/pkg/sdk"
-)
-
-func main() {
-  client, err := sdk.NewClient(sdk.Config{
-    BaseURL:     "http://127.0.0.1:8080",
-    BearerToken: "dev-api-key",
-    AgentID:     "demo-agent",
-    AgentSecret: "demo-agent-secret",
-  })
-  if err != nil {
-    log.Fatal(err)
-  }
-
-  req := sdk.NewActionRequest("fs.read", "file://workspace/README.md", map[string]any{})
-  resp, err := client.RunAction(context.Background(), req)
-  if err != nil {
-    log.Fatal(err)
-  }
-  fmt.Printf("decision=%s action_id=%s trace_id=%s\n", resp.Decision, resp.ActionID, resp.TraceID)
-}
+```bash
+python -m pip install -e "./sdk/python"
+# Optional, for the real LangGraph adapter:
+python -m pip install -e "./sdk/python[langgraph]"
 ```
 
-Runnable example:
+Python 3.10+ is required. The base client uses only the standard library.
+The Go gateway is a separate process; the package does not bundle it.
 
-- [`examples/http-sdk/go/main.go`](../examples/http-sdk/go/main.go)
+## Authorize, Execute, Report
 
-## Python Quickstart
+Create a `NomosClient` with your gateway URL, principal bearer token,
+agent ID, and agent HMAC secret. Load credentials from trusted configuration,
+never model-generated arguments. See the [complete local demo](../examples/local-inbox/demo.py)
+for a working setup with generated credentials.
 
 ```python
-from sdk.python.nomos_sdk import NomosClient, ActionRequest
+from nomos_sdk import CustomTool
 
-client = NomosClient(
-    base_url="http://127.0.0.1:8080",
-    bearer_token="dev-api-key",
-    agent_id="demo-agent",
-    agent_secret="demo-agent-secret",
+send = CustomTool(
+    client=client,
+    action_type="email.send",
+    resource=lambda p: "inbox://local/messages/" + p["message_id"],
+    execute=deliver,
 )
-
-response = client.run_action(
-    ActionRequest(
-        action_type="fs.read",
-        resource="file://workspace/README.md",
-        params={},
-    )
-)
-print(response["decision"])
+request = send.prepare({
+    "message_id": "message-123",
+    "recipient": "reader@example.test",
+    "body": "Hello",
+})
+result = send.run(request)
 ```
 
-Runnable example:
+`prepare` snapshots JSON input and assigns stable correlation IDs.
+`run` calls Nomos before invoking your callback. Only `ALLOW` with
+`execution_mode: external_authorized` permits local execution.
+Denials, approval requests, invalid responses, and transport failures do
+not invoke the callback.
 
-- [`examples/http-sdk/python/quickstart.py`](../examples/http-sdk/python/quickstart.py)
+Nomos does not implement `deliver`: use your trusted provider integration.
+Keep its credentials and direct execution entrypoint inaccessible to the
+agent. A wrapper around an agent-accessible function is not isolation.
 
-## TypeScript Quickstart
+## Approve And Resume
 
-```ts
-import { NomosClient, createActionRequest } from "../sdk/typescript/nomos_sdk";
+When `result.requires_approval()` is true, show the reviewer the saved
+request and `result.decision_response["approval_id"]`.
 
-const client = new NomosClient({
-  baseUrl: "http://127.0.0.1:8080",
-  bearerToken: "dev-api-key",
-  agentId: "demo-agent",
-  agentSecret: "demo-agent-secret",
-});
+A **separately authorized reviewer** records `APPROVE` or `DENY` using
+`reviewer.decide_approval(approval_id, "APPROVE")`. The reviewer principal
+must be configured in `approvals.approver_principals`. Never expose that
+client as an agent tool.
 
-const response = await client.runAction(
-  createActionRequest("fs.read", "file://workspace/README.md", {}),
-);
-console.log(response.decision);
+Retry `send.run(request, approval_id=approval_id)` with the original
+snapshot. Fingerprint-bound approval rejects changed arguments and expired
+or denied approval records. Approval is not consumed exactly once.
+
+## LangGraph
+
+```python
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
+from nomos_langgraph import tool_graph
+
+graph = tool_graph(send, checkpointer=InMemorySaver())
+config = {"configurable": {"thread_id": "review-123"}}
+state = graph.invoke({"params": request.params}, config)
+# If state contains __interrupt__, the separate reviewer decides in Nomos.
+# Only after that decision:
+state = graph.invoke(Command(resume=True), config)
 ```
 
-Runnable example:
+The graph checkpoints the prepared request before review. Resuming a graph
+does not grant approval; execution always rechecks Nomos. Use a durable
+checkpointer outside this demo. LangGraph can re-run interrupted nodes;
+place side effects only in the guarded execution callback and use stable
+provider idempotency keys. See
+[LangGraph interrupt semantics](https://docs.langchain.com/oss/python/langgraph/interrupts).
 
-- [`examples/http-sdk/typescript/quickstart.ts`](../examples/http-sdk/typescript/quickstart.ts)
+## Failure And Retry Rules
 
-## Migration From Handwritten HTTP
+`CustomTool` automatically reports SUCCEEDED or FAILED without sending
+the callback's output or exception text. A failed callback is re-raised;
+it may already have caused a side effect. No automatic retry occurs.
 
-Replace handwritten integration code that currently owns:
+If execution succeeds but recording fails, `OutcomeReportError` retains
+`result` and `report`. Reconcile the provider result and retry
+`client.report_external_outcome(error.report)`, not the tool.
+Repeated reports can produce repeated audit entries. Reports are
+caller-attested and do not prove provider delivery.
 
-- action envelope construction
-- id generation
-- auth header assembly
-- HMAC signing
-- raw decision parsing
+## Compatibility And Migration
 
-with:
+Go (`pkg/sdk`) and TypeScript (`sdk/typescript`) retain their HTTP
+clients and generic custom-action guards. They do not yet provide this
+Python adapter's automatic outcome reporting or LangGraph workflow.
 
-- `RunAction` / `run_action`
-- `DecideApproval` / `decide_approval`
-- `ExplainAction` / `explain_action`
-- `ReportExternalOutcome` / `report_external_outcome`
-- guarded wrapper helpers such as:
-  - `NewGuardedHTTPTool`
-  - `guard_http_tool`
-  - `guardHttpTool`
+Built-in actions such as `net.http_request` and `process.exec` already
+execute inside Nomos. Use the client's direct action method for those.
+Old specialized HTTP/process/file callback guards now reject invocation:
+running a built-in and a local callback could perform the side effect twice.
+Migrate local callbacks to explicit custom action names and matching policy;
+do not silently reuse built-in policy permissions.
 
-This is an adoption convenience layer only. It does not change Nomos authorization semantics.
-
-## Wrapper Layer
-
-The M38 wrapper layer is intentionally small:
-
-- construct a valid Nomos action
-- send it through the existing HTTP gateway
-- execute the wrapped function only on `ALLOW`
-- surface `DENY` and `REQUIRE_APPROVAL` without hidden fallbacks
-
-Reference examples:
-
-- Go: [`examples/http-sdk/go/guarded-http-tool/main.go`](../examples/http-sdk/go/guarded-http-tool/main.go)
-- Python: [`examples/http-sdk/python/guarded_langchain_tool.py`](../examples/http-sdk/python/guarded_langchain_tool.py)
-- TypeScript: [`examples/http-sdk/typescript/guarded_cli_tool.ts`](../examples/http-sdk/typescript/guarded_cli_tool.ts)
-
-For custom external business actions:
-
-- Python: [`examples/http-sdk/python/custom_action_external.py`](../examples/http-sdk/python/custom_action_external.py)
+See [the HTTP contract](http-integration-kit.md) and
+[custom action semantics](custom-actions.md).

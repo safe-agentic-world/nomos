@@ -56,10 +56,10 @@ async function closeServer(server: http.Server): Promise<void> {
 }
 
 async function testAllow(): Promise<void> {
-  const { server, baseUrl } = await startServer(() => ({ body: { decision: "ALLOW" } }));
+  const { server, baseUrl } = await startServer(() => ({ body: { decision: "ALLOW", execution_mode: "external_authorized" } }));
   try {
     const executed: string[] = [];
-    const guarded = guardHttpTool<{ orderId: string }, string>({
+    const guarded = customTestTool<{ orderId: string }, string>({
       client: createClient(baseUrl),
       resource: (input) => `url://shop.example.com/refunds/${input.orderId}`,
       params: () => ({ method: "POST" }),
@@ -82,7 +82,7 @@ async function testDeny(): Promise<void> {
   const { server, baseUrl } = await startServer(() => ({ body: { decision: "DENY", reason: "deny_by_rule" } }));
   try {
     const executed: string[] = [];
-    const guarded = guardHttpTool<{ orderId: string }, string>({
+    const guarded = customTestTool<{ orderId: string }, string>({
       client: createClient(baseUrl),
       resource: (input) => `url://shop.example.com/refunds/${input.orderId}`,
       params: () => ({ method: "POST" }),
@@ -111,7 +111,7 @@ async function testApproval(): Promise<void> {
   }));
   try {
     const executed: string[] = [];
-    const guarded = guardHttpTool<{ orderId: string }, string>({
+    const guarded = customTestTool<{ orderId: string }, string>({
       client: createClient(baseUrl),
       resource: (input) => `url://shop.example.com/refunds/${input.orderId}`,
       params: () => ({ method: "POST" }),
@@ -134,7 +134,7 @@ async function testApproval(): Promise<void> {
 async function testFailClosed(): Promise<void> {
   const guarded = guardFunction<string, string>({
     client: createClient("http://127.0.0.1:9"),
-    buildRequest: () => createActionRequest("fs.read", "file://workspace/README.md", {}),
+    buildRequest: () => createActionRequest("tool.read", "file://workspace/README.md", {}),
     execute: () => "content",
   });
 
@@ -142,13 +142,13 @@ async function testFailClosed(): Promise<void> {
 }
 
 async function testTracePropagation(): Promise<void> {
-  const { server, baseUrl, captured } = await startServer(() => ({ body: { decision: "ALLOW", trace_id: "trace-explicit-123" } }));
+  const { server, baseUrl, captured } = await startServer(() => ({ body: { decision: "ALLOW", execution_mode: "external_authorized", trace_id: "trace-explicit-123" } }));
   try {
     const guarded = new GuardedFunction<string, string>(
       createClient(baseUrl),
       () =>
         ({
-          ...createActionRequest("net.http_request", "url://shop.example.com/refunds/ORD-1001", { method: "POST" }),
+          ...createActionRequest("tool.http", "url://shop.example.com/refunds/ORD-1001", { method: "POST" }),
           trace_id: "trace-explicit-123",
         }) as ActionRequest,
       () => "ok",
@@ -181,6 +181,7 @@ async function testExternalReport(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  await testLocalGuardSafety();
   await testAllow();
   await testDeny();
   await testApproval();
@@ -191,3 +192,40 @@ async function main(): Promise<void> {
 }
 
 await main();
+
+async function testLocalGuardSafety(): Promise<void> {
+  for (const [actionType, mode, requests] of [
+    ["net.http_request", "external_authorized", 0],
+    ["process.exec", "external_authorized", 0],
+    ["email.send", "", 1],
+    ["email.send", "nomos_executed", 1],
+  ] as const) {
+    const { server, baseUrl, captured } = await startServer(() => ({ body: { decision: "ALLOW", execution_mode: mode } }));
+    try {
+      let executed = false;
+      const guard = guardFunction({
+        client: createClient(baseUrl),
+        buildRequest: () => createActionRequest(actionType, "inbox://local/messages/1", {}),
+        execute: () => { executed = true; },
+      });
+      await assert.rejects(() => guard.invoke({}));
+      assert.equal(executed, false);
+      assert.equal(captured.length, requests);
+    } finally {
+      await closeServer(server);
+    }
+  }
+}
+
+function customTestTool<Input, Output>(config: {
+  client: NomosClient;
+  resource: (input: Input) => string;
+  params: (input: Input) => Record<string, unknown>;
+  execute: (input: Input) => Promise<Output> | Output;
+}) {
+  return guardFunction({
+    client: config.client,
+    buildRequest: (input: Input) => createActionRequest("tool.http", config.resource(input), config.params(input)),
+    execute: config.execute,
+  });
+}

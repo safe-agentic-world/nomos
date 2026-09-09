@@ -157,9 +157,17 @@ export class GuardedFunction<Input, Output> {
   }
 
   async invoke(input: Input): Promise<GuardResult<Output>> {
-    const decisionResponse = await this.client.runAction(this.buildRequest(input));
+    input = structuredClone(input);
+    const request = this.buildRequest(input);
+    if (["fs.read", "fs.write", "repo.apply_patch", "process.exec", "net.http_request", "secrets.checkout"].includes(request.action_type.trim())) {
+      throw new Error("Built-in actions execute inside Nomos: use runAction or wrap a custom action");
+    }
+    const decisionResponse = await this.client.runAction(request);
     if (decisionResponse.decision !== "ALLOW") {
       return { decisionResponse, executed: false };
+    }
+    if (decisionResponse.execution_mode !== "external_authorized") {
+      throw new Error("Missing external authorization: local callback not executed");
     }
     const value = await this.execute(input);
     return { decisionResponse, executed: true, value };
@@ -186,6 +194,7 @@ export function guardFunction<Input, Output>(config: {
   return new GuardedFunction(config.client, config.buildRequest, config.execute);
 }
 
+/** @deprecated Invocation rejects built-ins. Use runAction or a custom guardFunction. */
 export function guardHttpTool<Input, Output>(config: {
   client: NomosClient;
   resource: (input: Input) => string;
@@ -199,6 +208,7 @@ export function guardHttpTool<Input, Output>(config: {
   });
 }
 
+/** @deprecated Invocation rejects built-ins. Use runAction or a custom guardFunction. */
 export function guardSubprocessTool<Input, Output>(config: {
   client: NomosClient;
   resource: (input: Input) => string;
@@ -212,6 +222,7 @@ export function guardSubprocessTool<Input, Output>(config: {
   });
 }
 
+/** @deprecated Invocation rejects built-ins. Use runAction or a custom guardFunction. */
 export function guardFileReadTool<Input, Output>(config: {
   client: NomosClient;
   resource: (input: Input) => string;
@@ -225,6 +236,7 @@ export function guardFileReadTool<Input, Output>(config: {
   });
 }
 
+/** @deprecated Invocation rejects built-ins. Use runAction or a custom guardFunction. */
 export function guardFileWriteTool<Input, Output>(config: {
   client: NomosClient;
   resource: (input: Input) => string;

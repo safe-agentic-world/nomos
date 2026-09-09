@@ -23,7 +23,6 @@ import (
 	"github.com/safe-agentic-world/nomos/internal/doctor"
 	"github.com/safe-agentic-world/nomos/internal/gateway"
 	"github.com/safe-agentic-world/nomos/internal/identity"
-	"github.com/safe-agentic-world/nomos/internal/job"
 	"github.com/safe-agentic-world/nomos/internal/launcher"
 	"github.com/safe-agentic-world/nomos/internal/mcp"
 	"github.com/safe-agentic-world/nomos/internal/normalize"
@@ -51,10 +50,10 @@ func main() {
 		runMCP(os.Args[2:])
 	case "run":
 		runAgentLauncher(os.Args[2:])
-	case "job":
-		os.Exit(runJobCommand(os.Args[2:], os.Stdout, os.Stderr, os.Getenv, time.Now))
 	case "policy":
 		runPolicy(os.Args[2:])
+	case "test":
+		os.Exit(runPermissionTests(os.Args[2:], os.Stdout, os.Stderr))
 	case "profiles":
 		runProfiles(os.Args[2:])
 	case "approvals":
@@ -66,8 +65,6 @@ func main() {
 		os.Exit(2)
 	}
 }
-
-var executeJobRun = job.Run
 
 func versionOutput() string {
 	return version.Current().String()
@@ -417,71 +414,6 @@ func runAgentLauncher(args []string) {
 	}); err != nil {
 		cliFatalf("agent launcher: %v", err)
 	}
-}
-
-func runJobCommand(args []string, stdout io.Writer, stderr io.Writer, getenv func(string) string, now func() time.Time) int {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		writeHelpText(stderr, jobHelpText())
-		if len(args) == 0 {
-			return 2
-		}
-		return 0
-	}
-	if args[0] != "run" {
-		writeRedactedLine(stderr, "job command required: run")
-		return 2
-	}
-	fs := flag.NewFlagSet("job run", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	var agent string
-	var taskPath string
-	var configPath string
-	var policyBundle string
-	var profile string
-	var workspace string
-	var artifactDir string
-	var dryRun bool
-	var noLaunch bool
-	fs.StringVar(&agent, "agent", "", "agent to run: codex|claude")
-	fs.StringVar(&taskPath, "task", "", "task markdown file path")
-	fs.StringVar(&configPath, "config", "", "Nomos config json path")
-	fs.StringVar(&configPath, "c", "", "Nomos config json path")
-	fs.StringVar(&policyBundle, "policy-bundle", "", "policy bundle path")
-	fs.StringVar(&policyBundle, "policy", "", "policy bundle path")
-	fs.StringVar(&policyBundle, "p", "", "policy bundle path")
-	fs.StringVar(&profile, "profile", "", "default profile: safe-dev|ci-strict|prod-locked")
-	fs.StringVar(&workspace, "workspace", "", "workspace path (default current directory)")
-	fs.StringVar(&artifactDir, "artifact-dir", "", "artifact directory (default .nomos/job/<job-id>)")
-	fs.BoolVar(&dryRun, "dry-run", false, "validate and write job artifacts without launching")
-	fs.BoolVar(&noLaunch, "no-launch", false, "write generated config and artifacts without launching")
-	fs.Usage = func() { writeHelpText(fs.Output(), jobHelpText()) }
-	if err := fs.Parse(args[1:]); err != nil {
-		return 2
-	}
-	result, err := executeJobRun(job.Options{
-		Agent:            agent,
-		TaskPath:         taskPath,
-		ConfigPath:       configPath,
-		PolicyBundlePath: policyBundle,
-		Profile:          profile,
-		WorkspaceRoot:    workspace,
-		ArtifactDir:      artifactDir,
-		DryRun:           dryRun,
-		NoLaunch:         noLaunch,
-		NomosCommand:     "nomos",
-		Stdout:           stdout,
-		Stderr:           stderr,
-		Getenv:           getenv,
-		Now:              now,
-	})
-	if err != nil {
-		writeRedactedLine(stderr, "job run: "+err.Error())
-		if result.ExitCode != 0 {
-			return result.ExitCode
-		}
-		return job.ExitInternalError
-	}
-	return result.ExitCode
 }
 
 func runPolicy(args []string) {
@@ -1738,17 +1670,17 @@ func mcpSinkRewritesStdout(sink string) bool {
 
 func rootHelpText() string {
 	return "nomos commands:\n" +
+		"  test       run permission regression tests (no execution)\n" +
 		"  version    print build metadata\n" +
 		"  serve      start gateway server\n" +
 		"  mcp        start MCP stdio server\n" +
 		"  run        launch codex or claude with a Nomos workspace profile\n" +
-		"  job        run a governed codex or claude task with artifacts\n" +
 		"  policy     policy test/explain\n" +
 		"  profiles   inspect embedded default profiles\n" +
 		"  approvals  list, approve, or deny pending approvals\n" +
 		"  doctor     deterministic preflight checks\n\n" +
 		"example:\n" +
-		"  nomos mcp -c ./examples/configs/config.example.json -p ./examples/policies/your-policy-bundle.json\n"
+		"  nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml\n"
 }
 
 func runHelpText() string {
@@ -1764,24 +1696,6 @@ func runHelpText() string {
 		"examples:\n" +
 		"  nomos run codex --dry-run --print-config\n" +
 		"  nomos run claude --profile ci-strict --no-launch\n"
-}
-
-func jobHelpText() string {
-	return "usage: nomos job run --agent <codex|claude> --task <path> [flags]\n" +
-		"      --agent <agent>          codex|claude\n" +
-		"      --task <path>            task markdown file path\n" +
-		"  -c, --config <path>          Nomos config json path\n" +
-		"  -p, --policy-bundle <path>   policy bundle path\n" +
-		"      --policy <path>          alias for --policy-bundle\n" +
-		"      --profile <name>         safe-dev|ci-strict|prod-locked (default safe-dev)\n" +
-		"      --workspace <path>       workspace path (default current directory)\n" +
-		"      --artifact-dir <path>    artifact directory (default .nomos/job/<job-id>)\n" +
-		"      --dry-run                validate and write job artifacts without launching\n" +
-		"      --no-launch              write generated config and artifacts without launching\n\n" +
-		"examples:\n" +
-		"  nomos job run --agent codex --profile ci-strict --task .nomos/tasks/fix-tests.md\n" +
-		"  nomos job run --agent claude --policy nomos/policy.yaml --task .nomos/tasks/update-docs.md\n" +
-		"  nomos job run --agent codex --profile ci-strict --task examples/ci/tasks/noop.md --dry-run\n"
 }
 
 func profilesHelpText() string {
@@ -2062,8 +1976,8 @@ func decorateTokenPrefix(token string, prefixLen int, color string, bold bool) s
 
 func isHelpCommandToken(token string) bool {
 	switch strings.Trim(token, "[]<>.,:") {
-	case "nomos", "version", "serve", "mcp", "run", "policy", "profiles", "approvals", "doctor",
-		"list", "show", "verify", "approve", "deny", "test", "explain", "codex", "claude":
+	case "nomos", "version", "serve", "mcp", "run", "test", "policy", "profiles", "approvals", "doctor",
+		"list", "show", "verify", "approve", "deny", "explain", "codex", "claude":
 		return true
 	default:
 		return false

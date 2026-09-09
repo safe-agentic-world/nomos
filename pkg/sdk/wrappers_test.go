@@ -21,7 +21,7 @@ func TestGuardedFunctionAllowExecutesWrappedSideEffect(t *testing.T) {
 			t.Fatalf("decode request: %v", err)
 		}
 		_ = json.NewEncoder(w).Encode(DecisionResponse{
-			Decision: "ALLOW",
+			Decision: "ALLOW", ExecutionMode: "external_authorized",
 			ActionID: req.ActionID,
 			TraceID:  req.TraceID,
 		})
@@ -30,7 +30,7 @@ func TestGuardedFunctionAllowExecutesWrappedSideEffect(t *testing.T) {
 
 	client := mustTestClient(t, server.URL)
 	executed := false
-	guard, err := NewGuardedHTTPTool(client,
+	guard, err := newCustomTestGuard(client,
 		func(in wrapperInput) (string, error) { return "url://shop.example.com/refunds/" + in.OrderID, nil },
 		func(in wrapperInput) (map[string]any, error) { return map[string]any{"method": "POST"}, nil },
 		func(ctx context.Context, in wrapperInput) (string, error) {
@@ -59,7 +59,7 @@ func TestGuardedFunctionDenyDoesNotExecuteWrappedSideEffect(t *testing.T) {
 
 	client := mustTestClient(t, server.URL)
 	executed := false
-	guard, err := NewGuardedHTTPTool(client,
+	guard, err := newCustomTestGuard(client,
 		func(in wrapperInput) (string, error) { return "url://shop.example.com/refunds/" + in.OrderID, nil },
 		func(in wrapperInput) (map[string]any, error) { return map[string]any{"method": "POST"}, nil },
 		func(ctx context.Context, in wrapperInput) (string, error) {
@@ -93,7 +93,7 @@ func TestGuardedFunctionApprovalRequiredDoesNotExecuteWrappedSideEffect(t *testi
 
 	client := mustTestClient(t, server.URL)
 	executed := false
-	guard, err := NewGuardedSubprocessTool(client,
+	guard, err := newCustomTestGuard(client,
 		func(in wrapperInput) (string, error) { return "exec://support/refunds", nil },
 		func(in wrapperInput) (map[string]any, error) { return map[string]any{"argv": []string{"refund"}}, nil },
 		func(ctx context.Context, in wrapperInput) (string, error) {
@@ -123,7 +123,7 @@ func TestGuardedFunctionFailsClosedOnTransportOrAuthErrors(t *testing.T) {
 
 	client := mustTestClient(t, server.URL)
 	executed := false
-	guard, err := NewGuardedFileReadTool(client,
+	guard, err := newCustomTestGuard(client,
 		func(in wrapperInput) (string, error) { return "file://workspace/README.md", nil },
 		func(in wrapperInput) (map[string]any, error) { return map[string]any{}, nil },
 		func(ctx context.Context, in wrapperInput) (string, error) {
@@ -150,14 +150,14 @@ func TestGuardedFunctionPropagatesExplicitTraceID(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		_ = json.NewEncoder(w).Encode(DecisionResponse{Decision: "ALLOW", ActionID: captured.ActionID, TraceID: captured.TraceID})
+		_ = json.NewEncoder(w).Encode(DecisionResponse{Decision: "ALLOW", ExecutionMode: "external_authorized", ActionID: captured.ActionID, TraceID: captured.TraceID})
 	}))
 	defer server.Close()
 
 	client := mustTestClient(t, server.URL)
 	guard, err := NewGuardedFunction(client,
 		func(in wrapperInput) (ActionRequest, error) {
-			req := NewActionRequest("net.http_request", "url://shop.example.com/refunds/"+in.OrderID, map[string]any{"method": "POST"})
+			req := NewActionRequest("tool.http", "url://shop.example.com/refunds/"+in.OrderID, map[string]any{"method": "POST"})
 			req.TraceID = in.TraceID
 			return req, nil
 		},
@@ -191,12 +191,12 @@ func TestNewGuardedFunctionRejectsMissingInputs(t *testing.T) {
 
 func TestGuardedFunctionPropagatesExecutorErrorAfterAllow(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(DecisionResponse{Decision: "ALLOW"})
+		_ = json.NewEncoder(w).Encode(DecisionResponse{Decision: "ALLOW", ExecutionMode: "external_authorized"})
 	}))
 	defer server.Close()
 
 	client := mustTestClient(t, server.URL)
-	guard, err := NewGuardedHTTPTool(client,
+	guard, err := newCustomTestGuard(client,
 		func(in wrapperInput) (string, error) { return "url://shop.example.com/refunds/" + in.OrderID, nil },
 		func(in wrapperInput) (map[string]any, error) { return map[string]any{"method": "POST"}, nil },
 		func(ctx context.Context, in wrapperInput) (string, error) {
@@ -271,4 +271,8 @@ func mustTestClient(t *testing.T, baseURL string) *Client {
 		t.Fatalf("new client: %v", err)
 	}
 	return client
+}
+
+func newCustomTestGuard[T any, R any](client *Client, resource ResourceMapper[T], params ParamsMapper[T], execute Executor[T, R]) (GuardedFunction[T, R], error) {
+	return NewGuardedFunction(client, buildAction("tool.operation", resource, params), execute)
 }

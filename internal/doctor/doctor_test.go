@@ -529,10 +529,10 @@ func TestRunStrongGuaranteeSPIFFEIdentityEvidenceCanSatisfyIdentityRequirement(t
 	assertCheckPassed(t, report, "evidence.identity.workload_identity_verified")
 }
 
-func TestM17ReferenceArtifactsExist(t *testing.T) {
+func TestSecurityScopeDocumentationExists(t *testing.T) {
 	required := []string{
-		filepath.Join("docs", "reference-architecture.md"),
-		filepath.Join("docs", "strong-guarantee-deployment.md"),
+		filepath.Join("docs", "deployment.md"),
+		filepath.Join("docs", "assurance-levels.md"),
 		filepath.Join("docs", "egress-and-identity.md"),
 	}
 	for _, path := range required {

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -36,6 +37,11 @@ type teamsApprovalDecisionRequest struct {
 }
 
 func (g *Gateway) handleApprovalDecision(w http.ResponseWriter, r *http.Request) {
+	g.handleReviewerApprovalDecision(w, r, "approval.decided")
+}
+
+// Called only after a dedicated webhook credential has been verified.
+func (g *Gateway) handleWebhookApprovalDecision(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -58,14 +64,17 @@ func (g *Gateway) handleApprovalDecision(w http.ResponseWriter, r *http.Request)
 }
 
 func (g *Gateway) handleApprovalDecisionWebhook(w http.ResponseWriter, r *http.Request) {
-	if g.cfg.Approvals.WebhookToken != "" {
+	if g.cfg.Approvals.WebhookToken == "" {
+		g.respondError(w, http.StatusNotFound, "not_enabled", "approval webhook is not configured")
+		return
+	} else {
 		token := strings.TrimSpace(r.Header.Get("X-Nomos-Webhook-Token"))
-		if token == "" || token != g.cfg.Approvals.WebhookToken {
+		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(g.cfg.Approvals.WebhookToken)) != 1 {
 			g.respondError(w, http.StatusUnauthorized, "auth_error", "invalid webhook token")
 			return
 		}
 	}
-	g.handleApprovalDecision(w, r)
+	g.handleWebhookApprovalDecision(w, r)
 }
 
 func (g *Gateway) handleSlackApprovalWebhook(w http.ResponseWriter, r *http.Request) {
@@ -77,9 +86,12 @@ func (g *Gateway) handleSlackApprovalWebhook(w http.ResponseWriter, r *http.Requ
 		g.respondError(w, http.StatusNotFound, "not_enabled", "approvals are not enabled")
 		return
 	}
-	if g.cfg.Approvals.SlackToken != "" {
+	if g.cfg.Approvals.SlackToken == "" {
+		g.respondError(w, http.StatusNotFound, "not_enabled", "Slack webhook is not configured")
+		return
+	} else {
 		token := strings.TrimSpace(r.Header.Get("X-Nomos-Slack-Token"))
-		if token == "" || token != g.cfg.Approvals.SlackToken {
+		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(g.cfg.Approvals.SlackToken)) != 1 {
 			g.respondError(w, http.StatusUnauthorized, "auth_error", "invalid slack token")
 			return
 		}
@@ -106,9 +118,12 @@ func (g *Gateway) handleTeamsApprovalWebhook(w http.ResponseWriter, r *http.Requ
 		g.respondError(w, http.StatusNotFound, "not_enabled", "approvals are not enabled")
 		return
 	}
-	if g.cfg.Approvals.TeamsToken != "" {
+	if g.cfg.Approvals.TeamsToken == "" {
+		g.respondError(w, http.StatusNotFound, "not_enabled", "Teams webhook is not configured")
+		return
+	} else {
 		token := strings.TrimSpace(r.Header.Get("X-Nomos-Teams-Token"))
-		if token == "" || token != g.cfg.Approvals.TeamsToken {
+		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(g.cfg.Approvals.TeamsToken)) != 1 {
 			g.respondError(w, http.StatusUnauthorized, "auth_error", "invalid teams token")
 			return
 		}

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nomos-agent-sdk"
+version = "0.1.0"
+description = "Testable permissions for custom agent tools, backed by the Nomos gateway"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.optional-dependencies]
+langgraph = ["langgraph>=1.0,<2"]
+
+[project.urls]
+Repository = "https://github.com/safe-agentic-world/nomos"
+Issues = "https://github.com/safe-agentic-world/nomos/issues"
+
+[tool.setuptools]
+py-modules = ["nomos_sdk", "nomos_langgraph"]

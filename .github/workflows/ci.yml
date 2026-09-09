@@ -1,4 +1,4 @@
-name: Enterprise CI
+name: CI
 
 on:
   push:
@@ -19,9 +19,59 @@ permissions:
 
 env:
   GOFLAGS: -mod=readonly
-  GO_VERSION: "1.25.10"
+  GO_VERSION: "1.26.8"
 
 jobs:
+  developer-workflow:
+    name: Custom Tools (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v6.3.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Build gateway
+        run: go build ./cmd/nomos
+      - name: Test permissions offline
+        run: go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml --format json
+      - name: Install SDK and integration dependencies
+        run: python -m pip install -e "./sdk/python[langgraph]" build
+      - name: Python unit tests
+        run: python -m unittest discover -s sdk/python -p "test_*.py" -v
+      - name: Real gateway and LangGraph tests
+        run: python -m unittest discover -s examples/local-inbox -p "test_*.py" -v
+      - name: Approved local delivery
+        run: python examples/local-inbox/demo.py --auto-approve
+      - name: Rejected local delivery
+        run: python examples/local-inbox/demo.py --reject
+      - name: Build wheel and source distribution
+        run: python -m build ./sdk/python --outdir .tmp/python-dist
+      - name: Verify isolated wheel installation
+        run: python scripts/test_python_package.py
+      - name: Check documentation links
+        run: python scripts/check_docs.py
+
+  typescript-sdk:
+    name: TypeScript SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: node --experimental-strip-types --test sdk/typescript/test_nomos_sdk.ts
+
   quick-checks:
     name: Quick Checks
     if: github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')

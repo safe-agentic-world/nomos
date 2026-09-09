@@ -3,6 +3,8 @@ package sdk
 import (
 	"context"
 	"errors"
+
+	"github.com/safe-agentic-world/nomos/internal/action"
 )
 
 type ActionBuilder[T any] func(T) (ActionRequest, error)
@@ -62,6 +64,9 @@ func (g GuardedFunction[T, R]) Invoke(ctx context.Context, input T) (GuardResult
 	if err != nil {
 		return zero, err
 	}
+	if action.IsBuiltInActionType(req.ActionType) {
+		return zero, errors.New("built-in actions execute inside Nomos: use RunAction or wrap a custom action")
+	}
 	decision, err := g.client.RunAction(ctx, req)
 	if err != nil {
 		return zero, err
@@ -69,6 +74,9 @@ func (g GuardedFunction[T, R]) Invoke(ctx context.Context, input T) (GuardResult
 	result := GuardResult[R]{DecisionResponse: decision}
 	if !decision.IsAllowed() {
 		return result, nil
+	}
+	if decision.ExecutionMode != "external_authorized" {
+		return result, errors.New("missing external authorization: local callback not executed")
 	}
 	value, err := g.execute(ctx, input)
 	if err != nil {
@@ -97,18 +105,22 @@ func (g GuardedFunction[T, R]) InvokeAndReport(ctx context.Context, input T, bui
 	return result, nil
 }
 
+// Deprecated: built-ins execute in Nomos. Invocation fails; use RunAction or a custom NewGuardedFunction.
 func NewGuardedHTTPTool[T any, R any](client *Client, resource ResourceMapper[T], params ParamsMapper[T], execute Executor[T, R]) (GuardedFunction[T, R], error) {
 	return NewGuardedFunction(client, buildAction("net.http_request", resource, params), execute)
 }
 
+// Deprecated: built-ins execute in Nomos. Invocation fails; use RunAction or a custom NewGuardedFunction.
 func NewGuardedSubprocessTool[T any, R any](client *Client, resource ResourceMapper[T], params ParamsMapper[T], execute Executor[T, R]) (GuardedFunction[T, R], error) {
 	return NewGuardedFunction(client, buildAction("process.exec", resource, params), execute)
 }
 
+// Deprecated: built-ins execute in Nomos. Invocation fails; use RunAction or a custom NewGuardedFunction.
 func NewGuardedFileReadTool[T any, R any](client *Client, resource ResourceMapper[T], params ParamsMapper[T], execute Executor[T, R]) (GuardedFunction[T, R], error) {
 	return NewGuardedFunction(client, buildAction("fs.read", resource, params), execute)
 }
 
+// Deprecated: built-ins execute in Nomos. Invocation fails; use RunAction or a custom NewGuardedFunction.
 func NewGuardedFileWriteTool[T any, R any](client *Client, resource ResourceMapper[T], params ParamsMapper[T], execute Executor[T, R]) (GuardedFunction[T, R], error) {
 	return NewGuardedFunction(client, buildAction("fs.write", resource, params), execute)
 }

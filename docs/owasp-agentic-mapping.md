@@ -16,9 +16,9 @@ Coverage labels used here:
 
 Environment note:
 
-- controlled runtimes (`ci` and `k8s`) can provide stronger guarantees
+- deployment names are not proof of isolation; controls apply only to mediated actions
 - unmanaged laptops remain best-effort for mediation-dependent controls
-- see `docs/assurance-levels.md` and `docs/strong-guarantee-deployment.md`
+- see `docs/assurance-levels.md` and `docs/assurance-levels.md`
 
 ## ASI01 — Agent Goal Hijack
 
@@ -50,7 +50,7 @@ Evidence:
 
 Guarantee by environment:
 
-- `ci` / `k8s`: stronger control over mediated side effects
+- controlled runtimes: containment depends on independently enforced boundaries
 - unmanaged laptop: best-effort only; the agent can still attempt side effects outside Nomos if the surrounding tooling allows it
 
 Residual risk / bypass conditions:
@@ -60,7 +60,7 @@ Residual risk / bypass conditions:
 
 ## ASI02 — Tool Misuse & Exploitation
 
-Coverage: `FULL`
+Coverage: `PARTIAL`
 
 Why it matters:
 
@@ -88,7 +88,7 @@ Evidence:
 
 Guarantee by environment:
 
-- `ci` / `k8s`: strong or guarded for mediated actions
+- controlled runtimes: labels depend on configured assumptions, not a security certification
 - unmanaged laptop: mediated actions remain governed, but direct non-Nomos tools remain outside scope
 
 Residual risk / bypass conditions:
@@ -123,11 +123,11 @@ Evidence:
 - `internal/identity/auth_test.go`
 - `internal/credentials/broker_test.go`
 - `docs/egress-and-identity.md`
-- `docs/spiffe-spire.md`
+- `docs/egress-and-identity.md`
 
 Guarantee by environment:
 
-- controlled runtimes, especially `k8s`, are stronger when workload identity and no direct secret injection are enforced
+- workload identity helps only when alternate credential paths are removed
 - unmanaged laptop: best-effort because local credentials can still exist outside Nomos
 
 Residual risk / bypass conditions:
@@ -196,11 +196,11 @@ Evidence:
 
 - `internal/service/service_test.go`
 - `internal/doctor/doctor_test.go`
-- `docs/strong-guarantee-deployment.md`
+- `docs/assurance-levels.md`
 
 Guarantee by environment:
 
-- `k8s`: strongest current coverage when the surrounding runtime enforces container isolation
+- runtime isolation must be independently implemented and verified
 - unmanaged laptop: best-effort only
 
 Residual risk / bypass conditions:
@@ -284,7 +284,7 @@ Residual risk / bypass conditions:
 
 ## ASI08 — Cascading Failures
 
-Coverage: `FULL`
+Coverage: `PARTIAL`
 
 Why it matters:
 
@@ -308,7 +308,7 @@ Evidence:
 - `internal/gateway/gateway_test.go`
 - `cmd/nomos/main_test.go`
 - `docs/deployment.md`
-- `docs/strong-guarantee-deployment.md`
+- `docs/assurance-levels.md`
 
 Guarantee by environment:
 

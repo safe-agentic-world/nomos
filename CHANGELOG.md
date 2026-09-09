@@ -6,6 +6,35 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ## [Unreleased]
 
+### Developer Workflow
+
+- Pinned build/CI toolchains to patched Go 1.26.8 after the installed
+  Go 1.26.0 standard library was flagged by `govulncheck`. The Go language
+  baseline remains 1.25; automatic toolchain selection downloads the pin.
+
+- Added `nomos test --suite ... --bundle ...` for offline permission
+  regressions, text/JSON output, and CI exit codes.
+- Added an installable Python SDK, optional real LangGraph adapter, and
+  account-free local inbox integration with durable SQLite delivery.
+  Package installation is from this checkout; no PyPI release is claimed.
+- Remote approval decisions now require an authenticated principal in
+  `approvals.approver_principals`; empty lists authorize nobody. Configure
+  a separate reviewer before upgrading existing approval workflows.
+- Approval webhooks are disabled unless their specific token is configured.
+- Authorization decision audit failures now stop service processing;
+  failed external-report writes return an error instead of `recorded: true`.
+- Local callback guards reject built-in actions and require explicit
+  `external_authorized` mode. Migrate built-ins to direct client calls,
+  or use a custom action with its own policy for local tool execution.
+- Removed the standalone `nomos job run` runner, its CI examples/workflow,
+  misleading callback examples, and broad enterprise deployment guides.
+  No Kubernetes manifests or Helm charts were present to remove.
+- Refocused README, quickstart, contribution guidance, and CI on one
+  usable custom-tool workflow. Existing MCP/launcher APIs remain compatible.
+
+Earlier entries below describe the project's previous development history;
+the focused workflow and migration notes above supersede removed surfaces.
+
 ### Security
 
 - agent launcher now passes `--mcp-config <generated>` to `claude` so the launched Claude Code session is actually governed by Nomos. Previously the launcher set `CLAUDE_MCP_CONFIG` and `CODEX_MCP_CONFIG` environment variables that neither CLI honors, producing sessions that printed `Nomos workspace active` and recorded `default_boundary: true` in the audit log without any MCP server attached. The launcher now records `mcp_wiring_method` (`mcp_config_flag` for Claude, `operator_managed` for Codex) and the resolved `agent_launch_argv`, drops the un-verifiable `default_boundary` claim, and prints a `Verify after launch` block instructing operators to confirm `nomos` shows in `/mcp` before trusting the session.

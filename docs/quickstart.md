@@ -1,123 +1,85 @@
 # Quickstart
 
-This is the canonical first run for Nomos. It uses only checked-in files and should get a new user to one deterministic allow and one deterministic deny in under 10 minutes.
+Run a permission-controlled tool workflow locally. Nothing is sent to an
+email provider; requests are scripted, but Nomos and LangGraph are real.
 
-This quickstart demonstrates Nomos on the mediated path only. It is a local evaluation flow, not a claim of full mediation or strong-guarantee deployment.
+## Build And Test Permissions
 
-## Prerequisites
+From the repository root, with Go 1.25+:
 
-- Go 1.25+ on `PATH`
-- a clean checkout of this repository
-
-No Docker, Kubernetes, or external services are required for the first success path.
-
-## 1. Install Nomos CLI
-
-```powershell
-go install ./cmd/nomos
+```bash
+go build ./cmd/nomos
+go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
 ```
 
-## 2. Run Deterministic Preflight
+All six cases should pass. An unexpected decision exits 1; malformed input
+exits 2. No gateway, model, or Python dependency is needed for these tests.
+
+## Install The Python Integration
+
+Use Python 3.10+ in a virtual environment.
+
+macOS / Linux:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e "./sdk/python[langgraph]"
+.venv/bin/python examples/local-inbox/demo.py
+```
+
+Windows PowerShell:
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install -e "./sdk/python[langgraph]"
+.venv\Scripts\python.exe examples/local-inbox/demo.py
+```
+
+Internet access is needed to install dependencies, not to run the demo.
+The SDK is installed from this checkout, not a published PyPI release.
+
+## Review The Result
+
+The script starts its own loopback gateway with a fresh policy copy,
+separate agent/reviewer keys, and temporary SQLite stores. It demonstrates:
+
+1. An allowed draft and a blocked recipient.
+2. A send paused at a LangGraph interrupt, before delivery.
+3. Your terminal approval or rejection, followed by a fresh authorization check.
+4. A delivered local inbox entry only after approval.
+
+Answer `y` to approve; any other answer rejects. `--auto-approve` and
+`--reject` are explicit scripted test modes, not production review flows.
+Use `--nomos /path/to/nomos` if your binary is elsewhere.
+
+The printed temporary directory retains `inbox.db`, `approvals.db`,
+`audit.db`, and logs for inspection. It also contains development
+credentials in `config.json`; do not publish it. Delete that specific
+directory when finished. Windows file mode bits do not establish a separate
+security boundary.
+
+## Connect Your Tool
+
+Read [the Python guide](http-sdk.md), then replace the local delivery
+function with one trusted backend tool. Add allow/deny/review cases to a
+[permission suite](permission-tests.md) before using real credentials.
+Keep approval credentials outside the agent's accessible tools.
+
+This sample uses an in-memory LangGraph checkpointer and SQLite
+idempotency for local messages. Production restart/resume needs a durable
+checkpointer and the real provider's idempotency mechanism.
+
+## Compatibility Smoke
+
+Existing HTTP/MCP users can still run these commands with `nomos` on PATH:
 
 ```powershell
 nomos doctor -c .\examples\quickstart\config.quickstart.json --format json
-```
-
-Expected result:
-
-- exit code `0`
-- `overall_status` is `READY`
-
-Audit output for the quickstart uses `stdout`, so the same terminal shows readiness output and later action evidence.
-
-## 3. Verify One Allowed Action
-
-```powershell
 nomos policy test --action .\examples\quickstart\actions\allow-readme.json --bundle .\examples\policies\safe.yaml
-```
-
-Expected result:
-
-- `decision` is `ALLOW`
-
-## 4. Verify One Denied Action
-
-```powershell
 nomos policy test --action .\examples\quickstart\actions\deny-env.json --bundle .\examples\policies\safe.yaml
-```
-
-Expected result:
-
-- `decision` is `DENY`
-
-## 5. Start The HTTP Gateway
-
-```powershell
 nomos serve -c .\examples\quickstart\config.quickstart.json
 ```
 
-The gateway listens on `http://127.0.0.1:8080`.
-
-## 6. Run The HTTP SDK Example
-
-In a second terminal:
-
-```powershell
-python .\examples\openai-compatible\nomos_http_loop.py
-```
-
-Expected result:
-
-- the first request reads `README.md` and returns `ALLOW`
-- the second request targets `.env` and returns `DENY`
-
-The example prints both responses so you can see the policy-gated behavior directly.
-
-If you want the official Go SDK path instead of the raw Python loop:
-
-```powershell
-go run .\examples\http-sdk\go
-```
-
-## 7. Optional: Open The Operator UI
-
-Nomos now serves a small operator UI at:
-
-```text
-http://127.0.0.1:8080/ui/
-```
-
-The UI shell is static, but the data APIs require authenticated operator access.
-
-For the quickstart config:
-
-- use bearer token `dev-api-key`
-- readiness works immediately
-- approval inbox is disabled because `approvals.enabled` is `false`
-- action detail and trace inspection are limited because the quickstart audit sink is `stdout`, not sqlite
-- explain-only inspection works if you paste a full action JSON payload
-
-If you want the full M36a UI path locally, use a config with:
-
-- `approvals.enabled: true`
-- `audit.sink: sqlite:<path>`
-
-See [operator-ui.md](./operator-ui.md).
-
-## Troubleshooting
-
-- `load config:`:
-  Confirm [config.quickstart.json](../examples/quickstart/config.quickstart.json) is being used from the repository root.
-- `policy bundle path invalid`:
-  Use the checked-in bundle [safe.yaml](../examples/policies/safe.yaml).
-- `connection refused` from the Python example:
-  Start `nomos serve` first and keep that terminal open.
-- `python` not found:
-  Any Python 3.9+ interpreter works; the example uses only the standard library.
-
-## Next Paths
-
-- Codex and Claude Code MCP setup: [integration-kit.md](./integration-kit.md)
-- HTTP SDK reference: [http-sdk.md](./http-sdk.md)
-- Operator UI details: [operator-ui.md](./operator-ui.md)
+These are separate compatibility fixtures, not the isolated inbox demo.
+See [the compatibility guide](integration-kit.md).
 

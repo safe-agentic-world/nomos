@@ -36,9 +36,10 @@ func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
 		},
 		Audit: AuditConfig{Sink: "stdout"},
 		Approvals: ApprovalsConfig{
-			Enabled:    true,
-			StorePath:  filepath.Join(dir, "approvals.db"),
-			TTLSeconds: 600,
+			ApproverPrincipals: []string{"system"},
+			Enabled:            true,
+			StorePath:          filepath.Join(dir, "approvals.db"),
+			TTLSeconds:         600,
 		},
 		Identity: IdentityConfig{
 			Principal:   "system",
@@ -60,6 +61,7 @@ func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
 	payload := `{"approval_id":"` + approvalID + `","decision":"APPROVE"}`
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/approvals/decide", strings.NewReader(payload))
+	req.Header.Set("Authorization", "Bearer k")
 	gw.handleApprovalDecision(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -67,6 +69,7 @@ func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/approvals/decide", strings.NewReader(payload))
+	req.Header.Set("Authorization", "Bearer k")
 	gw.handleApprovalDecision(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected idempotent 200, got %d body=%s", w.Code, w.Body.String())
@@ -74,6 +77,7 @@ func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/approvals/decide", strings.NewReader(`{"approval_id":"`+approvalID+`","decision":"DENY"}`))
+	req.Header.Set("Authorization", "Bearer k")
 	gw.handleApprovalDecision(w, req)
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409 for conflicting decision, got %d", w.Code)
@@ -81,6 +85,7 @@ func TestApprovalDecisionEndpointIdempotentAndStrict(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/approvals/decide", strings.NewReader(`{"approval_id":"`+approvalID+`","decision":"APPROVE","extra":1}`))
+	req.Header.Set("Authorization", "Bearer k")
 	gw.handleApprovalDecision(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for unknown field, got %d", w.Code)
