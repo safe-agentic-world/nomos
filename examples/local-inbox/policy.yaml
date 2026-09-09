@@ -1,0 +1,26 @@
+version: v1
+rules:
+  - id: inbox-allow-draft
+    action_type: email.draft
+    resource: inbox://local/messages/*
+    decision: ALLOW
+    principals: [developer]
+    agents: [inbox-demo]
+    environments: [dev]
+  - id: inbox-review-send
+    action_type: email.send
+    resource: inbox://local/messages/*
+    decision: REQUIRE_APPROVAL
+    principals: [developer]
+    agents: [inbox-demo]
+    environments: [dev]
+  - id: inbox-deny-external-recipient
+    action_type: email.send
+    resource: inbox://local/messages/*
+    decision: DENY
+    params_match:
+      recipient: blocked@example.net
+  - id: inbox-deny-export
+    action_type: email.export
+    resource: inbox://local/**
+    decision: DENY

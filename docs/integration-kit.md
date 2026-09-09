@@ -1,5 +1,9 @@
 # Integration Kit
 
+This is the compatibility guide for existing MCP and coding-agent users.
+For new custom application tools, start with the
+[Python + LangGraph quickstart](quickstart.md); no coding-agent CLI is required.
+
 This guide covers local agent integration for Nomos using checked-in quickstart files, MCP stdio mode, and the official HTTP SDK adoption layer.
 
 Unless otherwise stated, the examples here show how to route actions through Nomos. They do not, by themselves, prove full mediation in unmanaged local environments.

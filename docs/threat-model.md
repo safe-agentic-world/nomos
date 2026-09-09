@@ -2,6 +2,23 @@
 
 This is the canonical security posture document for Nomos.
 
+## Custom-Tool Boundary
+
+The new Python workflow runs custom tools in a trusted application backend,
+not in a Nomos sandbox. That backend, its provider credentials, and its
+reviewer interface are part of the trusted computing base. Agent-accessible
+direct tools or approval-store access bypass the intended boundary.
+
+Custom-tool outcome reports are caller-attested. Approval binds normalized
+inputs by default but is not a single-use execution token. Use provider
+idempotency, durable workflow checkpoints, and protected reviewer credentials.
+The local demo illustrates these contracts without providing process isolation.
+
+The additional built-in executor, MCP, and identity controls below remain
+compatibility capabilities. Do not assume they apply to an arbitrary local
+callback or are enabled merely because a configuration names a deployment mode.
+See [security scope](assurance-levels.md).
+
 ## Scope
 
 Current hardening scope covers:

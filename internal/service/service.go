@@ -376,7 +376,9 @@ func (s *Service) Process(actionInput action.Action) (action.Response, error) {
 		Reason:              decision.ReasonCode,
 		Fingerprint:         fingerprint,
 	}
-	_ = s.recorder.WriteEvent(decisionEvent)
+	if err := s.recorder.WriteEvent(decisionEvent); err != nil {
+		return action.Response{}, errors.New("could not record authorization decision; action not authorized")
+	}
 	response := action.Response{
 		Decision:            decision.Decision,
 		Reason:              decision.ReasonCode,

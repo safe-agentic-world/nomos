@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible permission, approval, or integration failure.
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, follow SECURITY.md. Do not include credentials or private tool payloads."
+  - type: textarea
+    id: problem
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Smallest reproduction
+      description: Include sanitized policy, action or test case, and exact commands.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Nomos commit/version, OS, Go/Python versions, and framework version.
+    validations:
+      required: true

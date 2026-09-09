@@ -8,11 +8,9 @@ Use this when:
 - you do not want to adopt an official SDK yet
 - you need a machine-consumable contract for generated or hand-written clients
 
-Preferred order remains:
-
-1. MCP when available
-2. official SDKs when HTTP is needed
-3. raw HTTP using the published contract below
+For new custom tools, start with the [Python integration](http-sdk.md).
+Existing MCP users can retain their integration. Use this contract when
+writing a client without an adapter.
 
 ## Published Contract
 
@@ -48,13 +46,19 @@ Optional contract hint:
 
 Requests fail closed on missing or invalid auth.
 
+Approval decision endpoints are the exception to agent HMAC authentication:
+they verify the reviewer principal and require membership in
+`approvals.approver_principals`. Empty lists authorize nobody. Use a
+separate reviewer credential, never an agent-accessible approval tool.
+
 ## Core Execution Flow
 
 1. build an action request
 2. sign the exact JSON request body
 3. `POST /action`
 4. branch on `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`
-5. execute side effects only when Nomos authorizes them
+5. for custom actions, execute locally only with `ALLOW` and
+   `execution_mode: external_authorized`; built-ins already execute in Nomos
 
 Examples:
 
@@ -109,7 +113,8 @@ For semantics and examples, see [`docs/custom-actions.md`](./custom-actions.md).
 
 ## Compatibility Guidance
 
-The HTTP contract is additive.
+The v1 request shapes remain compatible, but reviewer authorization is now
+mandatory. Existing deployments must configure an explicit reviewer list.
 
 Safe client assumptions:
 

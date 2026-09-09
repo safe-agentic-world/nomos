@@ -1,43 +1,50 @@
-# Contributing
+# Contributing To Nomos
 
-Thanks for contributing to Nomos.
+Nomos is an Apache-2.0 open-source project focused on permission tests and
+human approval for custom agent tools. Start by running the
+[local inbox demo](docs/quickstart.md), then pick a small improvement from
+[the roadmap](docs/roadmap.md).
 
-## Development Setup
+## Useful Contributions
 
-1. Install Go (version from `go.mod`).
-2. Build:
+- A reproducible permission bug with the smallest policy and action fixture.
+- A complete custom-tool integration with a local, account-free test path.
+- A denial, approval-expiry, retry, or changed-arguments regression test.
+- A quickstart improvement verified from a fresh environment.
 
-```bash
-go build ./cmd/nomos
-```
+Discuss new frameworks or substantial abstractions in an issue first.
+We are not expanding into cluster deployment, hosted dashboards, or a
+general enterprise control plane.
 
-3. Test:
+## Development
 
-```bash
-go test ./...
-go vet ./...
-```
+The CLI is in `cmd/nomos`; policy, gateway, approval, and execution logic
+are in `internal/`. Public Go clients live in `pkg/sdk`; Python and
+TypeScript sources in `sdk/`. The primary runnable example is
+`examples/local-inbox`.
 
-4. Workflow changes:
+Use standard Go naming and `gofmt`. Keep behavior deterministic and
+fail closed. Python uses four-space indentation and standard-library
+`unittest`; name tests `test_*.py`. Add optional framework dependencies
+as extras, not base SDK requirements. Keep policy rule IDs descriptive and
+stable; reject unknown fields unless a contract explicitly allows them.
 
-- keep GitHub Actions least-privilege (`contents: read` by default, elevate only per job)
-- validate workflow changes with `Workflow Lint` and keep release changes PR-safe
-- keep release automation workflow-driven; do not add manual release-only steps to docs or process
+Run focused tests, then `go test ./...`, `go vet ./...`, and the
+relevant SDK/integration commands in [TESTING.md](TESTING.md).
+There is no mandatory coverage percentage; meaningful failure-path
+assertions are required for behavior changes.
 
 ## Pull Requests
 
-Please include:
+Use a focused imperative subject, following existing conventions such as
+`fix: reject expired tool approvals` or `feat: add ticket permission fixtures`.
+Include the problem, linked issue if any, scope, tests actually run, and
+migration notes for behavior changes. Include screenshots only for UI
+changes. Do not claim unrun tests passed.
 
-- what changed and why
-- linked issue/task (if any)
-- tests run and results
-- docs updates when behavior changes
-- whether workflow/release behavior changed, if applicable
+Keep generated binaries, Python caches, local databases, credentials, and
+temporary demo artifacts out of commits. Preserve existing contributor
+instructions in `AGENTS.md`.
 
-## Rules
-
-- Keep policy behavior deterministic and deny-by-default.
-- Do not introduce secret logging.
-- Keep validation strict (reject unknown fields unless explicitly allowed).
-- Prefer small, focused changes.
-- Do not bypass the workflow-managed release path for tags, releases, or install-manifest updates.
+Report vulnerabilities privately using [SECURITY.md](SECURITY.md), not a
+public issue containing secrets or an exploitable production configuration.

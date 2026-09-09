@@ -2,6 +2,8 @@ module github.com/safe-agentic-world/nomos
 
 go 1.25
 
+toolchain go1.26.8
+
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	gopkg.in/yaml.v3 v3.0.1

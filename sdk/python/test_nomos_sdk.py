@@ -5,12 +5,16 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from sdk.python.nomos_sdk import (
+from nomos_sdk import (
     ActionRequest,
     NomosClient,
     guard_callable,
-    guard_http_tool,
 )
+
+
+def custom_test_tool(*, client, resource_fn, params_fn, execute_fn):
+    return guard_callable(client=client, build_request=lambda p: ActionRequest(
+        "payments.refund", resource_fn(p), params_fn(p)), execute=execute_fn)
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -53,7 +57,7 @@ class NomosPythonWrapperTests(unittest.TestCase):
 
     def setUp(self) -> None:
         _Handler.response_status = 200
-        _Handler.response_body = {"decision": "ALLOW"}
+        _Handler.response_body = {"decision": "ALLOW", "execution_mode": "external_authorized"}
         _Handler.captured_requests = []
         self.client = NomosClient(
             base_url=self.base_url,
@@ -62,9 +66,9 @@ class NomosPythonWrapperTests(unittest.TestCase):
             agent_secret="demo-agent-secret",
         )
 
-    def test_guard_http_tool_allow_executes(self) -> None:
+    def test_custom_tool_allow_executes(self) -> None:
         executed: list[str] = []
-        tool = guard_http_tool(
+        tool = custom_test_tool(
             client=self.client,
             resource_fn=lambda payload: f"url://shop.example.com/refunds/{payload['order_id']}",
             params_fn=lambda payload: {"method": "POST"},
@@ -77,10 +81,10 @@ class NomosPythonWrapperTests(unittest.TestCase):
         self.assertEqual(result.value, "refund-submitted")
         self.assertEqual(executed, ["ORD-1001"])
 
-    def test_guard_http_tool_deny_does_not_execute(self) -> None:
+    def test_custom_tool_deny_does_not_execute(self) -> None:
         _Handler.response_body = {"decision": "DENY", "reason": "deny_by_rule"}
         executed: list[str] = []
-        tool = guard_http_tool(
+        tool = custom_test_tool(
             client=self.client,
             resource_fn=lambda payload: f"url://shop.example.com/refunds/{payload['order_id']}",
             params_fn=lambda payload: {"method": "POST"},
@@ -93,14 +97,14 @@ class NomosPythonWrapperTests(unittest.TestCase):
         self.assertTrue(result.is_denied())
         self.assertEqual(executed, [])
 
-    def test_guard_http_tool_requires_approval_does_not_execute(self) -> None:
+    def test_custom_tool_requires_approval_does_not_execute(self) -> None:
         _Handler.response_body = {
             "decision": "REQUIRE_APPROVAL",
             "approval_id": "apr_123",
             "approval_fingerprint": "fp_123",
         }
         executed: list[str] = []
-        tool = guard_http_tool(
+        tool = custom_test_tool(
             client=self.client,
             resource_fn=lambda payload: f"url://shop.example.com/refunds/{payload['order_id']}",
             params_fn=lambda payload: {"method": "POST"},
@@ -126,7 +130,7 @@ class NomosPythonWrapperTests(unittest.TestCase):
         guarded = guard_callable(
             client=broken_client,
             build_request=lambda value: ActionRequest(
-                action_type="fs.read",
+                action_type="notes.read",
                 resource="file://workspace/README.md",
                 params={},
             ),
@@ -141,7 +145,7 @@ class NomosPythonWrapperTests(unittest.TestCase):
         guarded = guard_callable(
             client=self.client,
             build_request=lambda value: ActionRequest(
-                action_type="net.http_request",
+                action_type="payments.refund",
                 resource="url://shop.example.com/refunds/ORD-1001",
                 params={"method": "POST"},
                 trace_id="trace-explicit-123",

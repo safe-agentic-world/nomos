@@ -318,13 +318,14 @@ func (u *UpstreamConfig) UnmarshalJSON(data []byte) error {
 }
 
 type ApprovalsConfig struct {
-	Enabled      bool   `json:"enabled"`
-	Backend      string `json:"backend,omitempty"`
-	StorePath    string `json:"store_path"`
-	TTLSeconds   int    `json:"ttl_seconds"`
-	WebhookToken string `json:"webhook_token"`
-	SlackToken   string `json:"slack_token"`
-	TeamsToken   string `json:"teams_token"`
+	ApproverPrincipals []string `json:"approver_principals,omitempty"`
+	Enabled            bool     `json:"enabled"`
+	Backend            string   `json:"backend,omitempty"`
+	StorePath          string   `json:"store_path"`
+	TTLSeconds         int      `json:"ttl_seconds"`
+	WebhookToken       string   `json:"webhook_token"`
+	SlackToken         string   `json:"slack_token"`
+	TeamsToken         string   `json:"teams_token"`
 }
 
 type IdentityConfig struct {

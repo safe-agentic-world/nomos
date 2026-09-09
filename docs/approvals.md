@@ -4,6 +4,9 @@ Nomos binds approvals to deterministic targets so an approval for one normalized
 
 ## Fingerprint
 
+This applies to the default `fingerprint` scope. Optional `class` approvals
+are deliberately broader and do not bind individual argument values.
+
 `action_fingerprint = sha256(canonical_json({normalized_action, principal, agent, environment}))`
 
 `normalized_action` includes:
@@ -12,7 +15,8 @@ Nomos binds approvals to deterministic targets so an approval for one normalized
 - `resource`
 - canonicalized `params`
 
-Any change to normalized inputs (including params) produces a new fingerprint and requires a new approval.
+Any change to normalized inputs (including params) produces a new fingerprint
+and requires a new fingerprint-scoped approval.
 
 ## MCP Argument Preview
 
@@ -50,10 +54,30 @@ Approvals are never global.
 
 ## Integrations
 
+`POST /approvals/decide` and `POST /api/ui/approvals/decide` require principal
+authentication and membership in `approvals.approver_principals`. An empty
+list authorizes nobody. Use a separate reviewer token; do not give the agent
+access to that client. These endpoints authenticate the reviewer principal,
+not the agent HMAC, and retain tenant-scope checks where tenancy is enabled.
+
+```json
+{"approvals": {"enabled": true, "approver_principals": ["reviewer"]}}
+```
+
+This is a configuration fragment; also configure the reviewer identity and
+durable store. Existing installations must add an explicit reviewer list
+before remote approval decisions will work.
+
 Nomos provides integration endpoints:
-- Generic webhook: `POST /webhooks/approvals` using header `X-Nomos-Webhook-Token` when configured.
-- Slack webhook: `POST /webhooks/slack/approvals` using header `X-Nomos-Slack-Token` when configured.
-- Teams webhook: `POST /webhooks/teams/approvals` using header `X-Nomos-Teams-Token` when configured.
+- Generic webhook: `POST /webhooks/approvals` requires `X-Nomos-Webhook-Token`.
+- Slack webhook: `POST /webhooks/slack/approvals` requires `X-Nomos-Slack-Token`.
+- Teams webhook: `POST /webhooks/teams/approvals` requires `X-Nomos-Teams-Token`.
+
+Each route is disabled (404) unless its own token is configured. These are
+trusted relay endpoints, not native Slack/Teams signature-verification
+integrations. A token holder is an approval authority; keep tokens outside
+agent access. The separate reviewer allowlist applies to principal-auth
+endpoints, not these token-authenticated relays.
 
 Slack payload schema:
 - `approval_id` (string, required)
@@ -124,6 +148,9 @@ Migration from older deployments:
 
 ## Approval CLI
 
+Direct store access is trusted operator access and bypasses HTTP reviewer
+authentication. Do not grant an agent filesystem access to approval stores.
+
 Operators can inspect pending approvals with:
 
 ```bash
@@ -143,5 +170,9 @@ nomos approvals deny --store ./nomos-approvals.json --backend file <approval_id>
 `approve` and `deny` accept `--format text|json`. The `approval_id` may appear before or after the flags.
 
 ## Params Patch (Future)
+
+Approval IDs are not single-use execution tokens. Replaying an approved
+action can run a custom tool again. Use provider idempotency keys and durable
+workflow checkpoints; see [the SDK guide](http-sdk.md).
 
 Approvals may optionally provide a params patch in a future revision. If applied, it creates a new normalized action and fingerprint, which requires approval against that new target.

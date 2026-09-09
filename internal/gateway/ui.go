@@ -283,12 +283,31 @@ func (g *Gateway) handleUIApprovals(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *Gateway) handleUIApprovalDecision(w http.ResponseWriter, r *http.Request) {
+	g.handleReviewerApprovalDecision(w, r, "approval.decided.ui")
+}
+
+func (g *Gateway) handleReviewerApprovalDecision(w http.ResponseWriter, r *http.Request, eventType string) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 	principal, ok := g.requireOperatorUIAuth(w, r)
 	if !ok {
+		return
+	}
+	allowed := false
+	for _, reviewer := range g.cfg.Approvals.ApproverPrincipals {
+		if reviewer == principal {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		g.respondError(w, http.StatusForbidden, "approval_forbidden", "principal is not an approval reviewer")
+		return
+	}
+	if !g.cfg.Approvals.Enabled || g.approvals == nil {
+		g.respondError(w, http.StatusNotFound, "not_enabled", "approvals are not enabled")
 		return
 	}
 	operatorTenantID, err := g.tenantIDForPrincipal(principal)
@@ -326,7 +345,7 @@ func (g *Gateway) handleUIApprovalDecision(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	g.applyApprovalDecision(w, r, req, "approval.decided.ui")
+	g.applyApprovalDecision(w, r, req, eventType)
 }
 
 func (g *Gateway) handleUIActionDetail(w http.ResponseWriter, r *http.Request) {

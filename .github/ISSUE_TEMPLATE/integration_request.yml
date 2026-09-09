@@ -1,0 +1,22 @@
+name: Tool integration request
+description: Propose one concrete tool workflow, not a platform.
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Tool and real problem
+      description: What side effect should be allowed, denied, or reviewed? Who runs this workflow?
+    validations:
+      required: true
+  - type: textarea
+    id: local
+    attributes:
+      label: Smallest runnable example
+      description: How could a contributor test this without paid accounts or production credentials?
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Retry and approval behavior
+      description: Describe idempotency, approval inputs, and important negative test cases.

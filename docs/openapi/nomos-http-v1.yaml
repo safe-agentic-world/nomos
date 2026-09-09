@@ -39,6 +39,9 @@ paths:
   /approvals/decide:
     post:
       summary: Record an approval decision
+      description: Requires an authenticated reviewer principal listed in approvals.approver_principals; agent HMAC is not required. An empty reviewer list authorizes nobody.
+      security:
+        - ReviewerBearer: []
       requestBody:
         required: true
         content:
@@ -46,6 +49,10 @@ paths:
             schema:
               $ref: '#/components/schemas/ApprovalDecisionRequest'
       responses:
+        '401':
+          description: Missing or invalid reviewer authentication
+        '403':
+          description: Principal not in reviewer allowlist or outside tenant scope
         '200':
           description: Decision response
           content:
@@ -78,6 +85,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ExternalReportRequest'
       responses:
+        '500':
+          description: Audit write failed; reconcile execution and retry the report, not the tool
         '200':
           description: External report response
           content:
@@ -85,6 +94,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExternalReportResponse'
 components:
+  securitySchemes:
+    ReviewerBearer:
+      type: http
+      scheme: bearer
   schemas:
     ActionRequest:
       $ref: '../schemas/action-request.v1.json'

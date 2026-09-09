@@ -31,3 +31,9 @@ Thumbs.db
 TASKS.md
 tmp/
 .nomos/
+
+# Python packaging and local environments
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/

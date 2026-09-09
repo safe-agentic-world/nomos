@@ -589,9 +589,10 @@ func newUITestGateway(t *testing.T) *Gateway {
 		"mcp":      map[string]any{"enabled": false},
 		"upstream": map[string]any{"routes": []any{}},
 		"approvals": map[string]any{
-			"enabled":     true,
-			"store_path":  filepath.Join(dir, "approvals.db"),
-			"ttl_seconds": 900,
+			"approver_principals": []string{"system"},
+			"enabled":             true,
+			"store_path":          filepath.Join(dir, "approvals.db"),
+			"ttl_seconds":         900,
 		},
 		"identity": map[string]any{
 			"principal":     "system",

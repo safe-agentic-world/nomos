@@ -86,7 +86,10 @@ func (g *Gateway) handleExternalReport(w http.ResponseWriter, r *http.Request) {
 		},
 		ActionSummary: req.ActionType + " " + resource,
 	}
-	_ = g.writer.WriteEvent(event)
+	if err := g.writer.WriteEvent(event); err != nil {
+		g.respondError(w, http.StatusInternalServerError, "audit_error", "outcome could not be recorded")
+		return
+	}
 	g.writeUIJSON(w, externalReportResponse{
 		Recorded: true,
 		TraceID:  req.TraceID,
