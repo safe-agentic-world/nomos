@@ -4,7 +4,7 @@
 tools, start a gateway, invoke an agent, or simulate approval storage.
 
 ```bash
-go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
+nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
 ```
 
 ## Suite Format
@@ -41,13 +41,18 @@ executor restrictions, authentication, or external tool execution.
 
 ## CI
 
+Use the [complete GitHub Actions workflow](../README.md#catch-permission-regressions-in-ci)
+to install a pinned release, verify its checksum, and test your checked-in
+policy. It requires neither Go nor Python. Once Nomos is on the runner's
+`PATH`, the test step is:
+
 ```yaml
 - name: Test tool permissions
-  run: go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml --format json
+  run: nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml --format json
 ```
 
-Install Go and check out the repository before this step. A consumer can
-also run the built `nomos` executable against its own policy and suite.
+Change the suite and bundle paths to match your repository. To test changes
+to Nomos itself, contributors can use `go run ./cmd/nomos test` instead.
 
 Exit codes are 0 for all passing cases, 1 for a decision/rule mismatch,
 and 2 for invalid input or a loading error. JSON reports include the policy

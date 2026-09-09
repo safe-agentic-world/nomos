@@ -58,7 +58,7 @@ func TestQuickstartDocsReferenceExistingFilesAndCurrentFlags(t *testing.T) {
 	}
 
 	requiredQuickstartCommands := []string{
-		`go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml`,
+		`nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml`,
 		`examples/local-inbox/demo.py`,
 		`./sdk/python[langgraph]`,
 		`nomos doctor -c .\examples\quickstart\config.quickstart.json --format json`,
