@@ -9,8 +9,18 @@ an audited local SQLite delivery. It runs without a model or service account.
 Its `permissions.json` is also a standalone CI regression suite:
 
 ```bash
-go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
+nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
 ```
+
+Install the CLI using the [installation guide](../README.md#install).
+
+## Standalone Agent
+
+[DispatchDesk](https://github.com/safe-agentic-world/dispatchdesk) is a separate
+Ollama-driven support agent using Nomos's public SDK. Its application owns the
+tools and SQLite data; Nomos gates reviewed sends and refunds. Start there for
+a model-driven example with durable pause/resume and external-consumer tests.
+It is maintained by the Nomos author, and sends/refunds are local records only.
 
 ## Compatibility Examples
 

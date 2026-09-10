@@ -20,11 +20,17 @@ Thumbs.db
 
 # Local runtime/state artifacts
 .env
+.env.*
+!.env.example
+!.env.sample
 *.db
-*.db-journal
+*.db-*
 *.sqlite
+*.sqlite-*
 *.sqlite3
+*.sqlite3-*
 *.log
+.local/
 
 # Temporary directories
 .tmp/

@@ -8,7 +8,9 @@ Import `NomosClient`, `ActionRequest`, and `CustomTool` from `nomos_sdk`.
 The standard-library SDK needs a running Nomos gateway. The Go gateway is
 installed separately; installing this package does not install the server.
 
-Start with the repository's `examples/local-inbox` demo and `docs/http-sdk.md`.
+Start with the [local inbox demo](../../examples/local-inbox/README.md) and
+[Python guide](../../docs/http-sdk.md). For a separately packaged, model-driven
+application, see [DispatchDesk](https://github.com/safe-agentic-world/dispatchdesk).
 The optional `nomos_langgraph` adapter uses LangGraph checkpoints and interrupts;
 it does not implement an agent framework or require an LLM account.
 

@@ -79,7 +79,7 @@ mkdir -p Formula
 
 cat > Formula/nomos.rb <<EOF
 class Nomos < Formula
-  desc "Zero-trust control plane for AI agent side effects"
+  desc "Permissions and approvals for custom AI agent tools"
   homepage "https://github.com/${SOURCE_REPOSITORY}"
   version "${VERSION}"
   license "Apache-2.0"
@@ -113,7 +113,7 @@ mkdir -p bucket
 cat > bucket/nomos.json <<EOF
 {
   "version": "${VERSION}",
-  "description": "Zero-trust control plane for AI agent side effects",
+  "description": "Permissions and approvals for custom AI agent tools",
   "homepage": "https://github.com/${SOURCE_REPOSITORY}",
   "license": "Apache-2.0",
   "architecture": {
