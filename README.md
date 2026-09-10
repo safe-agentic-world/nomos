@@ -5,7 +5,7 @@
 [![CI](https://github.com/safe-agentic-world/nomos/actions/workflows/ci.yml/badge.svg)](https://github.com/safe-agentic-world/nomos/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-[Install](#install) · [Quickstart](#quickstart) · [Python Guide](docs/http-sdk.md) · [Examples](examples/README.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
+[Install](#install) · [Quickstart](#quickstart) · [Agent Example](#standalone-agent-example) · [Python Guide](docs/http-sdk.md) · [Examples](examples/README.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
 
 Nomos is an open-source permission layer for custom AI agent tools.
 Your agent proposes an action; your application checks whether it is
@@ -93,6 +93,10 @@ Choose either path: **test a policy** with just the CLI, or **run a tool
 with human review** using Python and LangGraph. You do not need LangGraph
 for permission tests.
 
+Want a model-driven application instead of scripted requests? Try
+[DispatchDesk](#standalone-agent-example), a separate support agent that uses
+Nomos through its public SDK.
+
 Install Nomos above, then use Git to download the example files and Python
 SDK. Cloning the repository does not require building the CLI.
 
@@ -164,6 +168,39 @@ for the local demo.
 
 [Detailed walkthrough and prerequisites](docs/quickstart.md) ·
 [Demo source](examples/local-inbox/demo.py)
+
+## Standalone Agent Example
+
+[DispatchDesk](https://github.com/safe-agentic-world/dispatchdesk)
+is a separately packaged support agent with a real local Ollama model. It reads
+tickets, drafts replies, and—with Nomos enabled—pauses sends and refunds for
+review. Its application owns the tools and SQLite data; Nomos supplies
+authorization through the public Python SDK.
+
+- **Without Nomos:** run the agent in read/draft-only mode.
+- **With Nomos:** review through a separate reviewer CLI, then restart and
+  resume the agent with a fresh authorization check before execution.
+- **As a compatibility test:** check tenant isolation, approval expiry,
+  changed payloads/recipients, gateway outages, and duplicate execution.
+
+To try its policy suite, install Nomos above and clone the example into a
+separate directory:
+
+```bash
+git clone https://github.com/safe-agentic-world/dispatchdesk.git
+cd dispatchdesk
+nomos test --suite policies/permissions.json --bundle policies/support.yaml
+```
+
+All eight cases should pass, without Python or a running model. For the live
+agent, follow the [setup and review walkthrough](https://github.com/safe-agentic-world/dispatchdesk#add-nomos)
+(Python 3.10+, Ollama, and an installed local model).
+
+Sends and refunds create **local records only**—no email is delivered and no
+money moves. DispatchDesk is maintained by the Nomos author as a reference
+application, not an independent customer endorsement. Its
+[validation record](https://github.com/safe-agentic-world/dispatchdesk/blob/main/VALIDATION.md)
+covers live-model runs, CI results, and known limitations.
 
 ## Connect Your Own Tool
 
@@ -259,6 +296,7 @@ Read the [suite format and CI guide](docs/permission-tests.md).
 | Python SDK | Custom-tool authorization and automatic outcome reporting |
 | LangGraph adapter | Checkpointed review pauses and authorization checks on resume |
 | Local inbox example | Account-free allow, deny, approval, and SQLite delivery |
+| [DispatchDesk](https://github.com/safe-agentic-world/dispatchdesk) | Standalone Ollama support agent, durable tools, and public-SDK compatibility tests |
 | Go / TypeScript clients | HTTP clients and generic custom-action guards; application-owned review/reporting |
 | MCP / coding-agent launcher | Retained compatibility integrations, not required for the workflow above |
 
