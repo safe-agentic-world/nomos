@@ -57,7 +57,7 @@ It preserves the ordered bundle provenance as `path#hash` labels so operators ca
 
 - `rule_id`
 - `decision`
-- `bundle_source`
+- `bundle_source` (multi-bundle only)
 
 This lets operators answer which bundle contributed each matched rule without exposing raw action params or other sensitive request material.
 

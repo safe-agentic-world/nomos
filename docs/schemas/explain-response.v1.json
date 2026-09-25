@@ -42,6 +42,9 @@
     },
     "argument_preview": {
       "type": "object"
+    },
+    "matched_rule_provenance": {
+      "type": "array"
     }
   }
 }
