@@ -202,8 +202,12 @@ format for your own bundle.
   reached through an unusual spelling, a symlink created after the check,
   or a program that reads files by its own logic
   (`python script.py`) is decided by the rules that match that command,
-  not by what it will touch. Pair the hook with Claude Code's sandbox for
-  OS-level containment.
+  not by what it will touch. Option values are split on `,` and `=` only:
+  a value glued to a multi-letter short option (`-XY/abs`) or a
+  `:`-separated path list inside one value is checked as a single name,
+  so a tool that interprets those reaches outside the workspace only if
+  it is allowed with such arguments. Pair the hook with Claude Code's
+  sandbox for OS-level containment.
 - **Allowing an interpreter allows what it runs.** A rule that allows
   `python3 **`, `node **`, `make **`, or `npm run **` allows arbitrary
   code by construction (`python3 -c`, a Makefile recipe, an npm script);
