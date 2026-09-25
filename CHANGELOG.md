@@ -6,6 +6,49 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `nomos hook claude-code`: a Claude Code `PreToolUse` hook that decides the
+  agent's native `Bash`, `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`,
+  and `WebFetch` calls (and, opt-in, MCP tools) with a Nomos bundle or
+  embedded profile. Shell commands are split into simple commands and each
+  is evaluated; `deny` rules produce a hook `deny`, which Claude Code
+  enforces in every permission mode including `bypassPermissions`;
+  `REQUIRE_APPROVAL` produces `ask`; unmatched actions ask by default
+  (`--on-default deny` for unattended runs). Syntax the parser will not
+  interpret (variable or command substitution, heredocs, redirection to
+  files, subshells, `sudo`, `eval`, `xargs`, state-changing builtins) and
+  paths that resolve outside the workspace are never auto-allowed. Includes
+  `--install` (merges into `.claude/settings.json`), `--print-settings`,
+  `--simulate`, and `--verify-audit`. See `docs/claude-code-hook.md`.
+- Hash-chained JSONL audit recorder (`audit.NewFileChainRecorder`) for
+  short-lived processes: each line is redacted field by field, hashed after
+  redaction, and linked to the previous line, and `audit.VerifyFileChain`
+  re-verifies the file. The hook writes to `.nomos/claude-code-hook.jsonl`
+  by default.
+- Wildcard tokens in `exec_match.argv_patterns`: a token containing `*` or
+  `?` matches a whole argv token (`*` also matches `/`), so a rule such as
+  `["**", "*.pem", "**"]` denies a secret path in any argument position.
+- Incident regression suites under `examples/incidents/` for the three
+  default profiles, run by `go test ./...` and CI.
+
+### Changed
+
+- Default profiles now deny commands whose arguments name secret material
+  (`.env` and variants, `.pem`, `.key`, SSH keys, `.aws`, `.gcp`, `.kube`,
+  kubeconfig, `.netrc`), deny `rm`/`rmdir` targeting the home directory,
+  the filesystem root, any absolute path, or a parent directory, and gate
+  destructive git operations however their arguments are spelled
+  (`git reset --hard HEAD~5`, `git clean -fdx`, `git push --force ...`).
+  `safe-dev` additionally allows common read-only inspection tools (`cat`,
+  `head`, `grep`, `find`, ...) so they stop prompting. Profile hashes in
+  `testdata/policy-profiles/hashes.json` were re-pinned.
+- Documentation corrections: the launcher is described as the MCP boundary
+  for a launched session rather than "the default execution boundary";
+  `AGENTS.md` no longer references directories that do not exist; the MCP
+  compatibility note explains how forwarded tool lists can change; the
+  policy language reference documents exact-length argv matching.
+
 ### Developer Workflow
 
 - Pinned build/CI toolchains to patched Go 1.26.8 after the installed

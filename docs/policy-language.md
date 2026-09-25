@@ -237,6 +237,24 @@ For rules that use `exec_match`, Nomos derives a typed internal exec constraint 
 
 This keeps policy as the only authorization source while still letting the executor fail closed if the matched exec shape is not preserved.
 
+### Argv Pattern Semantics
+
+- Patterns are positional and exact-length: `["git", "reset", "--hard"]` matches
+  only that three-token argv. Append `"**"` to match any further tokens:
+  `["git", "reset", "--hard", "**"]` also matches `git reset --hard HEAD~5`.
+  A pattern without a trailing `"**"` that is meant to gate a command family
+  is the most common authoring mistake; the default profiles ship both forms.
+- `"**"` matches zero or more tokens and may appear anywhere, including first.
+- `"*"` matches exactly one token of any value.
+- A token containing `*` or `?` is a whole-token wildcard, and `*` also matches
+  `/`: `["**", "*.pem", "**"]` matches any argv that carries a `.pem` path in
+  any position, such as `cp certs/server.pem /tmp/`. Tokens without wildcard
+  characters match exactly.
+- Matching is over normalized argv tokens only. Shell syntax such as
+  variable expansion, command substitution, or redirection never reaches the
+  matcher; the MCP `run_command` tool rejects it and the Claude Code hook
+  asks for confirmation or denies it.
+
 Legacy `exec_allowlist` remains supported as a compatibility path for older bundles that do not use `exec_match`.
 
 Rules:

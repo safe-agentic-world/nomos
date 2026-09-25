@@ -670,3 +670,80 @@ func TestLoadBundlesRejectsDuplicateRuleIDsAcrossBundles(t *testing.T) {
 		t.Fatalf("expected duplicate rule rejection, got %v", err)
 	}
 }
+
+func TestPolicyExecMatchWildcardTokensMatchSensitivePathsAnywhereInArgv(t *testing.T) {
+	bundle := Bundle{
+		Version: "v1",
+		Rules: []Rule{
+			{
+				ID:         "allow-cat",
+				ActionType: "process.exec",
+				Resource:   "file://workspace/",
+				Decision:   DecisionAllow,
+				ExecMatch:  &ExecMatch{ArgvPatterns: [][]string{{"cat", "**"}}},
+			},
+			{
+				ID:         "deny-secret-file-args",
+				ActionType: "process.exec",
+				Resource:   "file://workspace/",
+				Decision:   DecisionDeny,
+				ExecMatch: &ExecMatch{ArgvPatterns: [][]string{
+					{"**", "*.env", "**"},
+					{"**", "*.env.*", "**"},
+					{"**", "*.pem", "**"},
+					{"**", "*id_rsa*", "**"},
+				}},
+			},
+		},
+	}
+	if err := bundle.Validate(); err != nil {
+		t.Fatalf("validate bundle: %v", err)
+	}
+	engine := NewEngine(bundle)
+	cases := []struct {
+		name string
+		argv []string
+		want string
+	}{
+		{name: "plain file read stays allowed", argv: []string{"cat", "README.md"}, want: DecisionAllow},
+		{name: "dotenv anywhere in argv is denied", argv: []string{"cat", "./config/.env"}, want: DecisionDeny},
+		{name: "dotenv variant is denied", argv: []string{"cat", "-n", ".env.local"}, want: DecisionDeny},
+		{name: "pem in later position is denied", argv: []string{"cat", "README.md", "certs/server.pem"}, want: DecisionDeny},
+		{name: "ssh key substring is denied", argv: []string{"cat", "/home/dev/.ssh/id_rsa"}, want: DecisionDeny},
+		{name: "wildcard does not match unrelated names", argv: []string{"cat", "environment.md"}, want: DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params, err := json.Marshal(map[string]any{"argv": tc.argv})
+			if err != nil {
+				t.Fatalf("marshal params: %v", err)
+			}
+			decision := engine.Evaluate(normalize.NormalizedAction{
+				ActionType:  "process.exec",
+				Resource:    "file://workspace/",
+				Params:      params,
+				Principal:   "system",
+				Agent:       "nomos",
+				Environment: "dev",
+			})
+			if decision.Decision != tc.want {
+				t.Fatalf("argv %v: got %s (%v) want %s", tc.argv, decision.Decision, decision.MatchedRuleIDs, tc.want)
+			}
+		})
+	}
+}
+
+func TestPolicyExecMatchLiteralTokensWithoutWildcardsStayExact(t *testing.T) {
+	if matchArgvToken("push", "pushed") {
+		t.Fatal("literal token must not prefix-match")
+	}
+	if !matchArgvToken("*", "anything") {
+		t.Fatal("bare * must match any token")
+	}
+	if !matchArgvToken("*.pem", "a/b/c.pem") {
+		t.Fatal("wildcard must match across path separators")
+	}
+	if matchArgvToken("?.pem", "ab.pem") {
+		t.Fatal("? must match exactly one character")
+	}
+}

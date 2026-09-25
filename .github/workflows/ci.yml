@@ -380,6 +380,21 @@ jobs:
           [[ ${traversal_status} -ne 0 ]]
           [[ "${traversal_output}" == *"NORMALIZATION_ERROR:"* ]]
 
+          for profile in safe-dev ci-strict prod-locked; do
+            "${BIN_PATH}" test --suite "./examples/incidents/${profile}.permissions.json" --bundle "./profiles/${profile}.yaml" --format json > "${TEST_DIR}/incidents-${profile}.json"
+            grep -q '"failed":0' "${TEST_DIR}/incidents-${profile}.json"
+          done
+
+          hook_deny="$("${BIN_PATH}" hook claude-code --profile safe-dev --workspace "${TEST_DIR}" --audit none --simulate --command 'rm -rf tests/ patches/ plan/ ~/' 2>/dev/null)"
+          echo "${hook_deny}"
+          [[ "${hook_deny}" == *'"permissionDecision":"deny"'* ]]
+          hook_allow="$("${BIN_PATH}" hook claude-code --profile safe-dev --workspace "${TEST_DIR}" --audit none --simulate --command 'git status' 2>/dev/null)"
+          [[ "${hook_allow}" == *'"permissionDecision":"allow"'* ]]
+          hook_ask="$("${BIN_PATH}" hook claude-code --profile safe-dev --workspace "${TEST_DIR}" --audit none --simulate --command 'rm -rf $HOME' 2>/dev/null)"
+          [[ "${hook_ask}" == *'"permissionDecision":"ask"'* ]]
+          "${BIN_PATH}" hook claude-code --install --workspace "${TEST_DIR}" --profile safe-dev
+          grep -q 'nomos hook claude-code --profile safe-dev' "${TEST_DIR}/.claude/settings.json"
+
           "${BIN_PATH}" doctor -c ./testdata/ci/config.smoke.json > "${TEST_DIR}/doctor.txt"
           cat "${TEST_DIR}/doctor.txt"
           grep -q "Result: READY" "${TEST_DIR}/doctor.txt"

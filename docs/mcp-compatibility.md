@@ -12,7 +12,7 @@ The `initialize` response currently advertises:
 
 - `capabilities.tools.listChanged = false`
 
-Nomos therefore treats MCP `tools/list` as a static advertised surface for the life of a server session.
+Nomos does not emit `notifications/tools/list_changed` to downstream clients. Its own direct tools are static for the life of a session. Forwarded upstream tools can change when an upstream server emits `notifications/tools/list_changed` (see [upstream MCP gateway](upstream-mcp-gateway.md)); a downstream client that receives an unknown-tool error should call `tools/list` again rather than rely on a notification.
 
 ## Supported Transports
 

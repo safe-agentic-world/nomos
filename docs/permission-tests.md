@@ -58,6 +58,12 @@ Exit codes are 0 for all passing cases, 1 for a decision/rule mismatch,
 and 2 for invalid input or a loading error. JSON reports include the policy
 bundle hash, per-case expected/actual decisions, matching rules, and totals.
 
+The checked-in [incident regression suites](../examples/incidents/README.md)
+apply the same format to documented agent incidents for each default
+profile. To see what Claude Code would receive for a shell command, use
+`nomos hook claude-code --simulate --command "..."`
+([hook guide](claude-code-hook.md)).
+
 Before broadening a permission, add a negative case that should still be
 denied. Use real-gateway integration tests for approval and execution
 semantics; passing these fixtures alone is not a security assessment.
