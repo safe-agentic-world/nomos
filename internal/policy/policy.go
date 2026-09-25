@@ -42,9 +42,9 @@ type DeniedRuleExplanation struct {
 }
 
 type MatchedRuleProvenance struct {
-	RuleID       string
-	Decision     string
-	BundleSource string
+	RuleID       string `json:"rule_id"`
+	Decision     string `json:"decision"`
+	BundleSource string `json:"bundle_source,omitempty"`
 }
 
 type ActionCapability struct {

@@ -628,3 +628,50 @@ func newUITestGateway(t *testing.T) *Gateway {
 	})
 	return gw
 }
+
+func TestExplainResponseMatchedRuleProvenanceUsesDocumentedJSONKeys(t *testing.T) {
+	resp := buildExplainResponse(policy.ExplainDetails{
+		Decision: policy.Decision{
+			Decision:       policy.DecisionAllow,
+			ReasonCode:     "allow_by_rule",
+			MatchedRuleIDs: []string{"allow-readme", "allow-workspace"},
+			Obligations:    map[string]any{},
+		},
+		MatchedRuleProvenance: []policy.MatchedRuleProvenance{
+			{RuleID: "allow-readme", Decision: policy.DecisionAllow, BundleSource: "base.yaml#hash-base"},
+			{RuleID: "allow-workspace", Decision: policy.DecisionAllow},
+		},
+		ObligationsPreview: map[string]any{},
+	}, normalize.NormalizedAction{
+		ActionID:   "act-provenance",
+		TraceID:    "trace-provenance",
+		ActionType: "fs.read",
+		Resource:   "file://workspace/README.md",
+	}, Config{}, "BEST_EFFORT")
+
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal explain response: %v", err)
+	}
+	var decoded struct {
+		MatchedRuleProvenance []map[string]any `json:"matched_rule_provenance"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal explain response: %v", err)
+	}
+	if len(decoded.MatchedRuleProvenance) != 2 {
+		t.Fatalf("expected two provenance entries, got %#v", decoded.MatchedRuleProvenance)
+	}
+	first := decoded.MatchedRuleProvenance[0]
+	if first["rule_id"] != "allow-readme" || first["decision"] != policy.DecisionAllow || first["bundle_source"] != "base.yaml#hash-base" {
+		t.Fatalf("expected documented snake_case provenance keys, got %#v", first)
+	}
+	for _, legacy := range []string{"RuleID", "Decision", "BundleSource"} {
+		if _, ok := first[legacy]; ok {
+			t.Fatalf("expected Go field name %q to be absent from explain JSON, got %#v", legacy, first)
+		}
+	}
+	if _, ok := decoded.MatchedRuleProvenance[1]["bundle_source"]; ok {
+		t.Fatalf("expected bundle_source to be omitted when a rule has no bundle provenance, got %#v", decoded.MatchedRuleProvenance[1])
+	}
+}

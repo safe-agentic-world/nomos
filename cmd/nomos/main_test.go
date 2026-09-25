@@ -992,3 +992,65 @@ func mustCanonicalHashForTest(t *testing.T, raw string) string {
 	}
 	return canonicaljson.HashSHA256(canonical)
 }
+
+func TestPolicyExplainPayloadMatchedRuleProvenanceUsesDocumentedJSONKeys(t *testing.T) {
+	buildPayload := func(provenance []policy.MatchedRuleProvenance) map[string]any {
+		return buildPolicyExplainPayload(policy.ExplainDetails{
+			Decision: policy.Decision{
+				Decision:         policy.DecisionAllow,
+				ReasonCode:       "allow_by_rule",
+				MatchedRuleIDs:   []string{"allow-workspace"},
+				PolicyBundleHash: "bundle-hash",
+			},
+			MatchedRuleProvenance: provenance,
+			ObligationsPreview:    map[string]any{},
+		}, normalize.NormalizedAction{
+			ActionType: "fs.read",
+			Resource:   "file://workspace/README.md",
+		}, explainSettings{
+			AssuranceLevel: assurance.LevelGuarded,
+		})
+	}
+
+	multi := decodeExplainProvenance(t, buildPayload([]policy.MatchedRuleProvenance{
+		{RuleID: "allow-workspace", Decision: policy.DecisionAllow, BundleSource: "base.yaml#hash-base"},
+		{RuleID: "deny-env", Decision: policy.DecisionDeny, BundleSource: "env.yaml#hash-env"},
+	}))
+	if len(multi) != 2 {
+		t.Fatalf("expected two provenance entries, got %#v", multi)
+	}
+	first := multi[0]
+	if first["rule_id"] != "allow-workspace" || first["decision"] != policy.DecisionAllow || first["bundle_source"] != "base.yaml#hash-base" {
+		t.Fatalf("expected documented snake_case provenance keys, got %#v", first)
+	}
+	for _, legacy := range []string{"RuleID", "Decision", "BundleSource"} {
+		if _, ok := first[legacy]; ok {
+			t.Fatalf("expected Go field name %q to be absent from explain JSON, got %#v", legacy, first)
+		}
+	}
+
+	single := decodeExplainProvenance(t, buildPayload([]policy.MatchedRuleProvenance{
+		{RuleID: "allow-workspace", Decision: policy.DecisionAllow},
+	}))
+	if len(single) != 1 || single[0]["rule_id"] != "allow-workspace" {
+		t.Fatalf("expected single-bundle provenance entry, got %#v", single)
+	}
+	if _, ok := single[0]["bundle_source"]; ok {
+		t.Fatalf("expected bundle_source to be omitted for single-bundle loads, got %#v", single[0])
+	}
+}
+
+func decodeExplainProvenance(t *testing.T, payload map[string]any) []map[string]any {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	var decoded struct {
+		MatchedRuleProvenance []map[string]any `json:"matched_rule_provenance"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	return decoded.MatchedRuleProvenance
+}
