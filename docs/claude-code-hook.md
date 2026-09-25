@@ -130,8 +130,13 @@ Two more inputs feed the answer:
   with `--outside-workspace deny`, or no decision with
   `--outside-workspace passthrough`. This applies to `Read`/`Write`/`Edit`
   paths, `cd` and `git -C` targets, and path-shaped arguments of shell
-  commands (`~`, absolute paths, `../`), checked from every working
-  directory the command could run in. Each path is resolved two ways and
+  commands (`~`, absolute paths, `../`, names containing a separator),
+  including option values in any spelling (`-C /tmp`, `-C/tmp`,
+  `--prefix=/opt`) and paths embedded in flags or assignments
+  (`-Wl,-rpath,/usr/lib`, `DESTDIR=/tmp/x`), checked from every working
+  directory the command could run in. A token is never exempt because it
+  contains `@` or `://`: a remote or URL resolves inside the workspace as
+  a relative name and yields no finding. Each path is resolved two ways and
   is outside if either escapes: with `..` collapsed first and symlinks
   resolved afterwards, and the way the kernel opens it, resolving a
   symlink before a following `..` (so `link/../secret` with `link`

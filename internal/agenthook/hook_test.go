@@ -369,6 +369,120 @@ func TestPhysicalPathResolvesSymlinksBeforeDotDot(t *testing.T) {
 	}
 }
 
+func TestPathCandidatesInspectOptionValuesAndEmbeddedPaths(t *testing.T) {
+	cases := []struct {
+		tok  string
+		want []string
+	}{
+		{"../user@corp-secret.txt", []string{"../user@corp-secret.txt"}},
+		{"./at@dir/../../secret.txt", []string{"./at@dir/../../secret.txt"}},
+		{"git@github.com:org/repo.git", []string{"git@github.com:org/repo.git"}},
+		{"https://example.com/x", []string{"https://example.com/x"}},
+		{"-C/tmp", []string{"/tmp"}},
+		{"-C..", []string{".."}},
+		{"-C~", []string{"~"}},
+		{"-o../out.txt", []string{"../out.txt"}},
+		{"-Wl,-rpath,/usr/lib", []string{"l,-rpath,/usr/lib", "/usr/lib"}},
+		{"--prefix=/opt", []string{"/opt"}},
+		{"--mount=type=bind,src=/etc,dst=/x", []string{"type=bind,src=/etc,dst=/x", "/etc", "/x"}},
+		{"DESTDIR=/tmp/x", []string{"DESTDIR=/tmp/x", "/tmp/x"}},
+		{"sub/a,b", []string{"sub/a,b", "sub/a"}},
+		{`..\secret.txt`, []string{`..\secret.txt`}},
+		{`C:\Users\x`, []string{`C:\Users\x`}},
+		{"-rf", nil},
+		{"-", nil},
+		{"--", nil},
+		{"--verbose", nil},
+		{"plain", nil},
+		{"", nil},
+	}
+	for _, tc := range cases {
+		got := pathCandidates(tc.tok)
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Fatalf("pathCandidates(%q) = %q, want %q", tc.tok, got, tc.want)
+		}
+	}
+}
+
+func TestEvaluateChecksPathsWithAtSignsAndGluedOptionValues(t *testing.T) {
+	root := newWorkspace(t)
+	outside := filepath.Dir(root)
+	if err := os.WriteFile(filepath.Join(outside, "user@corp-secret.txt"), []byte("outside"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("outside"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "at@dir"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	engine := testEngine(t)
+	opts := testOptions(t, root)
+
+	for _, command := range []string{
+		"cat ../user@corp-secret.txt",
+		"cat ./at@dir/../../secret.txt",
+		"cat at@dir/../../user@corp-secret.txt",
+		"cat " + filepath.ToSlash(filepath.Join(outside, "mail@host", "secret.txt")),
+		"cat -o../secret.txt",
+		"cat -C" + filepath.ToSlash(outside),
+		"cat -Wl,-rpath,../secret.txt",
+		"cat DESTDIR=../secret.txt",
+		"cat --output=../secret.txt",
+		"cat -C..",
+		"cat -C~",
+	} {
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": command}), opts)
+		if err != nil {
+			t.Fatalf("%s: evaluate: %v", command, err)
+		}
+		if res.Permission != PermissionAsk || !strings.Contains(res.Reason, "outside the workspace") {
+			t.Fatalf("%s: outside path must be found: %s %q", command, res.Permission, res.Reason)
+		}
+	}
+
+	denyOpts := opts
+	denyOpts.OutsideWorkspace = ModeDeny
+	res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": "cat ../user@corp-secret.txt"}), denyOpts)
+	if err != nil || res.Permission != PermissionDeny {
+		t.Fatalf("outside path with @ must deny under deny mode: %s %q err=%v", res.Permission, res.Reason, err)
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := os.MkdirAll(filepath.Join(outside, "dir"), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.Symlink(filepath.Join(outside, "dir"), filepath.Join(root, "link")); err != nil {
+			t.Fatalf("symlink: %v", err)
+		}
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": "cat link/../mail@host/secret.txt"}), opts)
+		if err != nil || res.Permission != PermissionAsk || !strings.Contains(res.Reason, "outside the workspace") {
+			t.Fatalf("symlink escape with @ must be found: %s %q err=%v", res.Permission, res.Reason, err)
+		}
+	}
+
+	// Remotes, URLs, and inside paths with separators produce no finding.
+	for _, command := range []string{
+		"git clone git@github.com:org/repo.git",
+		"git clone https://github.com/org/repo.git",
+		"cat sub/a,b",
+		"cat KEY=src/x",
+		"cat -osrc/out.txt",
+	} {
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": command}), opts)
+		if err != nil {
+			t.Fatalf("%s: evaluate: %v", command, err)
+		}
+		if strings.Contains(res.Reason, "outside the workspace") {
+			t.Fatalf("%s: must not be flagged as outside: %s %q", command, res.Permission, res.Reason)
+		}
+	}
+	res, err = Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": "cat sub/a,b"}), opts)
+	if err != nil || res.Permission != PermissionAllow {
+		t.Fatalf("inside path with comma must stay allowed: %s %q err=%v", res.Permission, res.Reason, err)
+	}
+}
+
 func TestEvaluateURLAndMCPAndPassthrough(t *testing.T) {
 	root := newWorkspace(t)
 	engine := testEngine(t)

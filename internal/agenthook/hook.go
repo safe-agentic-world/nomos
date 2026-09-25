@@ -264,14 +264,13 @@ func mapShell(command string, in Input, opts Options) Mapping {
 	}
 	for _, cmd := range list.Commands {
 		for _, tok := range cmd.Argv[1:] {
-			value, ok := pathCandidate(tok)
-			if !ok {
-				continue
-			}
-			for _, cwd := range cmd.Cwds {
-				if class, resolved := classifyPath(value, cwd, in, opts); class == pathOutside {
-					m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "argument " + strconvQuote(tok) + " resolves to " + strconvQuote(resolved)})
-					break
+		candidates:
+			for _, value := range pathCandidates(tok) {
+				for _, cwd := range cmd.Cwds {
+					if class, resolved := classifyPath(value, cwd, in, opts); class == pathOutside {
+						m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "argument " + strconvQuote(tok) + " resolves to " + strconvQuote(resolved)})
+						break candidates
+					}
 				}
 			}
 		}
@@ -528,30 +527,78 @@ func reverse(in []string) []string {
 	return out
 }
 
-// pathCandidate extracts a filesystem path from an argv token, if the token
-// looks like one. Options are skipped unless they carry a value after `=`.
-func pathCandidate(tok string) (string, bool) {
-	if tok == "" {
-		return "", false
-	}
-	if strings.HasPrefix(tok, "-") {
-		if idx := strings.Index(tok, "="); strings.HasPrefix(tok, "--") && idx > 0 {
-			return pathCandidate(tok[idx+1:])
+// pathCandidates extracts the filesystem paths an argv token may name.
+// Option values are inspected whether they are separate (`-C /tmp`, handled
+// as their own token), joined with `=` (`--prefix=/opt`), or glued to a
+// short option (`-C/tmp`, `-o../out`), and values are additionally split on
+// `,` and `=` so a path embedded in a flag or a variable assignment
+// (`-Wl,-rpath,/usr/lib`, `DESTDIR=/tmp/x`) is still classified. Tokens
+// containing `@` or `://` are not skipped: a URL or an scp-style remote is a
+// relative name that resolves inside the workspace and yields no finding,
+// while a real path that happens to contain `@` keeps its check.
+func pathCandidates(tok string) []string {
+	switch {
+	case tok == "":
+		return nil
+	case strings.HasPrefix(tok, "--"):
+		idx := strings.Index(tok, "=")
+		if idx < 0 {
+			return nil
 		}
-		return "", false
+		return pathPieces(tok[idx+1:])
+	case strings.HasPrefix(tok, "-"):
+		if len(tok) <= 2 {
+			return nil
+		}
+		return pathPieces(tok[2:])
+	default:
+		return pathPieces(tok)
 	}
-	if strings.Contains(tok, "://") || strings.Contains(tok, "@") {
-		return "", false
+}
+
+func pathPieces(value string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		if p == "" || seen[p] || !pathShaped(p) {
+			return
+		}
+		seen[p] = true
+		out = append(out, p)
 	}
+	add(value)
+	if strings.ContainsAny(value, ",=") {
+		for _, piece := range strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == '=' }) {
+			add(piece)
+		}
+	}
+	return out
+}
+
+// pathShaped reports whether a token looks like a filesystem path: a
+// relative or absolute name with a directory separator, a home reference,
+// or a bare `.`/`..`. Windows spellings are accepted so a `..\` escape is
+// classified on that platform; on POSIX a backslash is an ordinary byte and
+// such a token resolves inside the workspace.
+func pathShaped(tok string) bool {
 	switch {
 	case tok == ".", tok == "..", tok == "~":
-		return tok, true
+		return true
 	case strings.HasPrefix(tok, "/"), strings.HasPrefix(tok, "~"), strings.HasPrefix(tok, "./"), strings.HasPrefix(tok, "../"):
-		return tok, true
-	case strings.Contains(tok, "/"):
-		return tok, true
+		return true
+	case strings.HasPrefix(tok, "\\"), strings.HasPrefix(tok, ".\\"), strings.HasPrefix(tok, "..\\"):
+		return true
+	case strings.Contains(tok, "/"), strings.Contains(tok, "\\"):
+		return true
+	case len(tok) >= 2 && tok[1] == ':' && isASCIILetter(tok[0]):
+		// Drive-relative or drive-absolute Windows path (`C:x`, `C:\x`).
+		return true
 	}
-	return "", false
+	return false
+}
+
+func isASCIILetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
 func evaluateAction(engine *policy.Engine, in Input, act MappedAction, opts Options) (Outcome, error) {

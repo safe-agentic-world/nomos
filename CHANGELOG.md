@@ -19,9 +19,10 @@ The format is based on Keep a Changelog and semantic versioning.
   interpret (variable or command substitution, heredocs, redirection to
   files, subshells, `sudo`, `eval`, `xargs`, state-changing builtins, git
   configuration overrides such as `-c core.pager=...`) and paths that
-  resolve outside the workspace, checked from every working directory a
-  command could run in after a failed `cd` and with symlinks resolved
-  before a following `..`, are never auto-allowed. Includes
+  resolve outside the workspace, checked in option values and embedded
+  assignments too, from every working directory a command could run in
+  after a failed `cd`, and with symlinks resolved before a following `..`,
+  are never auto-allowed. Includes
   `--install` (merges into `.claude/settings.json`), `--print-settings`,
   `--simulate`, and `--verify-audit`. See `docs/claude-code-hook.md`.
 - Hash-chained JSONL audit recorder (`audit.NewFileChainRecorder`) for
