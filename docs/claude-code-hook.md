@@ -90,11 +90,20 @@ Normalization before evaluation:
   are unwrapped and the inner command list is parsed the same way.
 - `env`, `command`, `exec`, `nohup`, `time`, and `nice` prefixes are
   dropped when they carry no options.
-- git global options (`-C dir`, `-c key=value`, `--git-dir`,
-  `--work-tree`, `--no-pager`, ...) are stripped so `git -C . push` is
-  evaluated as `git push`; the directory feeds the workspace check below.
-- `cd` changes the effective working directory for the commands that
-  follow it and produces no action of its own.
+- git's harmless global options (`-C dir`, `--no-pager`, `-p`, `--bare`,
+  ...) are stripped so `git -C . push` is evaluated as `git push`; the
+  `-C` directory feeds the workspace check below. Options that execute
+  configured commands or relocate the repository (`-c key=value`,
+  `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`,
+  `--namespace`) are refused, because `git -c core.pager=... log` or an
+  alias override runs whatever the value says.
+- `cd` produces no action of its own and changes the working directory
+  for what follows. A real shell keeps going after a failed `cd` when the
+  separator is `;`, `||`, `|`, or `&`, so the hook tracks every directory
+  the next command could run in: after `cd nope ; cat ../secret.txt` the
+  read is checked from both the original directory and `nope`, and the
+  escape from the original directory is caught. Only `cd sub && ...`
+  narrows the next command to `sub`.
 
 ## Decision Semantics
 
@@ -121,9 +130,16 @@ Two more inputs feed the answer:
   with `--outside-workspace deny`, or no decision with
   `--outside-workspace passthrough`. This applies to `Read`/`Write`/`Edit`
   paths, `cd` and `git -C` targets, and path-shaped arguments of shell
-  commands (`~`, absolute paths, `../`), after symlink resolution of the
-  existing part of the path. Only `passthrough` lets Claude Code's own
-  flow decide such a call; it never turns into an `allow`.
+  commands (`~`, absolute paths, `../`), checked from every working
+  directory the command could run in. Each path is resolved two ways and
+  is outside if either escapes: with `..` collapsed first and symlinks
+  resolved afterwards, and the way the kernel opens it, resolving a
+  symlink before a following `..` (so `link/../secret` with `link`
+  pointing outside the workspace is outside, even though the cleaned text
+  names a file inside it). `passthrough` withholds the Nomos decision
+  so Claude Code's own permission flow applies; it never turns into an
+  `allow`, and a `deny` rule or an `ask` from another part of the same
+  command still wins.
 
 The workspace root is `--workspace`, else `CLAUDE_PROJECT_DIR`, else the
 `cwd` Claude Code sends with the hook input.
@@ -178,11 +194,25 @@ format for your own bundle.
   treat the hook as policy enforcement inside the harness, not as a
   sandbox around it.
 - **Argv, not filesystem state.** Rules see normalized tokens. A file
-  reached through an unusual spelling, a symlink the workspace check
-  cannot resolve, or a program that reads files by its own logic
+  reached through an unusual spelling, a symlink created after the check,
+  or a program that reads files by its own logic
   (`python script.py`) is decided by the rules that match that command,
   not by what it will touch. Pair the hook with Claude Code's sandbox for
   OS-level containment.
+- **Allowing an interpreter allows what it runs.** A rule that allows
+  `python3 **`, `node **`, `make **`, or `npm run **` allows arbitrary
+  code by construction (`python3 -c`, a Makefile recipe, an npm script);
+  the argv the policy sees is exactly what runs, but what runs is a
+  program. Allow interpreters only for workspaces you trust, and prefer
+  patterns that name the script or subcommand.
+- **Opaque wrappers stay opaque.** `timeout 5 cmd`, `docker run ...`,
+  `busybox sh -c ...`, and similar are evaluated as `timeout`, `docker`,
+  or `busybox` commands; the hook does not look inside them. With the
+  default profiles they have no allow rule and therefore ask.
+- **Hooks run once per tool call.** Claude Code does not re-run the hook
+  when a command it approved is retried, and the hook cannot see the
+  effect of an approved command on later ones (for example a script it
+  writes and then runs, which is decided as the interpreter call above).
 - **Identity is configured, not authenticated.** `--principal`,
   `--agent`, and `--environment` label the records and select rules with
   identity filters; the hook has no caller to verify.

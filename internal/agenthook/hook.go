@@ -7,6 +7,8 @@
 package agenthook
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -266,8 +268,11 @@ func mapShell(command string, in Input, opts Options) Mapping {
 			if !ok {
 				continue
 			}
-			if class, resolved := classifyPath(value, cmd.Cwd, in, opts); class == pathOutside {
-				m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "argument " + strconvQuote(tok) + " resolves to " + strconvQuote(resolved)})
+			for _, cwd := range cmd.Cwds {
+				if class, resolved := classifyPath(value, cwd, in, opts); class == pathOutside {
+					m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "argument " + strconvQuote(tok) + " resolves to " + strconvQuote(resolved)})
+					break
+				}
 			}
 		}
 		params := map[string]any{"argv": toAnySlice(cmd.Argv), "cwd": filepath.ToSlash(cmd.Cwd)}
@@ -347,8 +352,8 @@ func mapMCP(toolName string, params map[string]any) Mapping {
 	var m Mapping
 	rest := strings.TrimPrefix(toolName, "mcp__")
 	parts := strings.SplitN(rest, "__", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		m.Findings = append(m.Findings, Finding{Kind: FindingUnsupported, Detail: "unrecognized MCP tool name " + strconvQuote(toolName)})
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.Contains(parts[1], "__") {
+		m.Findings = append(m.Findings, Finding{Kind: FindingUnsupported, Detail: "ambiguous MCP tool name " + strconvQuote(toolName)})
 		return m
 	}
 	server, tool := parts[0], parts[1]
@@ -406,6 +411,8 @@ func classifyPath(raw, cmdCwd string, in Input, opts Options) (pathClass, string
 		if filepath.IsAbs(expanded) {
 			base = expanded
 		} else {
+			// `cd` is logical in POSIX shells: `..` is applied to the
+			// textual working directory, so the base is joined lexically.
 			base = filepath.Join(base, expanded)
 		}
 	}
@@ -413,6 +420,13 @@ func classifyPath(raw, cmdCwd string, in Input, opts Options) (pathClass, string
 	if !ok {
 		return pathOutside, raw
 	}
+	// Two views of the argument are checked and the path is outside the
+	// workspace when either escapes:
+	//   - lexical: `..` collapsed first, then symlinks resolved (how a
+	//     path-normalizing consumer such as an editor tool sees it);
+	//   - physical: symlinks resolved component by component before each
+	//     `..` (how the kernel opens it, so `link/../x` with `link`
+	//     pointing outside the workspace lands outside).
 	abs := expanded
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(base, abs)
@@ -422,16 +436,16 @@ func classifyPath(raw, cmdCwd string, in Input, opts Options) (pathClass, string
 	if resolvedRoot, err := filepath.EvalSymlinks(root); err == nil {
 		root = resolvedRoot
 	}
-	candidate := abs
+	lexical := abs
 	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		candidate = resolved
+		lexical = resolved
 	} else {
 		// The path may not exist yet (a new file); resolve the deepest
 		// existing ancestor so a symlinked parent cannot escape unnoticed.
-		candidate = resolveExistingPrefix(abs)
+		lexical = resolveExistingPrefix(abs)
 	}
-	rel, err := filepath.Rel(root, candidate)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	physical := physicalPath(base, expanded)
+	if outsideRoot(root, lexical) || outsideRoot(root, physical) {
 		return pathOutside, abs
 	}
 	// Report the relative path from the unresolved cleaned path so the
@@ -439,7 +453,54 @@ func classifyPath(raw, cmdCwd string, in Input, opts Options) (pathClass, string
 	if plainRel, err := filepath.Rel(filepath.Clean(opts.WorkspaceRoot), abs); err == nil && !strings.HasPrefix(plainRel, "..") {
 		return pathInside, filepath.ToSlash(plainRel)
 	}
+	rel, _ := filepath.Rel(root, lexical)
 	return pathInside, filepath.ToSlash(rel)
+}
+
+// outsideRoot reports whether candidate is not root itself or below it.
+func outsideRoot(root, candidate string) bool {
+	rel, err := filepath.Rel(root, candidate)
+	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// physicalPath resolves target the way the kernel does when a process opens
+// it: the base directory is resolved to its physical location first, then
+// every component is applied in order, with symlinks resolved before a
+// following `..` is taken. Components that do not exist yet are kept as
+// written, which matches a fresh directory whose parent is its lexical one.
+func physicalPath(base, target string) string {
+	cur := base
+	rest := target
+	if filepath.IsAbs(target) {
+		volume := filepath.VolumeName(target)
+		cur = volume + string(filepath.Separator)
+		rest = target[len(volume):]
+	}
+	if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+		cur = resolved
+	} else {
+		cur = resolveExistingPrefix(filepath.Clean(cur))
+	}
+	for _, comp := range strings.FieldsFunc(rest, isPathSeparator) {
+		switch comp {
+		case ".":
+			continue
+		case "..":
+			cur = filepath.Dir(cur)
+		default:
+			next := filepath.Join(cur, comp)
+			if resolved, err := filepath.EvalSymlinks(next); err == nil {
+				cur = resolved
+			} else {
+				cur = next
+			}
+		}
+	}
+	return cur
+}
+
+func isPathSeparator(r rune) bool {
+	return r == '/' || r == filepath.Separator
 }
 
 func resolveExistingPrefix(abs string) string {
@@ -519,9 +580,16 @@ func evaluateAction(engine *policy.Engine, in Input, act MappedAction, opts Opti
 }
 
 type contribution struct {
-	level  int // 0 allow, 1 ask, 2 deny
+	level  int // 0 allow, 1 defer (no decision), 2 ask, 3 deny
 	reason string
 }
+
+const (
+	levelAllow = iota
+	levelDefer
+	levelAsk
+	levelDeny
+)
 
 func aggregate(outcomes []Outcome, findings []Finding, opts Options) (string, string) {
 	if len(outcomes) == 0 && len(findings) == 0 {
@@ -538,19 +606,19 @@ func aggregate(outcomes []Outcome, findings []Finding, opts Options) (string, st
 		case policy.DecisionDeny:
 			if o.Decision.ReasonCode == "deny_by_default" {
 				if opts.OnDefaultDeny == ModeDeny {
-					contribs = append(contribs, contribution{2, fmt.Sprintf("no %s rule allows %s (deny by default)", label, o.Action.Summary)})
+					contribs = append(contribs, contribution{levelDeny, fmt.Sprintf("no %s rule allows %s (deny by default)", label, o.Action.Summary)})
 				} else {
-					contribs = append(contribs, contribution{1, fmt.Sprintf("no %s rule allows %s; asking for confirmation", label, o.Action.Summary)})
+					contribs = append(contribs, contribution{levelAsk, fmt.Sprintf("no %s rule allows %s; asking for confirmation", label, o.Action.Summary)})
 				}
 			} else {
-				contribs = append(contribs, contribution{2, fmt.Sprintf("%s denies %s (rules: %s)", label, o.Action.Summary, rules)})
+				contribs = append(contribs, contribution{levelDeny, fmt.Sprintf("%s denies %s (rules: %s)", label, o.Action.Summary, rules)})
 			}
 		case policy.DecisionRequireApproval:
-			contribs = append(contribs, contribution{1, fmt.Sprintf("%s requires confirmation for %s (rules: %s)", label, o.Action.Summary, rules)})
+			contribs = append(contribs, contribution{levelAsk, fmt.Sprintf("%s requires confirmation for %s (rules: %s)", label, o.Action.Summary, rules)})
 		case policy.DecisionAllow:
-			contribs = append(contribs, contribution{0, fmt.Sprintf("%s allows %s (rules: %s)", label, o.Action.Summary, rules)})
+			contribs = append(contribs, contribution{levelAllow, fmt.Sprintf("%s allows %s (rules: %s)", label, o.Action.Summary, rules)})
 		default:
-			contribs = append(contribs, contribution{2, fmt.Sprintf("%s returned unknown decision %q for %s", label, o.Decision.Decision, o.Action.Summary)})
+			contribs = append(contribs, contribution{levelDeny, fmt.Sprintf("%s returned unknown decision %q for %s", label, o.Decision.Decision, o.Action.Summary)})
 		}
 	}
 	for _, f := range findings {
@@ -558,15 +626,19 @@ func aggregate(outcomes []Outcome, findings []Finding, opts Options) (string, st
 		case FindingOutsideWorkspace:
 			switch opts.OutsideWorkspace {
 			case ModeDeny:
-				contribs = append(contribs, contribution{2, "path outside the workspace: " + f.Detail})
+				contribs = append(contribs, contribution{levelDeny, "path outside the workspace: " + f.Detail})
 			case ModeAsk:
-				contribs = append(contribs, contribution{1, "path outside the workspace, asking for confirmation: " + f.Detail})
+				contribs = append(contribs, contribution{levelAsk, "path outside the workspace, asking for confirmation: " + f.Detail})
+			default:
+				// Passthrough: Nomos withholds its decision so the agent's
+				// own permission flow applies. It never becomes an allow.
+				contribs = append(contribs, contribution{levelDefer, "path outside the workspace, left to Claude Code: " + f.Detail})
 			}
 		default:
 			if opts.OnUnsupported == ModeDeny {
-				contribs = append(contribs, contribution{2, "cannot safely interpret the command: " + f.Detail})
+				contribs = append(contribs, contribution{levelDeny, "cannot safely interpret the command: " + f.Detail})
 			} else {
-				contribs = append(contribs, contribution{1, "cannot safely interpret the command, asking for confirmation: " + f.Detail})
+				contribs = append(contribs, contribution{levelAsk, "cannot safely interpret the command, asking for confirmation: " + f.Detail})
 			}
 		}
 	}
@@ -588,10 +660,12 @@ func aggregate(outcomes []Outcome, findings []Finding, opts Options) (string, st
 	reason := "Nomos: " + strings.Join(reasonParts, "; ")
 	reason = redact.DefaultRedactor().RedactText(reason)
 	switch top.level {
-	case 2:
+	case levelDeny:
 		return PermissionDeny, reason
-	case 1:
+	case levelAsk:
 		return PermissionAsk, reason
+	case levelDefer:
+		return "", ""
 	default:
 		return PermissionAllow, reason
 	}
@@ -666,13 +740,20 @@ func AuditEvents(in Input, res Result, opts Options, now time.Time) []audit.Even
 }
 
 func sanitizeID(raw, fallback string) string {
-	cleaned := idSanitizer.ReplaceAllString(strings.TrimSpace(raw), "-")
+	trimmed := strings.TrimSpace(raw)
+	cleaned := idSanitizer.ReplaceAllString(trimmed, "-")
 	cleaned = strings.TrimLeft(cleaned, "._:-")
 	if cleaned == "" {
-		cleaned = fallback
+		return fallback
 	}
 	if len(cleaned) > 100 {
 		cleaned = cleaned[:100]
+	}
+	if cleaned != trimmed {
+		// Two raw IDs that sanitize to the same string must still yield
+		// distinct audit IDs.
+		sum := sha256.Sum256([]byte(trimmed))
+		cleaned += "-" + hex.EncodeToString(sum[:4])
 	}
 	return cleaned
 }

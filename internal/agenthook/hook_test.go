@@ -143,7 +143,6 @@ func TestEvaluateBashDecisions(t *testing.T) {
 		{name: "variable expansion denies in strict mode", command: "rm -rf $HOME", opts: func(o Options) Options { o.OnUnsupported = ModeDeny; return o }, want: PermissionDeny, reasonPart: "cannot safely interpret"},
 		{name: "allowed command with outside path asks", command: "cat /etc/hostname", want: PermissionAsk, reasonPart: "outside the workspace"},
 		{name: "allowed command with outside path denies in strict mode", command: "cat /etc/hostname", opts: func(o Options) Options { o.OutsideWorkspace = ModeDeny; return o }, want: PermissionDeny, reasonPart: "outside the workspace"},
-		{name: "allowed command with outside path passes through boundary check", command: "cat /etc/hostname", opts: func(o Options) Options { o.OutsideWorkspace = ModePassthrough; return o }, want: PermissionAllow, reasonPart: "allow-cat"},
 		{name: "cd outside then allowed command asks", command: "cd /tmp && git status", want: PermissionAsk, reasonPart: "working directory"},
 		{name: "parent escape asks", command: "cat ../secret.txt", want: PermissionAsk, reasonPart: "outside the workspace"},
 		{name: "relative path inside stays allowed", command: "cat ./src/main.go", want: PermissionAllow, reasonPart: "allow-cat"},
@@ -255,6 +254,118 @@ func TestEvaluateDetectsSymlinkEscape(t *testing.T) {
 	}
 	if res.Permission != PermissionAsk || !strings.Contains(res.Reason, "outside the workspace") {
 		t.Fatalf("symlinked write must be treated as outside: %s %q", res.Permission, res.Reason)
+	}
+}
+
+func TestEvaluateDetectsSymlinkFollowedByDotDotEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs privileges on windows")
+	}
+	root := newWorkspace(t)
+	outside := filepath.Join(filepath.Dir(root), "outside")
+	if err := os.MkdirAll(filepath.Join(outside, "deep"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("top secret"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "sub"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "secret.txt"), []byte("inside"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// The kernel resolves `link` before applying `..`, so `link/../secret.txt`
+	// opens the file outside the workspace even though the cleaned text
+	// `secret.txt` names a file inside it.
+	if err := os.Symlink(filepath.Join(outside, "deep"), filepath.Join(root, "link")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	engine := testEngine(t)
+	opts := testOptions(t, root)
+
+	for _, command := range []string{
+		"cat link/../secret.txt",
+		"cat ./link/./../secret.txt",
+		"cat sub/../link/../secret.txt",
+		"cat link/nested/../../secret.txt",
+	} {
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": command}), opts)
+		if err != nil {
+			t.Fatalf("%s: evaluate: %v", command, err)
+		}
+		if res.Permission != PermissionAsk || !strings.Contains(res.Reason, "outside the workspace") {
+			t.Fatalf("%s: symlink then .. must be treated as outside: %s %q", command, res.Permission, res.Reason)
+		}
+	}
+	for _, tool := range []struct {
+		name  string
+		input map[string]any
+	}{
+		{"Read", map[string]any{"file_path": "link/../secret.txt"}},
+		{"Write", map[string]any{"file_path": "link/../new.txt", "content": "x"}},
+	} {
+		res, err := Evaluate(engine, toolInput(root, tool.name, tool.input), opts)
+		if err != nil {
+			t.Fatalf("%s: evaluate: %v", tool.name, err)
+		}
+		if res.Permission != PermissionAsk || !strings.Contains(res.Reason, "outside the workspace") {
+			t.Fatalf("%s: symlink then .. must be treated as outside: %s %q", tool.name, res.Permission, res.Reason)
+		}
+	}
+
+	// A real (or not yet existing) directory followed by `..` stays inside.
+	for _, command := range []string{"cat sub/../secret.txt", "cat newdir/../secret.txt"} {
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": command}), opts)
+		if err != nil {
+			t.Fatalf("%s: evaluate: %v", command, err)
+		}
+		if res.Permission != PermissionAllow {
+			t.Fatalf("%s: inside path must stay allowed: %s %q", command, res.Permission, res.Reason)
+		}
+	}
+	res, err := Evaluate(engine, toolInput(root, "Write", map[string]any{"file_path": "sub/../new.txt", "content": "x"}), opts)
+	if err != nil || res.Permission != PermissionAllow {
+		t.Fatalf("inside write must stay allowed: %s %q err=%v", res.Permission, res.Reason, err)
+	}
+}
+
+func TestPhysicalPathResolvesSymlinksBeforeDotDot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs privileges on windows")
+	}
+	base := t.TempDir()
+	target := filepath.Join(base, "target", "deep")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ws := filepath.Join(base, "ws")
+	if err := os.MkdirAll(filepath.Join(ws, "real"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(ws, "link")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	resolvedBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	cases := map[string]string{
+		"link/../x":          filepath.Join(resolvedBase, "target", "x"),
+		"link/../../x":       filepath.Join(resolvedBase, "x"),
+		"real/../x":          filepath.Join(resolvedBase, "ws", "x"),
+		"missing/../x":       filepath.Join(resolvedBase, "ws", "x"),
+		"./link/./deeper/..": filepath.Join(resolvedBase, "target", "deep"),
+		"x":                  filepath.Join(resolvedBase, "ws", "x"),
+		ws + "/link/../x":    filepath.Join(resolvedBase, "target", "x"),
+	}
+	for in, want := range cases {
+		if got := physicalPath(ws, in); got != want {
+			t.Fatalf("physicalPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := physicalPath("/", "/../etc/../x"); got != string(filepath.Separator)+"x" {
+		t.Fatalf("root parent must stay at root: %q", got)
 	}
 }
 
@@ -400,5 +511,73 @@ func TestReasonsAreRedacted(t *testing.T) {
 	}
 	if strings.Contains(res.Reason, "abcdefghijklmnopqrstuvwxyz") {
 		t.Fatalf("reason leaked a bearer token: %q", res.Reason)
+	}
+}
+
+func TestEvaluateReviewFindingsStayClosed(t *testing.T) {
+	root := newWorkspace(t)
+	engine := testEngine(t)
+	opts := testOptions(t, root)
+
+	// F1: git configuration overrides execute commands; never evaluated as plain git.
+	for _, cmd := range []string{"git -c core.pager='cat config/.env' status", "git -c alias.zz='!touch MARK' zz", "git --exec-path=./src status"} {
+		res, err := Evaluate(engine, bashInput(root, cmd), opts)
+		if err != nil {
+			t.Fatalf("%q: %v", cmd, err)
+		}
+		if res.Permission != PermissionAsk || !strings.Contains(res.Reason, "cannot safely interpret") {
+			t.Fatalf("%q: got %s %q", cmd, res.Permission, res.Reason)
+		}
+	}
+
+	// F2: a failed cd leaves the real shell in the original directory.
+	res, _ := Evaluate(engine, bashInput(root, "cd nope ; cat ../secret.txt"), opts)
+	if res.Permission != PermissionAsk || !strings.Contains(res.Reason, "outside the workspace") {
+		t.Fatalf("failed cd then parent read: %s %q", res.Permission, res.Reason)
+	}
+	res, _ = Evaluate(engine, bashInput(root, "cd nope || cp secret.txt ../out"), opts)
+	if res.Permission != PermissionAsk {
+		t.Fatalf("cd || write outside: %s %q", res.Permission, res.Reason)
+	}
+	res, _ = Evaluate(engine, bashInput(root, "cd src && cat ../README.md"), opts)
+	if res.Permission != PermissionAllow {
+		t.Fatalf("cd && parent-of-subdir read stays inside: %s %q", res.Permission, res.Reason)
+	}
+
+	// F3: passthrough withholds the decision instead of allowing.
+	pass := opts
+	pass.OutsideWorkspace = ModePassthrough
+	res, _ = Evaluate(engine, bashInput(root, "cat /etc/hostname"), pass)
+	if !res.Passthrough() {
+		t.Fatalf("passthrough with outside path must yield no decision, got %s %q", res.Permission, res.Reason)
+	}
+	res, _ = Evaluate(engine, bashInput(root, "cat /etc/hostname && cat config/.env"), pass)
+	if res.Permission != PermissionDeny {
+		t.Fatalf("deny must still win under passthrough: %s %q", res.Permission, res.Reason)
+	}
+	res, _ = Evaluate(engine, bashInput(root, "cat /etc/hostname && git push origin main"), pass)
+	if res.Permission != PermissionAsk {
+		t.Fatalf("ask must beat passthrough: %s %q", res.Permission, res.Reason)
+	}
+
+	// Ambiguous MCP names are not guessed.
+	res, _ = Evaluate(engine, toolInput(root, "mcp__srv__get__thing", map[string]any{}), opts)
+	if res.Permission != PermissionAsk || !strings.Contains(res.Reason, "ambiguous MCP tool name") {
+		t.Fatalf("ambiguous mcp name: %s %q", res.Permission, res.Reason)
+	}
+}
+
+func TestSanitizeIDKeepsDistinctRawIDsDistinct(t *testing.T) {
+	a := sanitizeID("toolu 01", "hook")
+	b := sanitizeID("toolu_01", "hook")
+	c := sanitizeID("toolu-01", "hook")
+	if a == b || a == c {
+		t.Fatalf("sanitized ids collide: %q %q %q", a, b, c)
+	}
+	if b != "toolu_01" || c != "toolu-01" {
+		t.Fatalf("clean ids must be unchanged: %q %q", b, c)
+	}
+	if sanitizeID("   ", "hook") != "hook" {
+		t.Fatal("empty id must use the fallback")
 	}
 }

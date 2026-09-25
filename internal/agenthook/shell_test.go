@@ -74,7 +74,6 @@ func TestSplitShellCommandUnwrapsWrappersAndNormalizesNames(t *testing.T) {
 		{name: "time wrapper", cmd: "time go build ./...", want: [][]string{{"go", "build", "./..."}}},
 		{name: "nice wrapper", cmd: "nice -n 10 make", want: [][]string{{"make"}}},
 		{name: "git -C strips option and records target", cmd: "git -C /tmp/other push", want: [][]string{{"git", "push"}}, wantTargets: []string{"/tmp/other"}},
-		{name: "git -c config stripped", cmd: "git -c core.pager=cat log -1", want: [][]string{{"git", "log", "-1"}}},
 		{name: "git no-pager stripped", cmd: "git --no-pager diff", want: [][]string{{"git", "diff"}}},
 		{name: "pwsh command", cmd: `pwsh -NoProfile -Command "git status"`, want: [][]string{{"git", "status"}}},
 		{name: "cmd /c", cmd: `cmd /c "git status"`, want: [][]string{{"git", "status"}}},
@@ -136,6 +135,16 @@ func TestSplitShellCommandRefusesUnsafeSyntaxFailClosed(t *testing.T) {
 		{"cd dash", "cd - && ls", "cd to previous directory"},
 		{"pushd", "pushd /tmp", "shell builtin"},
 		{"env with assignment", "env FOO=1 make", "env with options or assignments"},
+		{"git config override executes commands", "git -c core.pager='touch MARK' log", "git configuration override"},
+		{"git alias override", "git -c alias.zz='!touch MARK' zz", "git configuration override"},
+		{"git config-env", "git --config-env=core.pager=X log", "git configuration override"},
+		{"git exec-path", "git --exec-path=./inside status", "relocates the repository"},
+		{"git git-dir", "git --git-dir=.git status", "relocates the repository"},
+		{"git work-tree space form", "git --work-tree /tmp status", "relocates the repository"},
+		{"powershell multiple command args", "pwsh -Command git status extra", "more than one argument"},
+		{"powershell encoded", "powershell -EncodedCommand ZQBjAGgAbwA=", "encoded command"},
+		{"cmd /c multiple args", "cmd /c git status extra", "more than one argument"},
+		{"nul byte", "ls\x00-la", "NUL byte"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -182,5 +191,63 @@ func TestSplitShellCommandNestedWrapperDepthIsBounded(t *testing.T) {
 	list := SplitShellCommand(cmd)
 	if len(list.Unsupported) == 0 {
 		t.Fatal("expected nesting limit to reject deeply nested wrappers")
+	}
+}
+
+func TestSplitShellCommandTracksPossibleCwdsAcrossFailedCd(t *testing.T) {
+	// A real shell keeps running after a failed cd when the separator is ;
+	// or ||, so the next command may run in either directory.
+	list := SplitShellCommand("cd nope ; cat ../secret.txt")
+	if len(list.Unsupported) != 0 {
+		t.Fatalf("unexpected unsupported: %+v", list.Unsupported)
+	}
+	if len(list.Commands) != 1 {
+		t.Fatalf("expected one command, got %v", argvs(list))
+	}
+	if got := list.Commands[0].Cwds; !reflect.DeepEqual(got, []string{"", "nope"}) {
+		t.Fatalf("cwd candidates after failed-or-succeeded cd: %v", got)
+	}
+	orList := SplitShellCommand("cd nope || cat ../secret.txt")
+	if got := orList.Commands[0].Cwds; !reflect.DeepEqual(got, []string{""}) {
+		t.Fatalf("after `cd || cmd` the command runs only when cd failed: %v", got)
+	}
+	andList := SplitShellCommand("cd sub && cat ../x")
+	if got := andList.Commands[0].Cwds; !reflect.DeepEqual(got, []string{"sub"}) {
+		t.Fatalf("after `cd && cmd` the command runs only when cd succeeded: %v", got)
+	}
+	later := SplitShellCommand("cd sub && ls ; cat ../x")
+	if got := later.Commands[1].Cwds; !reflect.DeepEqual(got, []string{"", "sub"}) {
+		t.Fatalf("a later command may run in either directory: %v", got)
+	}
+	chain := SplitShellCommand("cd a || cd b ; ls")
+	if got := chain.Commands[0].Cwds; len(got) != 3 {
+		t.Fatalf("expected three possible directories (root, a, b), got %v", got)
+	}
+}
+
+func TestSplitShellCommandBoundsCwdBranches(t *testing.T) {
+	cmd := ""
+	for i := 0; i < 20; i++ {
+		cmd += "cd d" + string(rune('a'+i)) + " ; "
+	}
+	cmd += "ls"
+	list := SplitShellCommand(cmd)
+	if len(list.Unsupported) == 0 {
+		t.Fatal("expected the working-directory branch bound to trigger")
+	}
+}
+
+func TestLexFollowsShellQuotingAndWhitespaceRules(t *testing.T) {
+	list := SplitShellCommand(`echo "a\.b" "say \"hi\"" 'lit\eral'`)
+	if len(list.Unsupported) != 0 {
+		t.Fatalf("unexpected unsupported: %+v", list.Unsupported)
+	}
+	want := []string{"echo", `a\.b`, `say "hi"`, `lit\eral`}
+	if got := list.Commands[0].Argv; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	nbsp := SplitShellCommand("ls\u00a0-la")
+	if got := nbsp.Commands[0].Argv; !reflect.DeepEqual(got, []string{"ls\u00a0-la"}) {
+		t.Fatalf("non-breaking space must not split words: %q", got)
 	}
 }
