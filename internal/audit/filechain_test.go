@@ -133,3 +133,57 @@ func TestFileChainRecorderWaitsForStaleLock(t *testing.T) {
 		t.Fatalf("stale lock must be reclaimed: %v", err)
 	}
 }
+
+func TestAcquireFileLockFailsClosedOnUnremovableStaleLock(t *testing.T) {
+	dir := t.TempDir()
+	lock := filepath.Join(dir, "audit.jsonl.lock")
+	// A directory with content cannot be removed as a stale lock file.
+	if err := os.MkdirAll(filepath.Join(lock, "keep"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	old := time.Now().Add(-2 * fileChainLockStale)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := acquireFileLock(lock, 100*time.Millisecond)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a directory at the lock path must not be taken as a free lock")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("acquireFileLock did not return: an unremovable stale lock must not spin past the deadline")
+	}
+}
+
+func TestFileChainRecorderFailsOnPlantedLockDirectory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.jsonl")
+	if err := os.MkdirAll(filepath.Join(path+".lock", "keep"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	old := time.Now().Add(-2 * fileChainLockStale)
+	if err := os.Chtimes(path+".lock", old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	rec, err := NewFileChainRecorder(path, redact.DefaultRedactor())
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- rec.WriteEvent(Event{Timestamp: time.Now(), EventType: "hook.decision", TraceID: "s"})
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a write behind a planted lock directory must fail so the hook blocks the call")
+		}
+	case <-time.After(fileChainLockTimeout + 10*time.Second):
+		t.Fatal("WriteEvent did not return: the hook would time out and Claude Code would let the call through")
+	}
+}

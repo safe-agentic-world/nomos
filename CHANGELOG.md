@@ -6,6 +6,20 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-09-26
+
+### Fixed
+
+- The audit writer no longer waits forever on a lock path it cannot
+  reclaim. A directory (or anything other than a regular file) at
+  `<audit>.lock` with an old timestamp made the stale-lock branch skip the
+  deadline, so the hook never answered and Claude Code, which lets a
+  PreToolUse call through when its hook times out, ran the call with no
+  decision and no audit record. Code running as the user could plant such
+  a lock. The deadline now bounds every path, only a stale regular file is
+  reclaimed, and a lock that cannot be taken fails the write, so the hook
+  exits 2 and blocks the call.
+
 ## [0.19.1] - 2026-09-26
 
 ### Security
