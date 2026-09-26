@@ -8,6 +8,23 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ### Added
 
+- `nomos hook claude-code --replay <file>` and `--replay-transcripts`: replay
+  recorded tool calls (a corpus JSONL, hook input JSON, Claude Code
+  transcript lines, or plain commands) through a profile or bundle and
+  report the allow, deny, and ask counts, why calls ask, the programs that
+  ask most, and every deny with its reason. Replay writes no audit and runs
+  nothing.
+- `scripts/e2e-claude-code-hook/`: a re-runnable end-to-end validation of
+  the hook against headless Claude Code sessions in throwaway projects with
+  canary files, and the resulting record in
+  `docs/validation-claude-code-hook.md`.
+- Issue templates for bypass reports and noisy decisions, and a roadmap
+  built on the verified incident research.
+
+## [0.14.0] - 2026-09-26
+
+### Added
+
 - `nomos hook claude-code`: a Claude Code `PreToolUse` hook that decides the
   agent's native `Bash`, `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`,
   and `WebFetch` calls (and, opt-in, MCP tools) with a Nomos bundle or

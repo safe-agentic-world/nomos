@@ -8,14 +8,17 @@ same deny-wins engine that backs `nomos test`, and answers with the hook
 JSON Claude Code expects: `allow`, `deny`, or `ask`.
 
 Why a hook: those native tools never pass through an MCP server, so the
-`nomos run claude` launcher cannot see them. Claude Code's own
-documentation states that a hook `deny` "blocks the tool even in
-`bypassPermissions` mode or with `--dangerously-skip-permissions`" and
-that hooks "can tighten restrictions but not loosen them"
-([hooks reference](https://code.claude.com/docs/en/hooks)). The same
-documentation says a Bash deny rule "isn't a security boundary around the
-program" because `/bin/rm`, `bash -c`, and `git -C . push` step around it
-([permissions](https://code.claude.com/docs/en/permissions)); the hook
+`nomos run claude` launcher cannot see them. Claude Code's documentation
+says that "PreToolUse hooks run before every tool call, whether or not it
+needs permission" ([hooks reference](https://code.claude.com/docs/en/hooks))
+and that "a blocking hook also takes precedence over allow rules" and
+"stops the tool call before permission rules are evaluated"
+([permissions](https://code.claude.com/docs/en/permissions)). The
+[validation record](validation-claude-code-hook.md) shows this holding
+in practice: under `--dangerously-skip-permissions`, a hook `ask` or
+`deny` ended in Claude Code refusing the call. The same documentation
+says a Bash deny rule "isn't a security boundary around the program"
+because `/bin/rm`, `bash -c`, and `git -C . push` step around it; the hook
 normalizes those spellings before the policy sees them.
 
 ## Install
@@ -189,6 +192,30 @@ The [incident regression suites](../examples/incidents/README.md) cover
 the documented incident classes for each default profile; copy the
 format for your own bundle.
 
+## Measure Before You Install
+
+A hook that prompts on routine work gets disabled. Replay records the
+decisions a profile would have made without running anything:
+
+```bash
+# your own Claude Code history, read-only (~/.claude/projects/**/*.jsonl)
+nomos hook claude-code --replay-transcripts --profile safe-dev
+
+# a file of recorded calls: corpus JSONL, hook input JSON, transcript lines, or plain commands
+nomos hook claude-code --replay commands.jsonl --profile safe-dev --show-asks
+```
+
+The report counts allow, deny, and ask decisions, explains why calls ask
+(refused syntax, a path outside the workspace, a rule that requires
+approval, or no matching rule), lists the programs that ask most, and
+prints every deny with its reason. `--format json` emits the same report
+for scripts. Replay evaluates each call with the live pipeline, writes no
+audit, and never executes a command.
+
+[Validation against a real agent](validation-claude-code-hook.md) records
+what happened when headless Claude Code sessions ran with the hook
+installed, in default and bypass permission modes.
+
 ## Limits
 
 - **Claude Code runs the hook, so its rules bound it.** Per the hooks
@@ -252,3 +279,6 @@ format for your own bundle.
 | `--print-settings` | | print the settings block instead of writing it |
 | `--simulate`, `--tool`, `--input`, `--command` | | evaluate a synthetic call and print the decision |
 | `--verify-audit` | | verify the audit chain and exit |
+| `--replay <file\|->` | | replay recorded tool calls and report the decisions |
+| `--replay-transcripts`, `--transcripts-dir` | `~/.claude/projects` | replay every Claude Code transcript under a directory |
+| `--format`, `--top`, `--show-asks` | `text`, `25` | replay report format, list length, and whether to list every ask |
