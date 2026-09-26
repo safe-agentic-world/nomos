@@ -279,6 +279,14 @@ agent:
 
   [Walkthrough and Windows steps](docs/quickstart.md) ·
   [Python and LangGraph guide](docs/http-sdk.md)
+- **A model-driven example.**
+  [DispatchDesk](https://github.com/safe-agentic-world/dispatchdesk) is a
+  separately packaged support agent with a local Ollama model. It reads
+  tickets and drafts replies, and with Nomos enabled it pauses sends and
+  refunds for review. Its application owns the tools and SQLite data; Nomos
+  supplies authorization through the public Python SDK. Sends and refunds
+  create local records only. DispatchDesk is maintained by the Nomos author
+  as a reference application, not an independent endorsement.
 - **MCP server and HTTP gateway.** Route MCP tool calls or HTTP `/action`
   requests through the same deny-wins evaluation, with brokered
   credentials and the same audit chain. [Integration kit](docs/integration-kit.md)
@@ -295,6 +303,7 @@ agent:
 | Python SDK | Custom-tool authorization and automatic outcome reporting |
 | LangGraph adapter | Checkpointed review pauses and authorization checks on resume |
 | Local inbox example | Account-free allow, deny, approval, and SQLite delivery |
+| [DispatchDesk](https://github.com/safe-agentic-world/dispatchdesk) | Standalone Ollama support agent, durable tools, and public-SDK compatibility tests |
 | Go / TypeScript clients | HTTP clients and generic custom-action guards; application-owned review and reporting |
 | MCP server, HTTP gateway, launcher | Routes into the same decision pipeline for tools that are not native to a coding agent; upstream MCP tool definitions are pinned and a changed definition is denied until an operator accepts it |
 
