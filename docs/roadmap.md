@@ -54,12 +54,14 @@ own permission denials as a validation record.
 Verified by: a checked-in record with the exact prompts, hook decisions,
 and audit lines; re-runnable with a script.
 
-### 4. A second harness
+### 4. A second harness (in progress)
 
 Adapt the same parser and decision pipeline to the next coding agent that
 exposes a blocking pre-tool hook, chosen from primary-source verification of
 its hook contract (input fields, output that blocks, behavior in auto
-modes).
+modes). Codex was chosen: its hooks are Claude-shaped, on by default, and
+fire with approvals disabled. `nomos hook codex` ships with the contract
+verified from source; the live end-to-end run is next.
 
 Verified by: contract tests against the harness's documented input and
 output, plus an adversarial review like the one the Claude Code hook had.

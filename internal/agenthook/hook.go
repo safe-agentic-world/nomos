@@ -169,7 +169,18 @@ func Evaluate(engine *policy.Engine, in Input, opts Options) (Result, error) {
 	if err := opts.validate(); err != nil {
 		return Result{}, err
 	}
-	mapping := MapToolCall(in, opts)
+	return EvaluateMapping(engine, in, MapToolCall(in, opts), opts)
+}
+
+// EvaluateMapping decides an already mapped tool call. Adapters for other
+// harnesses map their own tool shapes and share this evaluation.
+func EvaluateMapping(engine *policy.Engine, in Input, mapping Mapping, opts Options) (Result, error) {
+	if engine == nil {
+		return Result{}, errors.New("policy engine is required")
+	}
+	if err := opts.validate(); err != nil {
+		return Result{}, err
+	}
 	res := Result{Mapping: mapping}
 	if mapping.Passthrough {
 		return res, nil
@@ -733,6 +744,15 @@ func (r Result) HookOutput() ([]byte, error) {
 	return json.Marshal(payload)
 }
 
+// eventName is the hook event recorded in audit: the harness's own name
+// when the input carries one, else PreToolUse.
+func eventName(in Input) string {
+	if strings.TrimSpace(in.HookEventName) != "" {
+		return in.HookEventName
+	}
+	return hookEventName
+}
+
 // AuditEvents builds one audit record per evaluated action and per finding.
 func AuditEvents(in Input, res Result, opts Options, now time.Time) []audit.Event {
 	base := func(index int) audit.Event {
@@ -746,7 +766,7 @@ func AuditEvents(in Input, res Result, opts Options, now time.Time) []audit.Even
 			Agent:         opts.Identity.Agent,
 			Environment:   opts.Identity.Environment,
 			ExecutorMetadata: map[string]any{
-				"hook_event":      hookEventName,
+				"hook_event":      eventName(in),
 				"hook_permission": res.Permission,
 				"tool_name":       in.ToolName,
 				"permission_mode": in.PermissionMode,

@@ -8,6 +8,14 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ### Added
 
+- `nomos hook codex`: a Codex `PreToolUse` and `PermissionRequest` hook
+  that decides `Bash` commands and `apply_patch` files with the same
+  parser, profiles, and audit as the Claude Code hook. A deny is returned
+  where Codex can act on it; an ask leaves Codex's own prompt in place and
+  becomes a deny when approvals are disabled. `--install` writes
+  `.codex/hooks.json` with only the keys Codex accepts. The contract was
+  verified from the Codex source at a pinned commit; a live end-to-end run
+  is still pending. See `docs/codex-hook.md`.
 - `nomos hook claude-code --replay <file>` and `--replay-transcripts`: replay
   recorded tool calls (a corpus JSONL, hook input JSON, Claude Code
   transcript lines, or plain commands) through a profile or bundle and

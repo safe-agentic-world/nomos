@@ -37,6 +37,8 @@ func runHook(args []string) {
 	switch args[0] {
 	case "claude-code":
 		os.Exit(runClaudeCodeHook(args[1:], os.Stdin, os.Stdout, os.Stderr, os.Getenv))
+	case "codex":
+		os.Exit(runCodexHook(args[1:], os.Stdin, os.Stdout, os.Stderr, os.Getenv))
 	default:
 		writeHelpText(os.Stderr, hookHelpText())
 		os.Exit(2)
@@ -450,7 +452,7 @@ func simulatedHookInput(f claudeHookFlags) (agenthook.Input, error) {
 }
 
 func hookHelpText() string {
-	return "usage: nomos hook claude-code [flags]\n" +
+	return "usage: nomos hook claude-code [flags]   (nomos hook codex --help for the Codex hook)\n" +
 		"Claude Code PreToolUse hook: decides native Bash/Read/Write/Edit/WebFetch (and optionally MCP) tool calls\n" +
 		"with a Nomos policy. Reads the hook JSON on stdin and prints allow/deny/ask JSON. Exit code 2 blocks the call.\n\n" +
 		"policy:\n" +
