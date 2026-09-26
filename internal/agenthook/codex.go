@@ -22,9 +22,11 @@ import (
 // leave the hook without effect. A PermissionRequest hook runs in the
 // approval path, before Codex's own reviewer or the user, and may answer
 // {"decision":{"behavior":"allow"|"deny"}} or stay silent. The approvals it
-// sees include escalations (a retry outside the sandbox, a network grant),
-// which arrive with the same "Bash" shape plus a description, so an allow
-// there removes a sandbox rather than a prompt.
+// sees include escalations (a retry outside the sandbox after a denial, a
+// network grant, a command the model marked as needing escalated
+// permissions), and a retry without a model justification is
+// payload-identical to a plain prompt, so an allow there could remove a
+// sandbox rather than a prompt. Nomos therefore only ever answers deny.
 const (
 	CodexEventPreToolUse        = "PreToolUse"
 	CodexEventPermissionRequest = "PermissionRequest"
@@ -55,11 +57,6 @@ type CodexOptions struct {
 	// the default) or AskPassthrough (Codex's own flow, which in default
 	// mode means a sandboxed run with no prompt).
 	Ask string
-	// PermissionRequestAllow lets a Nomos allow answer a PermissionRequest,
-	// which skips Codex's prompt. Off by default because PermissionRequest
-	// also carries escalations (run outside the sandbox, grant network
-	// access), where an allow removes a protection instead of a prompt.
-	PermissionRequestAllow bool
 }
 
 // MapCodexToolCall translates a Codex tool call into Nomos actions. Shell
@@ -204,35 +201,25 @@ func CodexPreToolUseOutput(res Result, permissionMode string, opts CodexOptions)
 }
 
 // CodexPermissionRequestOutput renders the PermissionRequest hook output.
-// A Nomos deny is answered as a deny. An allow is answered only when
-// opts.PermissionRequestAllow is set, the session is not in bypass mode
-// (where Codex's own reviewer may be the one asking), and the request is a
-// plain tool call rather than an escalation carrying extra fields such as
-// a network-access description. Everything else prints nothing, which
-// leaves the decision to Codex's reviewer or the user.
-func CodexPermissionRequestOutput(res Result, in Input, opts CodexOptions) (CodexWire, error) {
-	var behavior string
-	switch res.Permission {
-	case PermissionDeny:
-		behavior = "deny"
-	case PermissionAllow:
-		if !opts.PermissionRequestAllow || in.PermissionMode == CodexBypassMode || isEscalationRequest(in) {
-			return CodexWire{}, nil
-		}
-		behavior = "allow"
-	default:
+// A Nomos deny is answered as a deny. Everything else prints nothing, which
+// leaves the decision to Codex's reviewer or the user: an allow is never
+// answered, because the approvals Codex routes here include retries after
+// a sandbox denial that are indistinguishable from a plain prompt, and an
+// allow there would remove the sandbox rather than the prompt.
+func CodexPermissionRequestOutput(res Result) (CodexWire, error) {
+	if res.Permission != PermissionDeny {
 		return CodexWire{}, nil
 	}
 	out, err := json.Marshal(map[string]any{
 		"hookSpecificOutput": map[string]any{
 			"hookEventName": CodexEventPermissionRequest,
 			"decision": map[string]any{
-				"behavior": behavior,
+				"behavior": PermissionDeny,
 				"message":  res.Reason,
 			},
 		},
 	})
-	return CodexWire{Decision: behavior, Output: out}, err
+	return CodexWire{Decision: PermissionDeny, Output: out}, err
 }
 
 // CodexAuditEvents returns the audit records for one Codex hook event,
@@ -253,7 +240,6 @@ func CodexAuditEvents(in Input, res Result, wire CodexWire, copts CodexOptions, 
 		md := events[i].ExecutorMetadata
 		md["wire_decision"] = decision
 		md["ask_mode"] = askMode
-		md["permission_request_allow"] = copts.PermissionRequestAllow
 		md["outside_workspace"] = opts.OutsideWorkspace
 	}
 	return events
@@ -289,33 +275,6 @@ func isCodexExactMatcher(matcher string) bool {
 		}
 	}
 	return true
-}
-
-// isEscalationRequest reports whether a PermissionRequest carries anything
-// beyond the plain tool input: Codex attaches a description such as
-// "network-access <host>" to sandbox and network escalations.
-func isEscalationRequest(in Input) bool {
-	var params map[string]any
-	if err := json.Unmarshal(in.ToolInput, &params); err != nil {
-		return true
-	}
-	switch in.ToolName {
-	case "Bash":
-		for key := range params {
-			if key != "command" {
-				return true
-			}
-		}
-		return false
-	case CodexToolApplyPatch:
-		for key := range params {
-			if key != "command" && key != "input" {
-				return true
-			}
-		}
-		return false
-	}
-	return false
 }
 
 // CodexHooksSnippet returns the hooks.json document that registers the

@@ -94,6 +94,16 @@ func TestDefaultPolicyProfileDecisions(t *testing.T) {
 		{name: "ci strict denies a bare shell", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("sh"), want: DecisionDeny},
 		{name: "prod locked denies inline node", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("node", "-e", "process.exit()"), want: DecisionDeny},
 		{name: "prod locked denies inline ruby", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("ruby", "-e", "puts 1"), want: DecisionDeny},
+		{name: "safe dev asks before a python option cluster with -c", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "-uc", "print(1)"), want: DecisionRequireApproval},
+		{name: "safe dev asks before node with a two-token option and -e", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("node", "-r", "ts-node/register", "-e", "1"), want: DecisionRequireApproval},
+		{name: "safe dev asks before a python debugger session", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "-m", "pdb", "app.py"), want: DecisionRequireApproval},
+		{name: "safe dev asks before awk runs a command", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("awk", "BEGIN{system(\"cat config/.env\")}"), want: DecisionRequireApproval},
+		{name: "safe dev allows a plain awk program", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("awk", "{print $1}", "data.txt"), want: DecisionAllow},
+		{name: "safe dev asks before tar runs a command", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("tar", "--to-command=sh", "-xf", "x.tar"), want: DecisionRequireApproval},
+		{name: "ci strict no longer allows sed", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("sed", "-i", "s/a/b/", "file.txt"), want: DecisionDeny},
+		{name: "ci strict allows a plain tar", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("tar", "czf", "dist.tgz", "build/"), want: DecisionAllow},
+		{name: "ci strict denies tar with a compress program", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("tar", "-I", "sh", "-xf", "x.tar"), want: DecisionDeny},
+		{name: "prod locked denies a python debugger session", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "-m", "pdb", "app.py"), want: DecisionDeny},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

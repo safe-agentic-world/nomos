@@ -68,7 +68,7 @@ where Codex acts on it as intended:
 | Nomos decision | `PreToolUse` | `PermissionRequest` |
 |---|---|---|
 | `deny` | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":...}}`; Codex tells the model the command was blocked | `decision: {"behavior":"deny"}` |
-| `allow` | no output; Codex's normal flow continues | no output by default; with `--permission-request-allow`, `decision: {"behavior":"allow"}` for a plain request in `default` mode, so the prompt is skipped |
+| `allow` | no output; Codex's normal flow continues | no output: Codex's reviewer or the user decides (see below for why an allow is never answered) |
 | `ask` | a `deny` whose reason says confirmation was required and cannot be requested here; `--ask passthrough` prints nothing instead | no output: Codex's reviewer or the user decides |
 | passthrough | no output | no output |
 
@@ -94,18 +94,19 @@ to you). `--ask passthrough` makes an ask silent instead, which in
 on-request mode means a sandboxed run with no human in the loop; use it
 only where Codex's own policy already prompts.
 
-### Escalations and the automated reviewer
+### Why an allow never answers an approval prompt
 
 `PermissionRequest` is also how Codex asks about escalations: a retry
 outside the sandbox after a denial, a network grant (`description:
 "network-access <host>"`), or a command the model marked
-`with_escalated_permissions` with a `justification`. An `allow` there
-removes a protection rather than a prompt, so Nomos never answers `allow`
-to a request that carries anything beyond the plain tool input, even with
-`--permission-request-allow`. It also never answers `allow` with approvals
-disabled, where the request may come from Codex's strict automated review
-rather than from a user prompt: silence leaves that reviewer in charge. A
-Nomos `deny` is answered in every case.
+`with_escalated_permissions` with a `justification`. A retry without a
+model justification is payload-identical to a plain prompt, so the hook
+cannot tell "may I run `git status`?" from "may I run `git status`
+outside the sandbox after it was denied inside it?". An `allow` there
+would remove a protection rather than a prompt, so Nomos never answers
+`allow` to a `PermissionRequest`; it only answers `deny`, and it does so
+in every mode, including with approvals disabled, where the request may
+come from Codex's strict automated review rather than a user prompt.
 
 For unattended runs combine `--on-default deny` with the default
 `--ask deny` so that nothing the policy has not allowed can run.
@@ -116,11 +117,13 @@ Every decision is appended to `.nomos/codex-hook.jsonl` in the workspace as
 a redacted, hash-chained record with the event (`PreToolUse` or
 `PermissionRequest`), the normalized action, the matched rules, the
 permission Nomos computed (`hook_permission`), and what Codex actually
-received (`wire_decision`: `deny`, `allow`, or `none`), together with the
-adapter settings that shaped it (`ask_mode`, `permission_request_allow`,
-`outside_workspace`) and Codex's `turn_id`. `PermissionRequest` inputs
-carry no `tool_use_id`, so their action ids derive from the turn id and a
-hash of the request, which keeps two requests in one turn distinct.
+received (`wire_decision`: `deny` or `none`), together with the adapter
+settings that shaped it (`ask_mode`, `outside_workspace`) and Codex's
+`turn_id`. `PermissionRequest` inputs carry no `tool_use_id`, so their
+action ids derive from the turn id and a hash of the request, which keeps
+two different requests in one turn distinct; the same request repeated in
+one turn (Codex's own retry) shares an id and is told apart by its
+timestamp and position in the chain.
 `nomos hook codex --verify-audit` re-checks the chain. `--audit none`
 disables the log; `--audit <path>` moves it.
 
@@ -148,10 +151,13 @@ disables the log; `--audit <path>` moves it.
   (`ci-strict`, `prod-locked`) before a bare `python`, `node`, `ruby`,
   `bash`, `sh`, and the other interpreters and shells, and before inline
   code (`python -c`, `node -e`, `ruby -e`, `perl -e`, `php -r`,
-  `deno eval`). Scripts started by name (`python build.py`) are decided by
-  the toolchain rules, and flag clusters or glued forms (`-Bc`, `-c'code'`)
-  are not recognized: an interpreter that may run is an interpreter that
-  may run anything.
+  `deno eval`), including the common option clusters (`-uc`, `-pe`),
+  two-token options before the code flag (`node -r x -e`), and the REPL
+  modules (`python -m code|pdb|timeit|asyncio`). Scripts started by name
+  (`python build.py`) are decided by the toolchain rules; glued forms
+  (`-c'code'`), rarer clusters, and program text (a sed script, an awk
+  program without `system`, `getline`, or a pipe) are not recognized: an
+  interpreter that may run is an interpreter that may run anything.
 - **`apply_patch` reveals paths, not effects.** The policy sees which files
   a patch touches. What the new content does when it runs is decided by
   the rules that allow running it. Header paths are trimmed, so a path
@@ -172,7 +178,6 @@ disables the log; `--audit <path>` moves it.
 | `--on-unsupported` | `ask` | `ask` or `deny` for shell syntax the parser refuses |
 | `--outside-workspace` | `ask` | `ask`, `deny`, or `passthrough` for paths outside the workspace |
 | `--ask` | `deny` | what an `ask` becomes in `PreToolUse`, which cannot ask: `deny` or `passthrough` |
-| `--permission-request-allow` | off | answer a plain `PermissionRequest` with `allow`; never for escalations, never with approvals disabled |
 | `--audit` | `.nomos/codex-hook.jsonl` | audit file, or `none` |
 | `--principal`, `--agent`, `--environment` | `developer`, `codex`, `local` | identity recorded on actions |
 | `--install`, `--hooks-file`, `--matcher`, `--mcp`, `--timeout`, `--hook-command`, `--permission-request` | | register the hook in a `hooks.json` file |

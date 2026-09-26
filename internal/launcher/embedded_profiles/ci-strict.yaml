@@ -411,6 +411,8 @@ rules:
         - ["git", "checkout", "**", "--", "**"]
 
   # Conservative workspace file operations for CI runs; paths outside the workspace are asked about by the hook.
+  # sed is not allowed here: a sed script can read and write arbitrary files (r, w) and run commands (e),
+  # and the policy cannot see inside it.
   - id: ci-strict-allow-workspace-file-ops
     action_type: process.exec
     resource: file://workspace/
@@ -426,7 +428,6 @@ rules:
         - ["sha256sum", "**"]
         - ["shasum", "**"]
         - ["md5sum", "**"]
-        - ["sed", "**"]
         - ["jq", "**"]
         - ["true"]
         - ["false"]
@@ -437,7 +438,8 @@ rules:
 
   # Inline interpreter code (python -c, node -e, ruby -e, ...) and interactive interpreters or shells run
   # code the policy cannot see: they are denied. Scripts started by name are decided by the toolchain rules
-  # above; flag clusters and glued forms (-Bc, -c'code') are a documented limit.
+  # above. Common clusters (-uc, -pe) are listed; glued forms (-c'code'), rarer clusters, and program
+  # text (a sed script, an awk program without system/getline/|) are a documented limit.
   - id: ci-strict-deny-inline-interpreter-code
     action_type: process.exec
     resource: file://workspace/
@@ -507,6 +509,44 @@ rules:
         - ["dash"]
         - ["fish"]
         - ["ksh"]
+        # Clusters, two-token options, and REPL modules the plain forms above miss.
+        - ["python*", "-?c", "**"]
+        - ["python*", "-??c", "**"]
+        - ["python*", "-m", "code", "**"]
+        - ["python*", "-m", "pdb", "**"]
+        - ["python*", "-m", "timeit", "**"]
+        - ["python*", "-m", "asyncio", "**"]
+        - ["python*", "-*", "-m", "code", "**"]
+        - ["python*", "-*", "-m", "pdb", "**"]
+        - ["python*", "-*", "-m", "timeit", "**"]
+        - ["python*", "-*", "-m", "asyncio", "**"]
+        - ["node", "-pe", "**"]
+        - ["node", "-ep", "**"]
+        - ["node", "-*", "*", "-e", "**"]
+        - ["node", "-*", "*", "--eval", "**"]
+        - ["node", "-*", "*", "--eval=*", "**"]
+        - ["node", "-*", "*", "-p", "**"]
+        - ["node", "-*", "*", "--print", "**"]
+        - ["node", "-*", "*", "--print=*", "**"]
+        - ["ruby", "-?e", "**"]
+        - ["ruby", "-??e", "**"]
+        - ["ruby", "-*", "-?e", "**"]
+        - ["php", "-*", "*", "-r", "**"]
+        - ["deno", "run", "**", "-"]
+        # Programs whose own scripts or options run commands.
+        - ["*awk", "**", "*system(*", "**"]
+        - ["*awk", "**", "*getline*", "**"]
+        - ["*awk", "**", "*|*", "**"]
+        - ["*awk", "**", "-f", "**"]
+        - ["*awk", "**", "-f*", "**"]
+        - ["*awk", "**", "--file*", "**"]
+        - ["tar", "**", "--to-command*", "**"]
+        - ["tar", "**", "--use-compress-program*", "**"]
+        - ["tar", "**", "-I", "**"]
+        - ["tar", "**", "--rsh-command*", "**"]
+        - ["tar", "**", "--rmt-command*", "**"]
+        - ["zip", "**", "-TT", "**"]
+        - ["zip", "**", "--unzip-command*", "**"]
 
   # CI must never write secret material.
   - id: ci-strict-deny-secret-file-write

@@ -14,9 +14,9 @@ The format is based on Keep a Changelog and semantic versioning.
   where Codex acts on it. Codex's `PreToolUse` cannot ask and its usual
   on-request mode runs an unblocked command sandboxed without a prompt, so
   an ask is a deny by default (`--ask passthrough` to leave it to Codex).
-  An allow prints nothing unless `--permission-request-allow` is set, and
-  even then never for a sandbox or network escalation and never with
-  approvals disabled, where Codex's own reviewer may be asking. Patch
+  An allow prints nothing, and never answers a `PermissionRequest`,
+  because Codex routes retries outside the sandbox through the same
+  prompt shape as a plain confirmation. Patch
   headers are matched the way Codex's parser matches them, a patch is
   decided as a whole, the audit records what Codex received
   (`wire_decision`) next to the computed permission, and `--install`
@@ -61,9 +61,15 @@ The format is based on Keep a Changelog and semantic versioning.
   shells (`python`, `node`, `bash`, `sh`, ...) now ask for confirmation in
   `safe-dev` and are denied in `ci-strict` and `prod-locked`, because the
   policy cannot see what they run and Codex can feed a running interpreter
-  without a hook event. On the corpus this moves 6 `safe-dev` allows to
-  asks (675 to 669) and adds 7 denies to `ci-strict` (38 to 45) and
-  `prod-locked` (92 to 99), among them `curl ... | sh`.
+  without a hook event. The rules cover the common option clusters
+  (`-uc`, `-pe`), two-token options before the code flag, the REPL
+  modules (`python -m pdb`), `awk` programs that call `system` or
+  `getline` or pipe, and `tar` or `zip` options that run a command;
+  `ci-strict` no longer allows `sed`, whose scripts can read, write, and
+  run commands. On the corpus the interpreter rules moved 6 `safe-dev`
+  allows to asks (675 to 669) and added 7 denies to `ci-strict` (38 to
+  45) and `prod-locked` (92 to 99), among them `curl ... | sh`; the
+  second round's numbers are in the golden.
 - Hook installers (`--install`, `--print-settings`, `--print-hooks`) quote
   the generated command's arguments for the shell the harness runs hooks
   through, so a bundle or audit path with a space works, and the Codex

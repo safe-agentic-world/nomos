@@ -324,7 +324,8 @@ func TestCodexHookDecidesBothEventsAndInstalls(t *testing.T) {
 	if code != 0 || strings.TrimSpace(out) != "" {
 		t.Fatalf("allow must produce no PreToolUse output: code=%d out=%q", code, out)
 	}
-	// PermissionRequest: deny answers, allow is silent unless opted in and never for escalations.
+	// PermissionRequest: deny answers; an allow is always silent, because
+	// the prompt may be a retry outside the sandbox.
 	perm := func(input, mode string) string {
 		return `{"session_id":"s","turn_id":"t","cwd":"` + dir + `","hook_event_name":"PermissionRequest","permission_mode":"` + mode + `","tool_name":"Bash","tool_input":` + input + `}`
 	}
@@ -332,22 +333,16 @@ func TestCodexHookDecidesBothEventsAndInstalls(t *testing.T) {
 	if code != 0 || !strings.Contains(out, `"behavior":"deny"`) {
 		t.Fatalf("permission request deny: code=%d out=%q", code, out)
 	}
-	code, out, _ = run(base, perm(`{"command":"git status"}`, "default"))
-	if code != 0 || strings.TrimSpace(out) != "" {
-		t.Fatalf("permission request allow must be silent by default: code=%d out=%q", code, out)
+	for _, input := range []string{`{"command":"git status"}`, `{"command":"git status","description":"network-access github.com"}`} {
+		for _, mode := range []string{"default", "bypassPermissions"} {
+			code, out, _ = run(base, perm(input, mode))
+			if code != 0 || strings.TrimSpace(out) != "" {
+				t.Fatalf("permission request allow must be silent (%s, %s): code=%d out=%q", input, mode, code, out)
+			}
+		}
 	}
-	withAllow := append(append([]string{}, base...), "--permission-request-allow")
-	code, out, _ = run(withAllow, perm(`{"command":"git status"}`, "default"))
-	if code != 0 || !strings.Contains(out, `"behavior":"allow"`) {
-		t.Fatalf("opted-in permission request allow: code=%d out=%q", code, out)
-	}
-	code, out, _ = run(withAllow, perm(`{"command":"git status","description":"network-access github.com"}`, "default"))
-	if code != 0 || strings.TrimSpace(out) != "" {
-		t.Fatalf("an escalation must never be allowed: code=%d out=%q", code, out)
-	}
-	code, out, _ = run(withAllow, perm(`{"command":"git status"}`, "bypassPermissions"))
-	if code != 0 || strings.TrimSpace(out) != "" {
-		t.Fatalf("no allow with approvals disabled: code=%d out=%q", code, out)
+	if code, _, _ := run([]string{"-p", bundle, "--permission-request-allow", "--simulate", "--command", "ls"}, ""); code != hookExitError {
+		t.Fatalf("the removed --permission-request-allow flag must be rejected, not ignored")
 	}
 	patch := `{"session_id":"s","cwd":"` + dir + `","hook_event_name":"PreToolUse","permission_mode":"default","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Add File: ../escape.txt\n+x\n*** End Patch"},"tool_use_id":"call_2"}`
 	code, out, _ = run(append(append([]string{}, base...), "--outside-workspace", "deny"), patch)

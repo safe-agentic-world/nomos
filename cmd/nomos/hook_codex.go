@@ -18,33 +18,32 @@ import (
 const defaultCodexAuditFile = "codex-hook.jsonl"
 
 type codexHookFlags struct {
-	bundlePath             string
-	profile                string
-	workspace              string
-	principal              string
-	agent                  string
-	environment            string
-	onDefault              string
-	onUnsupported          string
-	outsideWorkspace       string
-	ask                    string
-	permissionRequestAllow bool
-	auditPath              string
-	install                bool
-	hooksFile              string
-	matcher                string
-	hookCommand            string
-	timeoutSeconds         int
-	includeMCP             bool
-	permissionRequest      bool
-	printHooks             bool
-	simulate               bool
-	tool                   string
-	input                  string
-	command                string
-	event                  string
-	permissionMode         string
-	verifyAudit            bool
+	bundlePath        string
+	profile           string
+	workspace         string
+	principal         string
+	agent             string
+	environment       string
+	onDefault         string
+	onUnsupported     string
+	outsideWorkspace  string
+	ask               string
+	auditPath         string
+	install           bool
+	hooksFile         string
+	matcher           string
+	hookCommand       string
+	timeoutSeconds    int
+	includeMCP        bool
+	permissionRequest bool
+	printHooks        bool
+	simulate          bool
+	tool              string
+	input             string
+	command           string
+	event             string
+	permissionMode    string
+	verifyAudit       bool
 }
 
 // runCodexHook implements `nomos hook codex`, the Codex PreToolUse and
@@ -72,7 +71,6 @@ func runCodexHook(args []string, stdin io.Reader, stdout, stderr io.Writer, gete
 	fs.StringVar(&f.onUnsupported, "on-unsupported", agenthook.ModeAsk, "when shell syntax cannot be interpreted: ask|deny")
 	fs.StringVar(&f.outsideWorkspace, "outside-workspace", agenthook.ModeAsk, "when a path resolves outside the workspace: ask|deny|passthrough")
 	fs.StringVar(&f.ask, "ask", agenthook.AskDeny, "what an ask means in PreToolUse, which cannot ask: deny|passthrough")
-	fs.BoolVar(&f.permissionRequestAllow, "permission-request-allow", false, "let an allow answer a plain PermissionRequest so Codex skips its prompt (never for escalations or with approvals disabled)")
 	fs.StringVar(&f.auditPath, "audit", "", "hash-chained JSONL audit file (default <workspace>/.nomos/"+defaultCodexAuditFile+"; \"none\" disables)")
 	fs.BoolVar(&f.install, "install", false, "register the hook in a Codex hooks.json file and exit")
 	fs.StringVar(&f.hooksFile, "hooks-file", "", "hooks file for --install (default <workspace>/.codex/hooks.json)")
@@ -173,7 +171,7 @@ func runCodexHook(args []string, stdin io.Reader, stdout, stderr io.Writer, gete
 		BundleLabel:      label,
 		HomeDir:          agenthook.DefaultHomeDir(),
 	}
-	copts := agenthook.CodexOptions{Ask: f.ask, PermissionRequestAllow: f.permissionRequestAllow}
+	copts := agenthook.CodexOptions{Ask: f.ask}
 	res, err := agenthook.EvaluateMapping(engine, in, agenthook.MapCodexToolCall(in, opts), opts)
 	if err != nil {
 		fmt.Fprintf(stderr, "hook: %v\n", err)
@@ -186,7 +184,7 @@ func runCodexHook(args []string, stdin io.Reader, stdout, stderr io.Writer, gete
 	case agenthook.CodexEventPreToolUse:
 		wire, err = agenthook.CodexPreToolUseOutput(res, in.PermissionMode, copts)
 	case agenthook.CodexEventPermissionRequest:
-		wire, err = agenthook.CodexPermissionRequestOutput(res, in, copts)
+		wire, err = agenthook.CodexPermissionRequestOutput(res)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "hook: encode output: %v\n", err)
@@ -226,16 +224,10 @@ func codexSimulatedEffect(in agenthook.Input, res agenthook.Result, wire agentho
 	}
 	switch in.HookEventName {
 	case agenthook.CodexEventPermissionRequest:
-		switch {
-		case res.Permission == agenthook.PermissionAllow && !copts.PermissionRequestAllow:
-			return "no output; Codex's reviewer or the user decides (--permission-request-allow would answer allow for a plain prompt)"
-		case res.Permission == agenthook.PermissionAllow && in.PermissionMode == agenthook.CodexBypassMode:
-			return "no output; approvals are disabled, so Codex's own reviewer decides"
-		case res.Permission == agenthook.PermissionAllow:
-			return "no output; this request is an escalation (sandbox or network), so Codex's reviewer or the user decides"
-		default:
-			return "no output; Codex's reviewer or the user decides"
+		if res.Permission == agenthook.PermissionAllow {
+			return "no output; Codex's reviewer or the user decides (an allow never answers an approval prompt, which may be a retry outside the sandbox)"
 		}
+		return "no output; Codex's reviewer or the user decides"
 	default:
 		if res.Permission == agenthook.PermissionAsk {
 			if in.PermissionMode == agenthook.CodexBypassMode {
@@ -268,9 +260,6 @@ func runCodexHookSetup(f codexHookFlags, stdout, stderr io.Writer) int {
 		}
 		if f.ask != agenthook.AskDeny {
 			command += " --ask " + shellQuote(f.ask)
-		}
-		if f.permissionRequestAllow {
-			command += " --permission-request-allow"
 		}
 		if f.auditPath != "" {
 			command += " --audit " + shellQuote(f.auditPath)
@@ -371,8 +360,8 @@ func codexHookHelpText() string {
 		"with a Nomos policy. Reads the hook JSON on stdin. A deny is printed where Codex acts on it: as a\n" +
 		"PreToolUse deny and as a PermissionRequest deny. Codex's PreToolUse cannot ask, so an ask becomes a deny\n" +
 		"(--ask passthrough leaves the call to Codex, which in its usual on-request mode runs it sandboxed without\n" +
-		"a prompt). An allow prints nothing; --permission-request-allow lets it answer plain PermissionRequest\n" +
-		"prompts. Exit code 2 blocks the call.\n\n" +
+		"a prompt). An allow prints nothing: a Codex approval prompt may be a retry outside the sandbox, which\n" +
+		"Nomos never grants. Exit code 2 blocks the call.\n\n" +
 		"policy:\n" +
 		"  -p, --policy-bundle <path>   policy bundle (YAML or JSON)\n" +
 		"      --profile <name>         embedded profile safe-dev|ci-strict|prod-locked (default safe-dev)\n" +
@@ -383,9 +372,6 @@ func codexHookHelpText() string {
 		"      --outside-workspace ask|deny|passthrough\n" +
 		"                               path resolves outside the workspace (default ask)\n" +
 		"      --ask deny|passthrough   what an ask means in PreToolUse, which cannot ask (default deny)\n" +
-		"      --permission-request-allow\n" +
-		"                               answer plain PermissionRequest prompts with allow (default off; never for\n" +
-		"                               sandbox or network escalations, never with approvals disabled)\n" +
 		"      --audit <path|none>      hash-chained JSONL log (default .nomos/" + defaultCodexAuditFile + ")\n" +
 		"      --principal/--agent/--environment\n" +
 		"                               identity recorded on actions (default developer/codex/local)\n\n" +

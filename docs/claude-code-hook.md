@@ -252,8 +252,12 @@ installed, in default and bypass permission modes.
   patterns that name the script or subcommand. The default profiles ask
   (`safe-dev`) or deny (`ci-strict`, `prod-locked`) before the common
   inline forms (`python -c`, `node -e`, `ruby -e`, `perl -e`, `php -r`,
-  `deno eval`) and before a bare interpreter or shell; flag clusters and
-  glued forms (`-Bc`, `-c'code'`) are not recognized.
+  `deno eval`, common clusters such as `-uc` and `-pe`, REPL modules such
+  as `python -m pdb`), before a bare interpreter or shell, and before
+  `awk` programs that call `system` or `getline` or pipe, and `tar` or
+  `zip` options that run a command. Glued forms (`-c'code'`), rarer
+  clusters, and program text (a sed script) are not recognized, which is
+  why `ci-strict` does not allow `sed` at all.
 - **Opaque wrappers stay opaque.** `timeout 5 cmd`, `docker run ...`,
   `busybox sh -c ...`, and similar are evaluated as `timeout`, `docker`,
   or `busybox` commands; the hook does not look inside them. With the

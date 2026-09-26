@@ -167,50 +167,15 @@ func TestCodexOutputsFollowTheVerifiedContract(t *testing.T) {
 		}
 	}
 
-	// PermissionRequest: a deny always answers; an allow only when opted in,
-	// outside bypass mode, and for a plain request.
-	plain := Input{HookEventName: CodexEventPermissionRequest, PermissionMode: CodexDefaultMode, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"git status"}`)}
-	allow := Result{Permission: PermissionAllow, Reason: "Nomos: allows git status"}
-	wire, err = CodexPermissionRequestOutput(deny, plain, CodexOptions{})
+	// PermissionRequest: a deny always answers; nothing else does, because
+	// an approval prompt may be a retry outside the sandbox.
+	wire, err = CodexPermissionRequestOutput(deny)
 	if err != nil || wire.Decision != "deny" || !strings.Contains(string(wire.Output), `"behavior":"deny"`) || !strings.Contains(string(wire.Output), `"hookEventName":"PermissionRequest"`) {
 		t.Fatalf("permission deny: %+v err=%v", wire, err)
 	}
-	if wire, err := CodexPermissionRequestOutput(allow, plain, CodexOptions{}); err != nil || wire.Output != nil {
-		t.Fatalf("allow must stay silent unless opted in: %+v err=%v", wire, err)
-	}
-	wire, err = CodexPermissionRequestOutput(allow, plain, CodexOptions{PermissionRequestAllow: true})
-	if err != nil || wire.Decision != "allow" || !strings.Contains(string(wire.Output), `"behavior":"allow"`) {
-		t.Fatalf("opted-in allow: %+v err=%v", wire, err)
-	}
-	bypass := plain
-	bypass.PermissionMode = CodexBypassMode
-	if wire, err := CodexPermissionRequestOutput(allow, bypass, CodexOptions{PermissionRequestAllow: true}); err != nil || wire.Output != nil {
-		t.Fatalf("allow must stay silent with approvals disabled (Codex's own reviewer may be asking): %+v err=%v", wire, err)
-	}
-	escalations := []json.RawMessage{
-		json.RawMessage(`{"command":"git status","description":"network-access github.com"}`),
-		json.RawMessage(`{"command":"git status","with_escalated_permissions":true}`),
-		json.RawMessage(`{"command":"git status","justification":"needs the network"}`),
-	}
-	for _, input := range escalations {
-		esc := plain
-		esc.ToolInput = input
-		if wire, err := CodexPermissionRequestOutput(allow, esc, CodexOptions{PermissionRequestAllow: true}); err != nil || wire.Output != nil {
-			t.Fatalf("an escalation must never be allowed by Nomos: %s -> %+v err=%v", input, wire, err)
-		}
-		if wire, err := CodexPermissionRequestOutput(deny, esc, CodexOptions{PermissionRequestAllow: true}); err != nil || wire.Decision != "deny" {
-			t.Fatalf("a deny still answers an escalation: %s -> %+v err=%v", input, wire, err)
-		}
-	}
-	patchReq := plain
-	patchReq.ToolName = CodexToolApplyPatch
-	patchReq.ToolInput = json.RawMessage(`{"command":"*** Begin Patch\n*** Add File: a.txt\n+x\n*** End Patch"}`)
-	if wire, err := CodexPermissionRequestOutput(allow, patchReq, CodexOptions{PermissionRequestAllow: true}); err != nil || wire.Decision != "allow" {
-		t.Fatalf("a plain apply_patch request may be allowed when opted in: %+v err=%v", wire, err)
-	}
-	for _, r := range []Result{ask, {}} {
-		if wire, err := CodexPermissionRequestOutput(r, plain, CodexOptions{PermissionRequestAllow: true}); err != nil || wire.Output != nil {
-			t.Fatalf("ask/passthrough must leave the approval flow alone: %+v err=%v", wire, err)
+	for _, r := range []Result{{Permission: PermissionAllow, Reason: "Nomos: allows git status"}, ask, {}} {
+		if wire, err := CodexPermissionRequestOutput(r); err != nil || wire.Output != nil || wire.Decision != "" {
+			t.Fatalf("allow/ask/passthrough must leave the approval flow alone: %+v err=%v", wire, err)
 		}
 	}
 }
@@ -238,7 +203,7 @@ func TestCodexAuditEventsRecordTheWireDecision(t *testing.T) {
 		t.Fatalf("events: %+v", events)
 	}
 	md := events[0].ExecutorMetadata
-	if md["hook_permission"] != PermissionAsk || md["wire_decision"] != PermissionDeny || md["ask_mode"] != AskDeny || md["turn_id"] != "turn-7" || md["outside_workspace"] != opts.OutsideWorkspace || md["permission_request_allow"] != false {
+	if md["hook_permission"] != PermissionAsk || md["wire_decision"] != PermissionDeny || md["ask_mode"] != AskDeny || md["turn_id"] != "turn-7" || md["outside_workspace"] != opts.OutsideWorkspace {
 		t.Fatalf("metadata: %+v", md)
 	}
 	if !strings.HasPrefix(events[0].ActionID, "turn-7-") {
