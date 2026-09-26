@@ -2,6 +2,7 @@ package policy
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/safe-agentic-world/nomos/internal/normalize"
 )
@@ -65,6 +66,18 @@ func matchArgvSegments(pattern, argv []string) bool {
 	return matchArgvSegments(pattern[1:], argv[1:])
 }
 
+// matchArgvToken compares one argv token against one pattern token.
+//
+// A bare `*` matches any single token. A token containing `*` or `?` is a
+// whole-token wildcard (for example `*.env*` matches `./config/.env.local`),
+// which lets a rule match a sensitive path wherever it appears in argv:
+// `["**", "*.pem", "**"]`. Tokens without wildcard characters match exactly.
 func matchArgvToken(pattern, token string) bool {
-	return pattern == "*" || pattern == token
+	if pattern == "*" || pattern == token {
+		return true
+	}
+	if strings.ContainsAny(pattern, "*?") {
+		return normalize.MatchWildcard(pattern, token)
+	}
+	return false
 }

@@ -688,7 +688,7 @@ func TestRunFallsBackToEmbeddedProfileWhenNotOnDisk(t *testing.T) {
 	// The materialized bundle must produce the canonical hash pinned in
 	// testdata/policy-profiles/hashes.json. If this assertion ever fails,
 	// the generated embedded YAML drifted from the canonical profile.
-	const safeDevPinnedHash = "4d39231248c1f4887034b63745c7b8ec5ad3a3e78ccab4dffb3d31c7f9eaf93d"
+	safeDevPinnedHash := pinnedProfileHash(t, "safe-dev")
 	if result.PolicyBundleHash != safeDevPinnedHash {
 		t.Fatalf("embedded safe-dev hash drift: got %s want %s", result.PolicyBundleHash, safeDevPinnedHash)
 	}
@@ -807,4 +807,24 @@ func assertLauncherAuditEvent(t *testing.T, path string) {
 	if count != 1 {
 		t.Fatalf("expected one launcher audit event, got %d", count)
 	}
+}
+
+// pinnedProfileHash reads the canonical hash for a default profile from
+// testdata/policy-profiles/hashes.json so re-pinning never requires editing
+// this test.
+func pinnedProfileHash(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "policy-profiles", "hashes.json"))
+	if err != nil {
+		t.Fatalf("read pinned profile hashes: %v", err)
+	}
+	var hashes map[string]string
+	if err := json.Unmarshal(data, &hashes); err != nil {
+		t.Fatalf("decode pinned profile hashes: %v", err)
+	}
+	hash := strings.TrimSpace(hashes[name])
+	if hash == "" {
+		t.Fatalf("no pinned hash for profile %s", name)
+	}
+	return hash
 }

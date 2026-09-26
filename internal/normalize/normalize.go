@@ -419,6 +419,14 @@ func matchSegment(pattern, value string) bool {
 	return matchWildcard(pattern, value)
 }
 
+// MatchWildcard reports whether value matches a shell-style pattern where
+// `*` matches any run of characters (including `/`) and `?` matches exactly
+// one character. It is used for whole-token matching, unlike MatchPattern,
+// which splits on `/` segments.
+func MatchWildcard(pattern, value string) bool {
+	return matchWildcard(pattern, value)
+}
+
 func matchWildcard(pattern, value string) bool {
 	pIdx := 0
 	vIdx := 0

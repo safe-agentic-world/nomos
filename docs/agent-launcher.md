@@ -14,7 +14,7 @@ Agents may:
 
 This makes Nomos feel optional and weakens both security guarantees and product adoption.
 
-This feature makes Nomos the default execution boundary, not an optional tool the user must remember to mention.
+The launcher makes Nomos the MCP boundary for the launched session so the agent does not have to be told to use it. It cannot disable the agent's native shell and file tools, and it cannot verify that the agent loaded the MCP config, so a session launched this way is governed only for calls that go through the Nomos tools. To decide Claude Code's native `Bash`, `Read`, `Write`, `Edit`, and `WebFetch` calls with the same policy, install the [PreToolUse hook](claude-code-hook.md); the two mechanisms compose.
 
 ## Commands
 

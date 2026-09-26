@@ -231,3 +231,57 @@ rules:
     action_type: secrets.checkout
     resource: secret://**/**
     decision: DENY
+
+  # Deny any command whose arguments name secret material (dotenv, keys, cloud and cluster credentials), wherever the token appears.
+  - id: prod-locked-deny-exec-secret-file-args
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["**", "*.env", "**"]
+        - ["**", "*.env.*", "**"]
+        - ["**", "*.envrc", "**"]
+        - ["**", "*.pem", "**"]
+        - ["**", "*.key", "**"]
+        - ["**", "*id_rsa*", "**"]
+        - ["**", "*id_ed25519*", "**"]
+        - ["**", "*id_ecdsa*", "**"]
+        - ["**", "*.ssh/*", "**"]
+        - ["**", "*.aws/*", "**"]
+        - ["**", "*.gcp/*", "**"]
+        - ["**", "*.kube/*", "**"]
+        - ["**", "*kubeconfig*", "**"]
+        - ["**", "*.netrc", "**"]
+
+  # Deny deletes that target the home directory, the filesystem root, any absolute path, or a parent directory; workspace-relative deletes stay subject to the other rules.
+  - id: prod-locked-deny-catastrophic-delete
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["rm", "**", "~", "**"]
+        - ["rm", "**", "~/", "**"]
+        - ["rm", "**", "~/*", "**"]
+        - ["rm", "**", "/", "**"]
+        - ["rm", "**", "/*", "**"]
+        - ["rm", "**", "..", "**"]
+        - ["rm", "**", "../*", "**"]
+        - ["rmdir", "**", "~*", "**"]
+        - ["rmdir", "**", "/*", "**"]
+        - ["rmdir", "**", "..", "**"]
+
+  # Deny destructive git operations however their arguments are spelled.
+  - id: prod-locked-deny-git-destructive-with-args
+    action_type: process.exec
+    resource: file://workspace/
+    decision: DENY
+    exec_match:
+      argv_patterns:
+        - ["git", "reset", "--hard", "**"]
+        - ["git", "clean", "**"]
+        - ["git", "branch", "-D", "**"]
+        - ["git", "push", "--force", "**"]
+        - ["git", "push", "-f", "**"]
+        - ["git", "push", "--force-with-lease", "**"]

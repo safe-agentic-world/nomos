@@ -12,6 +12,13 @@ Its `permissions.json` is also a standalone CI regression suite:
 go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
 ```
 
+## Incident Regression Suites
+
+[examples/incidents](incidents/README.md) turns documented coding-agent
+incidents (home-directory wipes, secret reads through shell commands,
+force pushes, `terraform destroy`) into `nomos test` suites for each default
+profile. They run in `go test ./...` and in CI.
+
 ## Compatibility Examples
 
 - [Quickstart configuration](quickstart/config.quickstart.json):

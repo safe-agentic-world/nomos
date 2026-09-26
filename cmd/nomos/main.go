@@ -50,6 +50,8 @@ func main() {
 		runMCP(os.Args[2:])
 	case "run":
 		runAgentLauncher(os.Args[2:])
+	case "hook":
+		runHook(os.Args[2:])
 	case "policy":
 		runPolicy(os.Args[2:])
 	case "test":
@@ -1675,6 +1677,7 @@ func rootHelpText() string {
 		"  serve      start gateway server\n" +
 		"  mcp        start MCP stdio server\n" +
 		"  run        launch codex or claude with a Nomos workspace profile\n" +
+		"  hook       Claude Code PreToolUse hook that decides native tool calls by policy\n" +
 		"  policy     policy test/explain\n" +
 		"  profiles   inspect embedded default profiles\n" +
 		"  approvals  list, approve, or deny pending approvals\n" +

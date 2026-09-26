@@ -59,6 +59,11 @@ Troubleshooting:
 
 ## Claude Code Setup
 
+The MCP setup below governs calls made through the Nomos tools. Claude
+Code's native `Bash`, `Read`, `Write`, `Edit`, and `WebFetch` tools do not
+pass through MCP; to decide those with the same policy, install the
+[PreToolUse hook](claude-code-hook.md). The two compose.
+
 1. Run the same preflight:
 
 ```powershell
