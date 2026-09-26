@@ -240,6 +240,64 @@ Validated arguments are canonicalized with the same canonical JSON primitive use
 
 This means two calls with the same logical arguments but different JSON key order produce the same action fingerprint and approval binding. The validator also enforces argument byte, depth, and node limits so crafted arguments cannot force unbounded validation work.
 
+### Tool Definition Pinning
+
+An upstream MCP server can change what a tool does after you approved it: the same tool name comes back from `tools/list` with a new description or a new `inputSchema`, typically announced through `notifications/tools/list_changed`. Nomos pins the definition of every forwarded tool and refuses calls whose live definition no longer matches the pin until an operator accepts the change.
+
+The definition hash is the hex SHA-256 of the canonical JSON of `{"name", "description", "inputSchema"}` exactly as the upstream advertised it (`inputSchema` is omitted when the upstream sends none). Key order and whitespace of the upstream payload do not change the hash; any change to the description or the schema does.
+
+Pins live in a sidecar JSON file configured under `upstream.tool_pins`:
+
+```json
+{
+  "upstream": {
+    "tool_pins": {
+      "file": "./upstream-tool-pins.json",
+      "mode": "record"
+    }
+  }
+}
+```
+
+- `file` resolves relative to the config file directory, like every other filesystem-backed config field, and defaults to `upstream-tool-pins.json` next to the config.
+- `mode` is one of:
+  - `record` (default): trust on first sight. The first forwarded call to a tool pins its current definition; later calls are denied when the definition changed.
+  - `strict`: a tool without a pin is refused, so the pin file must be populated with `nomos mcp pins accept` before a tool can be called.
+  - `off`: no pinning; the file is neither read nor written.
+
+Any other mode value is a config error. The pin file format is:
+
+```json
+{
+  "version": "v1",
+  "pins": {
+    "retail/refund.request": {
+      "definition_hash": "<hex sha256>",
+      "pinned_at": "2026-09-26T12:00:00Z",
+      "name": "refund.request",
+      "description": "Submit a retail refund request."
+    }
+  }
+}
+```
+
+Keys are `<server>/<tool>` and unknown fields are rejected. A pin file that cannot be read or parsed is a startup (and reload) error. In `record` mode a pin that cannot be written makes the call fail closed with the `TOOL_PIN_STORE_ERROR` error instead of proceeding. Writes go through an atomic temp-file rename, and the gateway re-reads the file when it changes on disk, so pins accepted or removed with the CLI take effect without a restart.
+
+The check runs on every forwarded call before argument validation, policy, and approvals, including after a `notifications/tools/list_changed` refresh: a changed definition is caught on the next call and is never re-pinned silently. A refusal is a normal `DENY` decision (no upstream call is made, and the `tools/call` result has the same shape as any policy deny) with one of these reason codes:
+
+- `deny_by_tool_definition_change`: a pin exists and the live definition hash differs from it
+- `deny_by_unpinned_tool_definition`: `strict` mode and no pin exists for the tool
+
+Every pin decision writes an `mcp.tool_definition_pin` audit event whose `executor_metadata` carries `upstream_server`, `upstream_tool`, `tool_definition_hash` (live), `tool_definition_pinned_hash` (when a pin exists), `tool_pin_mode`, and `tool_pin_file`; `result_classification` is `PINNED`, `DENIED_TOOL_DEFINITION`, or `TOOL_PIN_STORE_ERROR`. The `mcp.call` action params also include `tool_definition_hash` and, when a pin exists, `tool_definition_pinned_hash`, so `nomos policy explain` and the `action.*` audit records show which definition a call was evaluated against and `params_match` rules can key on it.
+
+Operator flow after a `deny_by_tool_definition_change`:
+
+1. Review the new definition on the upstream server. The audit event carries the live hash and the pinned hash.
+2. Accept it: `nomos mcp pins accept retail/refund.request -c ./config.json`. This connects to the upstream with the same session code the gateway uses, enumerates the tool, rewrites the pin to the live hash, and prints the previous and new hashes. Pass `--hash <sha256>` to pin exactly the hash you reviewed (for example the `tool_definition_hash` from the audit event) without connecting.
+3. `nomos mcp pins list -c ./config.json` shows every pin; `nomos mcp pins remove retail/refund.request -c ./config.json` forgets one, after which `record` mode pins the next call again.
+
+Keep the pin file under version control next to the policy bundle: it is the record of which tool definitions your operators accepted.
+
 ### Environment Isolation
 
 Nomos now isolates upstream stdio processes from the parent environment by default. For each upstream server:

@@ -14,6 +14,8 @@ The `initialize` response currently advertises:
 
 Nomos does not emit `notifications/tools/list_changed` to downstream clients. Its own direct tools are static for the life of a session. Forwarded upstream tools can change when an upstream server emits `notifications/tools/list_changed` (see [upstream MCP gateway](upstream-mcp-gateway.md)); a downstream client that receives an unknown-tool error should call `tools/list` again rather than rely on a notification.
 
+Forwarded tool definitions are pinned. When a refreshed upstream definition (description or `inputSchema`) no longer matches the pinned one, `tools/call` for that tool returns a normal `DENY` result with reason `deny_by_tool_definition_change` (or `deny_by_unpinned_tool_definition` in `strict` mode) until an operator accepts the change with `nomos mcp pins accept`. See [tool definition pinning](upstream-mcp-gateway.md#tool-definition-pinning).
+
 ## Supported Transports
 
 - stdio

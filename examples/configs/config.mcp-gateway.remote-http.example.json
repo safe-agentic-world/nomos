@@ -70,7 +70,11 @@
     ]
   },
   "upstream": {
-    "routes": []
+    "routes": [],
+    "tool_pins": {
+      "file": "./upstream-tool-pins.json",
+      "mode": "record"
+    }
   },
   "approvals": {
     "enabled": true,

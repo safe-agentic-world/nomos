@@ -162,6 +162,10 @@ func runMCP(args []string) {
 		runMCPServe(args[1:])
 		return
 	}
+	if len(args) > 0 && args[0] == "pins" {
+		runMCPPins(args[1:])
+		return
+	}
 	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
 	fs.SetOutput(os.Stderr)
 	var configPath string
@@ -195,24 +199,7 @@ func runMCP(args []string) {
 	if err != nil {
 		cliFatalf("init credential broker: %v", err)
 	}
-	runtimeOptions, err := mcp.ParseRuntimeOptions(mcp.RuntimeOptions{
-		LogLevel:              resolved.LogLevel,
-		Quiet:                 resolved.Quiet,
-		LogFormat:             logFormat,
-		ErrWriter:             os.Stderr,
-		ExecCompatibilityMode: cfg.Policy.ExecCompatibilityMode,
-		ToolSurface:           toolSurface,
-		BundleRoles:           cfg.Policy.EffectiveBundleRoles(),
-		SandboxEvidence:       cfg.Runtime.Evidence.SandboxEvidence(),
-		ApprovalStorePath:     cfg.Approvals.StorePath,
-		ApprovalStoreBackend:  cfg.Approvals.Backend,
-		ApprovalTTLSeconds:    cfg.Approvals.TTLSeconds,
-		UpstreamRoutes:        toMCPUpstreamRoutes(cfg.Upstream.Routes),
-		UpstreamServers:       toMCPUpstreamServers(cfg.MCP.Timeouts, cfg.MCP.Breaker, cfg.MCP.UpstreamServers),
-		CredentialBroker:      credentialBroker,
-		Telemetry:             buildMCPRuntimeTelemetry(cfg),
-		TenantConfig:          cfg.Tenancy,
-	})
+	runtimeOptions, err := buildMCPRuntimeOptions(cfg, credentialBroker, resolved.LogLevel, logFormat, toolSurface, resolved.Quiet)
 	if err != nil {
 		cliFatalf("invalid mcp runtime options: %v", err)
 	}
@@ -290,23 +277,7 @@ func runMCPServe(args []string) {
 	if err != nil {
 		cliFatalf("init credential broker: %v", err)
 	}
-	runtimeOptions, err := mcp.ParseRuntimeOptions(mcp.RuntimeOptions{
-		LogLevel:              "info",
-		LogFormat:             "text",
-		ErrWriter:             os.Stderr,
-		ExecCompatibilityMode: cfg.Policy.ExecCompatibilityMode,
-		ToolSurface:           toolSurface,
-		BundleRoles:           cfg.Policy.EffectiveBundleRoles(),
-		SandboxEvidence:       cfg.Runtime.Evidence.SandboxEvidence(),
-		ApprovalStorePath:     cfg.Approvals.StorePath,
-		ApprovalStoreBackend:  cfg.Approvals.Backend,
-		ApprovalTTLSeconds:    cfg.Approvals.TTLSeconds,
-		UpstreamRoutes:        toMCPUpstreamRoutes(cfg.Upstream.Routes),
-		UpstreamServers:       toMCPUpstreamServers(cfg.MCP.Timeouts, cfg.MCP.Breaker, cfg.MCP.UpstreamServers),
-		CredentialBroker:      credentialBroker,
-		Telemetry:             buildMCPRuntimeTelemetry(cfg),
-		TenantConfig:          cfg.Tenancy,
-	})
+	runtimeOptions, err := buildMCPRuntimeOptions(cfg, credentialBroker, "info", "text", toolSurface, false)
 	if err != nil {
 		cliFatalf("invalid mcp runtime options: %v", err)
 	}
@@ -1493,24 +1464,7 @@ func reloadMCPServerFromConfig(ctx context.Context, server *mcp.Server, configPa
 	if err != nil {
 		return mcp.ReloadResult{}, err
 	}
-	runtimeOptions, err := mcp.ParseRuntimeOptions(mcp.RuntimeOptions{
-		LogLevel:              logLevel,
-		Quiet:                 quiet,
-		LogFormat:             logFormat,
-		ErrWriter:             os.Stderr,
-		ExecCompatibilityMode: cfg.Policy.ExecCompatibilityMode,
-		ToolSurface:           toolSurface,
-		BundleRoles:           cfg.Policy.EffectiveBundleRoles(),
-		SandboxEvidence:       cfg.Runtime.Evidence.SandboxEvidence(),
-		ApprovalStorePath:     cfg.Approvals.StorePath,
-		ApprovalStoreBackend:  cfg.Approvals.Backend,
-		ApprovalTTLSeconds:    cfg.Approvals.TTLSeconds,
-		UpstreamRoutes:        toMCPUpstreamRoutes(cfg.Upstream.Routes),
-		UpstreamServers:       toMCPUpstreamServers(cfg.MCP.Timeouts, cfg.MCP.Breaker, cfg.MCP.UpstreamServers),
-		CredentialBroker:      credentialBroker,
-		Telemetry:             buildMCPRuntimeTelemetry(cfg),
-		TenantConfig:          cfg.Tenancy,
-	})
+	runtimeOptions, err := buildMCPRuntimeOptions(cfg, credentialBroker, logLevel, logFormat, toolSurface, quiet)
 	if err != nil {
 		return mcp.ReloadResult{}, err
 	}
@@ -1554,6 +1508,37 @@ func protocolSafeMCPSink(sink string) string {
 		return "stderr"
 	}
 	return strings.Join(out, ",")
+}
+
+// buildMCPRuntimeOptions maps a loaded config onto the MCP runtime options shared by
+// `nomos mcp`, `nomos mcp serve`, config reloads, and `nomos mcp pins accept`.
+func buildMCPRuntimeOptions(cfg gateway.Config, credentialBroker mcp.UpstreamCredentialBroker, logLevel, logFormat, toolSurface string, quiet bool) (mcp.RuntimeOptions, error) {
+	return mcp.ParseRuntimeOptions(mcp.RuntimeOptions{
+		LogLevel:              logLevel,
+		Quiet:                 quiet,
+		LogFormat:             logFormat,
+		ErrWriter:             os.Stderr,
+		ExecCompatibilityMode: cfg.Policy.ExecCompatibilityMode,
+		ToolSurface:           toolSurface,
+		BundleRoles:           cfg.Policy.EffectiveBundleRoles(),
+		SandboxEvidence:       cfg.Runtime.Evidence.SandboxEvidence(),
+		ApprovalStorePath:     cfg.Approvals.StorePath,
+		ApprovalStoreBackend:  cfg.Approvals.Backend,
+		ApprovalTTLSeconds:    cfg.Approvals.TTLSeconds,
+		UpstreamRoutes:        toMCPUpstreamRoutes(cfg.Upstream.Routes),
+		UpstreamServers:       toMCPUpstreamServers(cfg.MCP.Timeouts, cfg.MCP.Breaker, cfg.MCP.UpstreamServers),
+		UpstreamToolPins:      toMCPUpstreamToolPins(cfg.Upstream.ToolPins),
+		CredentialBroker:      credentialBroker,
+		Telemetry:             buildMCPRuntimeTelemetry(cfg),
+		TenantConfig:          cfg.Tenancy,
+	})
+}
+
+func toMCPUpstreamToolPins(cfg gateway.UpstreamToolPinsConfig) mcp.UpstreamToolPinsConfig {
+	return mcp.UpstreamToolPinsConfig{
+		Mode: strings.TrimSpace(cfg.Mode),
+		File: strings.TrimSpace(cfg.File),
+	}
 }
 
 func toMCPUpstreamRoutes(routes []gateway.UpstreamRoute) []mcp.UpstreamRoute {
@@ -1737,6 +1722,8 @@ func serveHelpText() string {
 
 func mcpHelpText() string {
 	return "usage: nomos mcp [flags]\n" +
+		"       nomos mcp serve --http --listen <addr> [flags]\n" +
+		"       nomos mcp pins <list|accept|remove> [flags]\n" +
 		"  -c, --config <path>          config json path (or NOMOS_CONFIG)\n" +
 		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n" +
 		"  -l, --log-level <level>      error|warn|info|debug (or NOMOS_LOG_LEVEL)\n" +
@@ -1745,7 +1732,23 @@ func mcpHelpText() string {
 		"      --tool-surface <mode>    canonical|friendly|both\n\n" +
 		"example:\n" +
 		"  nomos mcp -c ./examples/configs/config.example.json -p ./examples/policies/your-policy-bundle.json\n" +
-		"  nomos mcp serve --http --listen 127.0.0.1:8090 -c ./examples/configs/config.example.json\n"
+		"  nomos mcp serve --http --listen 127.0.0.1:8090 -c ./examples/configs/config.example.json\n" +
+		"  nomos mcp pins list -c ./examples/configs/config.mcp-gateway.example.json\n"
+}
+
+func mcpPinsHelpText() string {
+	return "usage: nomos mcp pins <list|accept|remove> [flags]\n" +
+		"  list                         list pinned upstream tool definitions\n" +
+		"  accept <server>/<tool>       connect to the upstream, enumerate the tool, and pin its live definition\n" +
+		"  remove <server>/<tool>       forget a pin (record mode pins the next call again)\n" +
+		"  -c, --config <path>          config json path (or NOMOS_CONFIG)\n" +
+		"  -p, --policy-bundle <path>   policy bundle path (or NOMOS_POLICY_BUNDLE)\n" +
+		"      --hash <sha256>          accept this reviewed definition hash without connecting upstream\n" +
+		"      --format <fmt>           text|json\n\n" +
+		"examples:\n" +
+		"  nomos mcp pins list -c ./examples/configs/config.mcp-gateway.example.json\n" +
+		"  nomos mcp pins accept retail/refund.request -c ./examples/configs/config.mcp-gateway.example.json\n" +
+		"  nomos mcp pins remove retail/refund.request -c ./examples/configs/config.mcp-gateway.example.json\n"
 }
 
 func mcpServeHelpText() string {
@@ -1980,7 +1983,7 @@ func decorateTokenPrefix(token string, prefixLen int, color string, bold bool) s
 func isHelpCommandToken(token string) bool {
 	switch strings.Trim(token, "[]<>.,:") {
 	case "nomos", "version", "serve", "mcp", "run", "test", "policy", "profiles", "approvals", "doctor",
-		"list", "show", "verify", "approve", "deny", "explain", "codex", "claude":
+		"list", "show", "verify", "approve", "deny", "explain", "codex", "claude", "pins", "accept", "remove":
 		return true
 	default:
 		return false

@@ -46,6 +46,7 @@ type Server struct {
 	assuranceLevel        string
 	upstreamRoutes        []UpstreamRoute
 	upstream              *upstreamSupervisor
+	upstreamToolPins      UpstreamToolPinsConfig
 	state                 *serverStateHolder
 	reloadMu              *sync.Mutex
 	recorder              audit.Recorder
@@ -295,7 +296,11 @@ func NewServerForBundlesWithRuntimeOptionsAndRecorder(bundlePaths []string, iden
 	svc := service.New(engine, reader, writerExec, patcher, execRunner, httpRunner, recorder, logger.redactor, approvalStore, nil, sandboxProfile, nil)
 	svc.SetSandboxEvidence(parsedRuntime.SandboxEvidence, []string{workspaceRoot})
 	svc.SetExecCompatibilityMode(parsedRuntime.ExecCompatibilityMode)
-	upstream, err := newUpstreamSupervisor(parsedRuntime.UpstreamServers, logger, parsedRuntime.Telemetry, identity, parsedRuntime.CredentialBroker, recorder)
+	toolPins, err := openToolPinStoreForRuntime(parsedRuntime.UpstreamToolPins)
+	if err != nil {
+		return nil, err
+	}
+	upstream, err := newUpstreamSupervisor(parsedRuntime.UpstreamServers, logger, parsedRuntime.Telemetry, identity, parsedRuntime.CredentialBroker, recorder, toolPins)
 	if err != nil {
 		return nil, err
 	}
@@ -313,6 +318,7 @@ func NewServerForBundlesWithRuntimeOptionsAndRecorder(bundlePaths []string, iden
 		assuranceLevel:        "NONE",
 		upstreamRoutes:        append([]UpstreamRoute(nil), state.UpstreamRoutes...),
 		upstream:              upstream,
+		upstreamToolPins:      parsedRuntime.UpstreamToolPins,
 		state:                 newServerStateHolder(state),
 		reloadMu:              &sync.Mutex{},
 		recorder:              recorder,
@@ -421,6 +427,9 @@ func (s *Server) Reload(ctx context.Context, opts ReloadOptions) (ReloadResult, 
 	if !runtimeOptions.TenantConfig.Configured() && s.tenantConfig.Configured() {
 		runtimeOptions.TenantConfig = s.tenantConfig
 	}
+	if strings.TrimSpace(runtimeOptions.UpstreamToolPins.Mode) == "" && strings.TrimSpace(s.upstreamToolPins.Mode) != "" {
+		runtimeOptions.UpstreamToolPins = s.upstreamToolPins
+	}
 	parsedRuntime, err := ParseRuntimeOptions(runtimeOptions)
 	if err != nil {
 		result := s.reloadFailureResult(trigger, err)
@@ -447,12 +456,20 @@ func (s *Server) Reload(ctx context.Context, opts ReloadOptions) (ReloadResult, 
 		return result, fmt.Errorf("reload validation failed: %w", err)
 	}
 	nextEngine := policy.NewEngine(bundle)
+	toolPins, err := openToolPinStoreForRuntime(parsedRuntime.UpstreamToolPins)
+	if err != nil {
+		result := s.reloadFailureResult(trigger, err)
+		s.recordReloadAudit(result)
+		return result, fmt.Errorf("reload validation failed: %w", err)
+	}
 	upstreamResult, err := s.upstream.reload(ctx, parsedRuntime.UpstreamServers, s.identity, parsedRuntime.CredentialBroker, s.recorder)
 	if err != nil {
 		result := s.reloadFailureResult(trigger, err)
 		s.recordReloadAudit(result)
 		return result, fmt.Errorf("reload validation failed: %w", err)
 	}
+	s.upstream.setToolPins(toolPins)
+	s.upstreamToolPins = parsedRuntime.UpstreamToolPins
 	if err := s.service.SetPolicyEngine(nextEngine); err != nil {
 		result := s.reloadFailureResult(trigger, err)
 		result.RegistryVersion = upstreamResult.RegistryVersion
@@ -960,6 +977,10 @@ func (s *Server) handleForwardedToolWithSession(req Request, session *downstream
 	if !s.upstreamVisibleForIdentity(id, tool.ServerName) {
 		return Response{ID: req.ID, Error: "method_not_found"}
 	}
+	pin, refused := s.enforceToolDefinitionPin(req, tool, id, session)
+	if refused != nil {
+		return *refused
+	}
 	args := bytes.TrimSpace(req.Params)
 	if len(args) == 0 {
 		args = []byte(`{}`)
@@ -981,19 +1002,24 @@ func (s *Server) handleForwardedToolWithSession(req Request, session *downstream
 	if err != nil {
 		return Response{ID: req.ID, Error: upstreamArgumentValidationError}
 	}
+	actionParams := map[string]any{
+		"upstream_server":       tool.ServerName,
+		"upstream_tool":         tool.ToolName,
+		"tool_arguments":        validatedArgs.CanonicalValue,
+		"tool_arguments_hash":   validatedArgs.Hash,
+		"tool_schema_validated": len(tool.InputSchema) > 0,
+		"tool_definition_hash":  tool.DefinitionHash,
+	}
+	if pin != nil {
+		actionParams["tool_definition_pinned_hash"] = pin.DefinitionHash
+	}
 	actionReq := action.Request{
 		SchemaVersion: "v1",
 		ActionID:      "mcp_" + req.ID,
 		ActionType:    "mcp.call",
 		Resource:      "mcp://" + tool.ServerName + "/" + tool.ToolName,
-		Params: mustJSONBytes(map[string]any{
-			"upstream_server":       tool.ServerName,
-			"upstream_tool":         tool.ToolName,
-			"tool_arguments":        validatedArgs.CanonicalValue,
-			"tool_arguments_hash":   validatedArgs.Hash,
-			"tool_schema_validated": len(tool.InputSchema) > 0,
-		}),
-		TraceID: "mcp_" + req.ID,
+		Params:        mustJSONBytes(actionParams),
+		TraceID:       "mcp_" + req.ID,
 	}
 	actionReq.Context = action.Context{Extensions: buildActionExtensionsForSessionWithMetadata(approvalID, session, s.upstream.envMetadata(tool.ServerName))}
 	act, err := action.ToAction(actionReq, id)
@@ -1025,6 +1051,141 @@ func (s *Server) handleForwardedToolWithSession(req Request, session *downstream
 	resp.Obligations = nil
 	s.recordMCPContentBlocks(actionReq, tool, resp, governed, id)
 	return Response{ID: req.ID, Result: resp}
+}
+
+// enforceToolDefinitionPin applies the upstream tool definition pin check before a forwarded
+// call is turned into an mcp.call action. It returns the pin that binds the tool (nil when
+// pinning is off) or a refusal response the caller must return as is. Refusals are DENY
+// decisions with reason deny_by_tool_definition_change or deny_by_unpinned_tool_definition,
+// or the TOOL_PIN_STORE_ERROR error when the pin file cannot be read or written.
+func (s *Server) enforceToolDefinitionPin(req Request, tool upstreamTool, id identity.VerifiedIdentity, session *downstreamSession) (*ToolDefinitionPin, *Response) {
+	store := s.upstream.toolPins()
+	if store == nil {
+		return nil, nil
+	}
+	deny := func(reason string, pinned *ToolDefinitionPin) (*ToolDefinitionPin, *Response) {
+		s.recordToolDefinitionPinAudit(req, tool, id, session, store, toolPinAuditRecord{
+			classification: toolPinResultDenied,
+			decision:       policy.DecisionDeny,
+			reason:         reason,
+			pin:            pinned,
+		})
+		message := fmt.Sprintf("forwarded call denied (%s) server=%q tool=%q definition_hash=%s", reason, tool.ServerName, tool.ToolName, tool.DefinitionHash)
+		if pinned != nil {
+			message += " pinned_hash=" + pinned.DefinitionHash
+		}
+		s.logger.Warn(message + fmt.Sprintf("; review the upstream tool and run 'nomos mcp pins accept %s' to accept its current definition", ToolPinKey(tool.ServerName, tool.ToolName)))
+		return nil, &Response{ID: req.ID, Result: toolPinDenyResponse(req.ID, reason)}
+	}
+	storeError := func(err error) (*ToolDefinitionPin, *Response) {
+		s.recordToolDefinitionPinAudit(req, tool, id, session, store, toolPinAuditRecord{
+			classification: toolPinResultStoreError,
+			decision:       policy.DecisionDeny,
+			reason:         toolPinStoreError,
+			errorText:      err.Error(),
+		})
+		s.logger.Error(fmt.Sprintf("forwarded call failed closed (%s) server=%q tool=%q: %v", toolPinStoreError, tool.ServerName, tool.ToolName, err))
+		return nil, &Response{ID: req.ID, Error: toolPinStoreError}
+	}
+	if !isSHA256Hex(tool.DefinitionHash) {
+		return storeError(errors.New("upstream tool definition hash is missing"))
+	}
+	pinned, ok, err := store.Lookup(tool.ServerName, tool.ToolName)
+	if err != nil {
+		return storeError(err)
+	}
+	if ok {
+		if pinned.DefinitionHash != tool.DefinitionHash {
+			return deny(denyByToolDefinitionChange, &pinned)
+		}
+		return &pinned, nil
+	}
+	switch store.Mode() {
+	case ToolPinModeRecord:
+		recorded, created, err := store.PinIfAbsent(tool.ServerName, tool.ToolName, tool.DefinitionHash, tool.Description)
+		if err != nil {
+			return storeError(err)
+		}
+		if !created && recorded.DefinitionHash != tool.DefinitionHash {
+			return deny(denyByToolDefinitionChange, &recorded)
+		}
+		if created {
+			s.recordToolDefinitionPinAudit(req, tool, id, session, store, toolPinAuditRecord{
+				classification: toolPinResultPinned,
+				pin:            &recorded,
+			})
+			s.logger.Info(fmt.Sprintf("pinned upstream tool definition server=%q tool=%q definition_hash=%s file=%s", tool.ServerName, tool.ToolName, recorded.DefinitionHash, store.Path()))
+		}
+		return &recorded, nil
+	case ToolPinModeStrict:
+		return deny(denyByUnpinnedToolDefinition, nil)
+	default:
+		return storeError(fmt.Errorf("unsupported upstream tool pin mode %q", store.Mode()))
+	}
+}
+
+func toolPinDenyResponse(requestID, reason string) action.Response {
+	return action.Response{
+		Decision: policy.DecisionDeny,
+		Reason:   reason,
+		TraceID:  "mcp_" + requestID,
+		ActionID: "mcp_" + requestID,
+	}
+}
+
+type toolPinAuditRecord struct {
+	classification string
+	decision       string
+	reason         string
+	pin            *ToolDefinitionPin
+	errorText      string
+}
+
+func (s *Server) recordToolDefinitionPinAudit(req Request, tool upstreamTool, id identity.VerifiedIdentity, session *downstreamSession, store *ToolPinStore, record toolPinAuditRecord) {
+	if s == nil || s.service == nil {
+		return
+	}
+	metadata := map[string]any{
+		"upstream_server":      tool.ServerName,
+		"upstream_tool":        tool.ToolName,
+		"downstream_tool_name": tool.DownstreamName,
+		"tool_definition_hash": tool.DefinitionHash,
+		"tool_pin_mode":        store.Mode(),
+		"tool_pin_file":        store.Path(),
+	}
+	if record.pin != nil {
+		metadata["tool_definition_pinned_hash"] = record.pin.DefinitionHash
+		if record.pin.PinnedAt != "" {
+			metadata["tool_definition_pinned_at"] = record.pin.PinnedAt
+		}
+	}
+	if record.errorText != "" {
+		metadata["error"] = record.errorText
+	}
+	if session != nil {
+		for key, value := range session.auditMetadata() {
+			metadata[key] = value
+		}
+	}
+	tenantID, _ := s.tenantIDForIdentity(id)
+	_ = s.service.RecordAuditEvent(audit.Event{
+		SchemaVersion:        "v1",
+		Timestamp:            time.Now().UTC(),
+		EventType:            toolPinAuditEventType,
+		TraceID:              "mcp_" + req.ID,
+		ActionID:             "mcp_" + req.ID,
+		Principal:            id.Principal,
+		Agent:                id.Agent,
+		Environment:          id.Environment,
+		TenantID:             tenantID,
+		ActionType:           "mcp.call",
+		Resource:             "mcp://" + tool.ServerName + "/" + tool.ToolName,
+		ResultClassification: record.classification,
+		ExecutorMetadata:     metadata,
+		AssuranceLevel:       s.assuranceLevel,
+		Decision:             record.decision,
+		Reason:               record.reason,
+	})
 }
 
 func (s *Server) handleFSWrite(req Request, session *downstreamSession) Response {

@@ -31,6 +31,7 @@ type RuntimeOptions struct {
 	ApprovalTTLSeconds    int
 	UpstreamRoutes        []UpstreamRoute
 	UpstreamServers       []UpstreamServerConfig
+	UpstreamToolPins      UpstreamToolPinsConfig
 	CredentialBroker      UpstreamCredentialBroker
 	Telemetry             *telemetry.Emitter
 	TenantConfig          tenant.Config
@@ -125,6 +126,10 @@ func ParseRuntimeOptions(options RuntimeOptions) (RuntimeOptions, error) {
 	if err := tenant.ValidateConfig(options.TenantConfig); err != nil {
 		return RuntimeOptions{}, err
 	}
+	toolPins, err := normalizeUpstreamToolPinsConfig(options.UpstreamToolPins)
+	if err != nil {
+		return RuntimeOptions{}, err
+	}
 	return RuntimeOptions{
 		LogLevel:              level,
 		Quiet:                 options.Quiet,
@@ -139,6 +144,7 @@ func ParseRuntimeOptions(options RuntimeOptions) (RuntimeOptions, error) {
 		ApprovalTTLSeconds:    options.ApprovalTTLSeconds,
 		UpstreamRoutes:        append([]UpstreamRoute(nil), options.UpstreamRoutes...),
 		UpstreamServers:       append([]UpstreamServerConfig(nil), options.UpstreamServers...),
+		UpstreamToolPins:      toolPins,
 		CredentialBroker:      options.CredentialBroker,
 		Telemetry:             options.Telemetry,
 		TenantConfig:          options.TenantConfig,

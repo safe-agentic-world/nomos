@@ -8,6 +8,36 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ### Added
 
+- Upstream MCP tool definition pinning: every forwarded tool's `name`,
+  `description`, and `inputSchema` are hashed on enumeration and pinned in
+  the sidecar file configured by `upstream.tool_pins` (default
+  `upstream-tool-pins.json` next to the config). `record` mode (default)
+  pins a tool on its first call, `strict` refuses unpinned tools, and `off`
+  disables pinning. A call whose live definition no longer matches its pin,
+  including after a `notifications/tools/list_changed` refresh, is denied
+  with `deny_by_tool_definition_change` (unpinned tools in `strict` mode
+  with `deny_by_unpinned_tool_definition`), is never re-pinned silently,
+  and is audited as `mcp.tool_definition_pin` with both hashes. An
+  unreadable pin file fails startup and an unwritable one fails the call
+  closed. `nomos mcp pins list|accept|remove` manages the file; `accept`
+  enumerates the live definition over the upstream session (or takes
+  `--hash`). The `mcp.call` action params now carry `tool_definition_hash`
+  and `tool_definition_pinned_hash`.
+
+### Changed
+
+- Gateway deployments that forward upstream MCP tools now write
+  `upstream-tool-pins.json` next to the config on the first forwarded call
+  (`upstream.tool_pins.mode` defaults to `record`). A config directory
+  that cannot be written makes those calls fail closed with
+  `TOOL_PIN_STORE_ERROR`; point `upstream.tool_pins.file` at a writable
+  path, populate it with `nomos mcp pins accept` and use `strict`, or set
+  `mode: off` to keep the previous behavior.
+
+## [0.17.0] - 2026-09-26
+
+### Added
+
 - `exec_match.program_patterns`: a rule can be narrowed to programs that
   were started by a relative path with a directory component
   (`./scripts/test.sh`, `tools/gen.py`). The hooks clean that path, check

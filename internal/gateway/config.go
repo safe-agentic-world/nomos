@@ -281,12 +281,27 @@ type UpstreamRoute struct {
 }
 
 type UpstreamConfig struct {
-	Routes []UpstreamRoute `json:"routes"`
+	Routes   []UpstreamRoute        `json:"routes"`
+	ToolPins UpstreamToolPinsConfig `json:"tool_pins"`
 }
+
+// UpstreamToolPinsConfig configures the sidecar file that pins upstream MCP tool definitions.
+// File resolves relative to the config file directory and defaults to upstream-tool-pins.json
+// next to the config; Mode is record (default), strict, or off.
+type UpstreamToolPinsConfig struct {
+	File string `json:"file,omitempty"`
+	Mode string `json:"mode,omitempty"`
+}
+
+const (
+	defaultUpstreamToolPinsFile = "upstream-tool-pins.json"
+	defaultUpstreamToolPinsMode = "record"
+)
 
 func (u *UpstreamConfig) UnmarshalJSON(data []byte) error {
 	type typedUpstreamConfig struct {
-		Routes []UpstreamRoute `json:"routes"`
+		Routes   []UpstreamRoute        `json:"routes"`
+		ToolPins UpstreamToolPinsConfig `json:"tool_pins"`
 	}
 	var typed typedUpstreamConfig
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -296,11 +311,13 @@ func (u *UpstreamConfig) UnmarshalJSON(data []byte) error {
 			return errors.New("upstream config contains trailing data")
 		}
 		u.Routes = typed.Routes
+		u.ToolPins = typed.ToolPins
 		return nil
 	}
 
 	var legacy struct {
-		Routes []string `json:"routes"`
+		Routes   []string               `json:"routes"`
+		ToolPins UpstreamToolPinsConfig `json:"tool_pins"`
 	}
 	dec = json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -314,6 +331,7 @@ func (u *UpstreamConfig) UnmarshalJSON(data []byte) error {
 	for _, route := range legacy.Routes {
 		u.Routes = append(u.Routes, UpstreamRoute{URL: route})
 	}
+	u.ToolPins = legacy.ToolPins
 	return nil
 }
 
@@ -477,6 +495,12 @@ func (c *Config) SetDefaults() error {
 	}
 	if c.Credentials.Enabled && len(c.Credentials.Secrets) == 0 {
 		c.Credentials.Enabled = false
+	}
+	if strings.TrimSpace(c.Upstream.ToolPins.Mode) == "" {
+		c.Upstream.ToolPins.Mode = defaultUpstreamToolPinsMode
+	}
+	if strings.TrimSpace(c.Upstream.ToolPins.File) == "" {
+		c.Upstream.ToolPins.File = defaultUpstreamToolPinsFile
 	}
 	if c.Approvals.Enabled {
 		if c.Approvals.Backend == "" {
@@ -743,6 +767,17 @@ func (c Config) Validate() error {
 		if value := strings.TrimSpace(route.PathPrefix); value != "" && !strings.HasPrefix(value, "/") {
 			return errors.New("upstream.routes.path_prefix must start with /")
 		}
+	}
+	switch strings.TrimSpace(c.Upstream.ToolPins.Mode) {
+	case "record", "strict", "off":
+	default:
+		return errors.New("upstream.tool_pins.mode must be one of record, strict, off")
+	}
+	if strings.TrimSpace(c.Upstream.ToolPins.File) == "" {
+		return errors.New("upstream.tool_pins.file is required")
+	}
+	if info, err := os.Stat(c.Upstream.ToolPins.File); err == nil && info.IsDir() {
+		return errors.New("upstream.tool_pins.file must be a file, not a directory")
 	}
 	credentialProfiles := map[string]struct{}{}
 	for _, secret := range c.Credentials.Secrets {
@@ -1289,6 +1324,10 @@ func (c *Config) ResolveRelativePaths(baseDir string) error {
 	c.Approvals.StorePath = resolveRelativePath(absBase, c.Approvals.StorePath)
 	c.Identity.OIDC.PublicKeyPath = resolveRelativePath(absBase, c.Identity.OIDC.PublicKeyPath)
 	c.Audit.Sink = resolveAuditSinkPaths(absBase, c.Audit.Sink)
+	if strings.TrimSpace(c.Upstream.ToolPins.File) == "" {
+		c.Upstream.ToolPins.File = defaultUpstreamToolPinsFile
+	}
+	c.Upstream.ToolPins.File = resolveRelativePath(absBase, c.Upstream.ToolPins.File)
 	for idx := range c.MCP.UpstreamServers {
 		if hasPathSeparator(c.MCP.UpstreamServers[idx].Command) {
 			c.MCP.UpstreamServers[idx].Command = resolveRelativePath(absBase, c.MCP.UpstreamServers[idx].Command)
