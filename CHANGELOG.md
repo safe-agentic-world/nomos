@@ -6,11 +6,32 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-09-26
+
+### Security
+
+- The hooks protect their own control files. Claude Code picks up hook
+  edits in its settings files during a session, so an agent that could
+  write `.claude/settings.json` could switch Nomos off, and `safe-dev`
+  allowed that write, as well as overwriting the audit log. A file write
+  to the audit log or anything under `.nomos/` is now denied. A file
+  write, or a command argument, that names `.claude/settings.json`,
+  `.claude/settings.local.json`, `.codex/hooks.json`, or
+  `.codex/config.toml` (in the workspace or the home directory), the `-p`
+  policy bundle, the running `nomos` binary, or a directory that holds one
+  of them now asks. Paths are
+  resolved first, so `cd`, `..`, symlinks, globs, and case do not get
+  around the check. Reads, including `cat` and `tail` by name, are
+  unchanged, and no decision moved on the 1,526-command corpus. A program
+  that writes those files without naming them is still decided by its own
+  rules; see "The Hook Protects Its Own Files" in
+  `docs/claude-code-hook.md`.
+
 ### Changed
 
 - The Homebrew formula and Scoop manifest describe Nomos as a deny-wins
   policy hook for Claude Code and Codex, matching the repository
-  description. The next release publishes the new text.
+  description.
 
 ### Removed
 

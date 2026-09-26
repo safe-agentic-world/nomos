@@ -66,6 +66,7 @@ func MapCodexToolCall(in Input, opts Options) Mapping {
 	if in.ToolName != CodexToolApplyPatch {
 		return MapToolCall(in, opts)
 	}
+	opts = opts.withControls()
 	var params map[string]any
 	if err := json.Unmarshal(in.ToolInput, &params); err != nil || params == nil {
 		params = map[string]any{}

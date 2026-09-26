@@ -138,6 +138,17 @@ disables the log; `--audit <path>` moves it.
   organization can restrict hooks to managed ones. Keep the timeout short
   and the hook local, and treat it as policy enforcement inside Codex, not
   as a sandbox around it.
+- **The hook guards its own files, not everything that writes them.** A
+  patch or command that could change `.codex/hooks.json`, `.codex/config.toml`
+  (where the hooks feature and each hook's trust are kept), the `-p`
+  bundle, the `nomos` binary, or anything under `.nomos/` is an ask, so under the default
+  `--ask deny` it is denied; a write to the audit log is denied either way
+  ([how paths are resolved](claude-code-hook.md#the-hook-protects-its-own-files)).
+  A program that writes those files without naming them is decided by its
+  own rules. For a hook the agent cannot remove, admins can set
+  `allow_managed_hooks_only = true` in `requirements.toml`, which "ignore[s]
+  user, project, and session hook configs while still allowing managed
+  hooks".
 - **The working directory is the session's.** Codex's shell tool accepts a
   `workdir` (and a `shell`, an `environment_id`, and sandbox flags) that
   the hook input does not include; the hook sees only the command and the
