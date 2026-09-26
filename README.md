@@ -42,7 +42,7 @@ For Codex, `nomos hook codex --install --profile safe-dev` registers the
 same decisions through its `PreToolUse` and `PermissionRequest` hooks
 ([guide](docs/codex-hook.md)).
 
-The hook commands need Nomos v0.15.0 or newer (`nomos version`).
+The commands and numbers on this page are for Nomos v0.19.0 or newer (`nomos version`).
 
 ## What It Did In Real Sessions
 
@@ -235,8 +235,8 @@ jobs:
           persist-credentials: false
       - name: Install Nomos
         env:
-          NOMOS_VERSION: v0.15.0
-          NOMOS_SHA256: 398e713b08f08f98cf44d0ab54cb5e5f0cceed66dedba0d1600bca132c06cb24
+          NOMOS_VERSION: v0.19.0
+          NOMOS_SHA256: 4313a79e705aecd185104bab611ab7d43fb347c9193079476e9da0619170307d
         shell: bash
         run: |
           set -euo pipefail
@@ -338,6 +338,9 @@ and the [changelog](CHANGELOG.md).
 - **Add a regression case:** a small policy and an action that should stay
   denied or require review.
 - **Improve the docs:** a verified command or a clearer example is a useful PR.
+- **Have a question or an idea?** Ask in
+  [Discussions](https://github.com/safe-agentic-world/nomos/discussions), and
+  share the policies you write there too.
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [roadmap](docs/roadmap.md). To check a Go change, run `go test ./...` and

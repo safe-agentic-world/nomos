@@ -23,6 +23,45 @@ while editing, for example `go test ./internal/gateway ./internal/service`.
 Format changed Go files with `gofmt`. There is no fixed coverage percentage;
 add assertions for allowed, denied, approval, and failure paths you change.
 
+## Coding-Agent Hooks
+
+The Claude Code and Codex hook adapters live in `internal/agenthook`, and
+their CLI commands in `cmd/nomos`.
+
+```bash
+go test ./internal/agenthook ./cmd/nomos
+```
+
+**Corpus golden.** `testdata/realworld/commands.jsonl` holds 1,526 real
+build and test commands, and `expected.json` records how each default
+profile decides them. The golden test fails whenever a decision moves.
+After an intended change, regenerate it and review the diff line by line:
+
+```bash
+go test ./internal/agenthook -run Corpus -update-corpus
+git diff testdata/realworld/expected.json
+```
+
+**Profiles.** After editing `profiles/*.yaml`, refresh the embedded copies
+and pinned hashes, then regenerate the golden:
+
+```bash
+go run scripts/pin_profile_hashes.go
+```
+
+**Replay.** See how a profile decides a corpus, or your own transcripts,
+without running anything:
+
+```bash
+go run ./cmd/nomos hook claude-code --replay testdata/realworld/commands.jsonl --profile safe-dev
+```
+
+**End to end.** `scripts/e2e-claude-code-hook/run-all.sh <output-root>
+[nomos-binary]` runs headless Claude Code sessions in throwaway projects
+with canary files and writes the validation record. It needs the `claude`
+CLI and working credentials. See
+[the validation record](docs/validation-claude-code-hook.md).
+
 ## Permission Regression Suite
 
 ```bash

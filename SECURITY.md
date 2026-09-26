@@ -8,7 +8,10 @@ Nomos is pre-`v1.0.0`. Security fixes are applied to the latest `main` branch st
 
 Please do not open public issues for potential vulnerabilities.
 
-Report privately to the maintainers with:
+Report privately through GitHub's private vulnerability reporting: open the
+repository's **Security** tab and select **Report a vulnerability**, or go to
+https://github.com/safe-agentic-world/nomos/security/advisories/new.
+Include:
 
 - affected version/commit
 - reproduction steps
