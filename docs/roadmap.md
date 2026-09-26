@@ -1,46 +1,101 @@
-# Developer-Adoption Roadmap
+# Roadmap
 
-## This Iteration's End Goal
+Nomos exists so that a coding agent's irreversible actions pass a
+deterministic, testable decision before they run. This roadmap is ordered by
+what the [verified incident research](../README.md#why-nomos) says users are
+missing, not by what is easiest to build. Each milestone ships as a pull
+request with CI and a release, and each names how it is verified.
 
-A contributor can install from a checkout, run a real permission-and-review
-workflow without an account, inspect the outcome, and add a regression test
-before connecting one custom tool. The project should explain where it
-fits without requiring knowledge of an enterprise control plane.
+## Principles
 
-Delivered interfaces:
+- **Fail closed.** A command Nomos cannot interpret, or a path it cannot
+  place inside the workspace, is never auto-allowed.
+- **No silent policy changes.** Suggested rules are printed for a human to
+  review and commit; nothing edits a policy behind the user's back.
+- **Claims are tested.** A capability is documented only after a test,
+  a smoke check, or a recorded validation run exercises it.
+- **Local by default.** The hook reads and writes only inside the project
+  and its audit file, does no network I/O, and sends nothing anywhere.
+- **Honest limits.** Every guide states what the feature does not cover.
+  Nomos is not a sandbox, a prompt-injection detector, or a backup.
 
-- `nomos test`: deterministic offline allow/deny/review fixtures with CI exits.
-- Installable Python SDK with optional LangGraph adapter.
-- Real local inbox delivery, reviewer authentication, and outcome reporting.
-- Negative tests for approval and execution boundaries.
-- Focused onboarding; broad deployment/job-runner material removed.
+## Milestones
 
-See [the validation checklist](local-validation-plan.md) for acceptance
-checks and [local verification results](validation.md). Packaging locally
-does not imply publication to PyPI.
+### 1. Real-world noise measurement (in progress)
 
-## Small Contributions To Validate Next
+A hook that prompts on every second command recreates the approval fatigue
+it exists to remove. Ship a replay mode that runs a corpus of real developer
+commands (build and test steps from permissively licensed open-source
+projects, plus a user's own Claude Code transcripts) through a profile and
+reports how many would allow, deny, or ask, and why.
 
-1. **First-run feedback:** reproduce the quickstart on a fresh machine and
-   report the exact step that caused confusion.
-2. **Permission cases:** contribute a minimal policy and denied edge case,
-   especially for unexpected tool arguments and out-of-scope resources.
-3. **Durable LangGraph example:** demonstrate stop/restart during review with
-   a supported persistent checkpointer and a crash/replay regression test.
-4. **One real connector:** propose a specific ticket or notification tool,
-   including account-free tests and provider idempotency behavior.
-5. **SDK parity:** bring the proven custom-tool outcome/reporting contract
-   to TypeScript or Go with equivalent failure tests.
+Verified by: a checked-in corpus with source attribution, a regression test
+that fails when a benign build command is denied or an incident case stops
+denying, and the ask rate reported in the release notes.
 
-Open an integration request before building a new abstraction. Shipping a
-small working example is more useful than listing unsupported frameworks.
+### 2. Nag-free defaults
 
-## Not Planned In This Direction
+Record which asked commands the user then approved, and let
+`nomos hook claude-code --suggest` propose allow rules from that record.
+Tune the `safe-dev` profile with the corpus so ordinary build, test, lint,
+and read-only git commands do not prompt inside the workspace, while every
+incident case still denies or asks.
+
+Verified by: the corpus ask rate for `safe-dev` and the incident suites in
+CI; suggestions are never applied automatically.
+
+### 3. End-to-end runs with a real agent
+
+Run Claude Code headless in throwaway projects with the hook installed,
+under default and bypass permission modes, and drive it toward the
+commands from the incident reports. Publish the decisions and the agent's
+own permission denials as a validation record.
+
+Verified by: a checked-in record with the exact prompts, hook decisions,
+and audit lines; re-runnable with a script.
+
+### 4. A second harness
+
+Adapt the same parser and decision pipeline to the next coding agent that
+exposes a blocking pre-tool hook, chosen from primary-source verification of
+its hook contract (input fields, output that blocks, behavior in auto
+modes).
+
+Verified by: contract tests against the harness's documented input and
+output, plus an adversarial review like the one the Claude Code hook had.
+
+### 5. Trust holes named by the research
+
+- Pin upstream MCP tool definitions (name, description, input schema) and
+  require re-approval when one changes, so a class approval cannot survive a
+  description rewrite.
+- Replace the executor's blanket rejection of `--` arguments with flag
+  patterns expressed in policy.
+
+Verified by: unit tests for the pin and the change detection, an
+`explain` reason for the new deny, and updated policy docs.
+
+### 6. Distribution and community
+
+Lead the README, the repository description, and the release notes with the
+hook; keep the incident corpus open to contributions through the bypass and
+noisy-decision issue templates; answer every issue and discussion.
+
+Verified by: templates in `.github/ISSUE_TEMPLATE`, a Discussions
+announcement per release, and the contribution paths in
+[CONTRIBUTING.md](../CONTRIBUTING.md).
+
+## Not planned
 
 Hosted accounts, billing, cluster manifests, Helm packaging, infrastructure
-orchestration, and a standalone coding-agent job platform. Existing MCP and
-launcher interfaces remain compatibility features, not the primary roadmap.
+orchestration, telemetry that leaves the machine, and a standalone
+coding-agent job platform. MCP and launcher interfaces remain supported as
+routes into the same decision pipeline.
 
-Adoption and popularity are outcomes to validate with users, not guarantees.
-Prioritize successful first runs, contributors connecting a real tool, and
-actionable issue reports over adding more surface area.
+## Status
+
+Delivered so far: the `nomos test` permission suites, the Python SDK and
+LangGraph adapter, the local inbox example, the MCP server and HTTP gateway,
+and in v0.14.0 the Claude Code hook with the incident regression suites.
+Adoption is an outcome to measure with users, not a claim to make in
+advance.

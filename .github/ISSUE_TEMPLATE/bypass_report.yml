@@ -1,0 +1,50 @@
+name: Bypass report
+description: A command the Claude Code hook (or a policy) allowed but should have denied or asked about.
+labels: ["bypass"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Confirmed bypasses become cases in `examples/incidents/` so they stay closed.
+        If the bypass exposes secrets or a production system, follow SECURITY.md instead of filing here.
+  - type: input
+    id: version
+    attributes:
+      label: Nomos version
+      description: Output of `nomos version`.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and profile
+      description: The exact command as the agent would send it, and the profile or bundle in use. Redact real secrets and hostnames.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: simulate
+    attributes:
+      label: What the hook decided
+      description: Paste the full output of `nomos hook claude-code --simulate --profile <profile> --command '<command>'`.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened and why
+      description: Which file, host, or effect the command reaches that the policy meant to stop.
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Where it ran
+      options:
+        - Claude Code hook
+        - MCP server
+        - HTTP gateway
+        - Only simulated
+    validations:
+      required: true
