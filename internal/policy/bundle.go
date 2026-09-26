@@ -45,6 +45,13 @@ type Rule struct {
 
 type ExecMatch struct {
 	ArgvPatterns [][]string `json:"argv_patterns,omitempty" yaml:"argv_patterns,omitempty"`
+	// ProgramPatterns optionally narrows the rule to commands whose program
+	// was started by a relative path with a directory component inside the
+	// workspace (params.program, set by the coding-agent hooks after their
+	// boundary check). Each entry is a whole-token wildcard matched against
+	// that cleaned path; a rule that lists any never matches an action
+	// without a program path.
+	ProgramPatterns []string `json:"program_patterns,omitempty" yaml:"program_patterns,omitempty"`
 }
 
 const obligationExecAllowlist = "exec_allowlist"
@@ -284,6 +291,14 @@ func (b Bundle) Validate() error {
 					if token == "" {
 						return fmt.Errorf("rule %s exec_match.argv_patterns[%d][%d] must not be empty", rule.ID, idx, tokenIdx)
 					}
+				}
+			}
+			for idx, pattern := range rule.ExecMatch.ProgramPatterns {
+				if strings.TrimSpace(pattern) == "" {
+					return fmt.Errorf("rule %s exec_match.program_patterns[%d] must not be empty", rule.ID, idx)
+				}
+				if strings.HasPrefix(pattern, "/") || strings.HasPrefix(pattern, "~") {
+					return fmt.Errorf("rule %s exec_match.program_patterns[%d] must be a relative path pattern", rule.ID, idx)
 				}
 			}
 		}

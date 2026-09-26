@@ -798,3 +798,57 @@ func TestEvaluateDecidesRedirectionsAndPrintOnlyExpansions(t *testing.T) {
 		}
 	}
 }
+
+func TestBashWorkspaceScriptsAreAllowedOnlyInsideTheWorkspace(t *testing.T) {
+	root := newWorkspace(t)
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "scripts", "test.sh"), []byte("echo hi\n"), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "evil.sh"), []byte("echo evil\n"), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "evil.sh"), filepath.Join(root, "scripts", "link.sh")); err != nil {
+		t.Skipf("symlink: %v", err)
+	}
+	bundle, err := launcher.EmbeddedProfileBundle("safe-dev")
+	if err != nil {
+		t.Fatalf("profile: %v", err)
+	}
+	engine := policy.NewEngine(bundle)
+	opts := testOptions(t, root)
+	opts.BundleLabel = "profile safe-dev"
+	cases := []struct {
+		command    string
+		want       string
+		reasonPart string
+	}{
+		{"./scripts/test.sh --fast", PermissionAllow, "safe-dev-allow-workspace-scripts"},
+		{"scripts/test.sh", PermissionAllow, "safe-dev-allow-workspace-scripts"},
+		{"cd scripts && ./test.sh", PermissionAllow, "safe-dev-allow-workspace-scripts"},
+		{"../" + filepath.Base(outside) + "/evil.sh", PermissionAsk, "outside the workspace"},
+		{"scripts/../../" + filepath.Base(outside) + "/evil.sh", PermissionAsk, "outside the workspace"},
+		{"./scripts/link.sh", PermissionAsk, "outside the workspace"},
+		{filepath.Join(outside, "evil.sh"), PermissionAsk, "no profile safe-dev rule allows"},
+		{"evil.sh", PermissionAsk, "no profile safe-dev rule allows"},
+		{"./rm -rf ~/", PermissionDeny, "safe-dev-deny-catastrophic-delete"},
+		{"./scripts/test.sh && cat config/.env", PermissionDeny, "safe-dev-deny-exec-secret-file-args"},
+	}
+	for _, tc := range cases {
+		res, err := Evaluate(engine, bashInput(root, tc.command), opts)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.command, err)
+		}
+		if res.Permission != tc.want || !strings.Contains(res.Reason, tc.reasonPart) {
+			t.Fatalf("%q: got %s %q, want %s containing %q", tc.command, res.Permission, res.Reason, tc.want, tc.reasonPart)
+		}
+	}
+	// The program path reaches the policy and the audit as written.
+	res, err := Evaluate(engine, bashInput(root, "./scripts/test.sh"), opts)
+	if err != nil || len(res.Outcomes) != 1 || res.Outcomes[0].Action.Params["program"] != "scripts/test.sh" || res.Outcomes[0].Action.Original != "./scripts/test.sh" {
+		t.Fatalf("program param: %+v err=%v", res.Outcomes, err)
+	}
+}

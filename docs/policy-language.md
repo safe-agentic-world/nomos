@@ -68,6 +68,9 @@ rules:
   - tokens match exactly unless the token is `*` or `**`
   - `*` matches exactly one argv token
   - `**` matches zero or more argv tokens
+  - `program_patterns` optionally narrows the rule to programs started by a
+    relative path with a directory component (`./scripts/test.sh`); see
+    [Program Path Semantics](#program-path-semantics)
 - `id` is required and must be stable across bundle versions.
 
 ## Determinism
@@ -257,6 +260,33 @@ This keeps policy as the only authorization source while still letting the execu
   so `C:\Users` needs no escaping. The default profiles use this to deny
   `rm -rf ~/*` and `rm -rf /*` outright while a delete of some other path
   outside the workspace is left to the hook's boundary check, which asks.
+### Program Path Semantics
+
+`argv[0]` is always the program's base name, so `["rm", "**"]` matches
+`rm`, `/bin/rm`, and `./bin/rm` alike. The path the program was started by
+is kept separately: when it was a relative path with a directory component
+(`./scripts/test.sh`, `tools/gen.py`, `scripts/../tools/gen.py`), the
+coding-agent hooks clean it (`scripts/test.sh`, `tools/gen.py`), check it
+against the workspace boundary like any other path argument, and pass it as
+`params.program`. A bare name, an absolute path, and a home reference carry
+no program path.
+
+- `program_patterns` is an optional list of whole-token wildcards matched
+  against `params.program`; any match is sufficient, and `argv_patterns`
+  must also match.
+- A rule with `program_patterns` never matches an action without a program
+  path, so it cannot apply to `/tmp/evil.sh`, to `evil.sh` found on `PATH`,
+  or to a caller that does not set the field (the MCP `run_command` tool
+  does not).
+- Patterns must be relative: `/...` and `~...` are rejected at load time.
+- Deny and approval rules keep matching on the base name, so a workspace
+  script named `rm` or a workspace-built `deno eval` is still decided by
+  those rules first.
+
+The `safe-dev` profile uses `program_patterns: ["*"]` with
+`argv_patterns: [["**"]]` to allow the project's own scripts inside the
+workspace; a script outside it asks through the hook's boundary check.
+
 - Matching is over normalized argv tokens only. Shell syntax such as
   variable expansion, command substitution, or redirection never reaches the
   matcher; the MCP `run_command` tool rejects it and the Claude Code hook

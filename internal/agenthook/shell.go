@@ -2,6 +2,7 @@ package agenthook
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -34,6 +35,13 @@ type SimpleCommand struct {
 	// Original is argv[0] exactly as written when it was normalized, empty
 	// otherwise.
 	Original string
+	// Program is the cleaned relative path of the program when argv[0] was
+	// written as a relative path with a directory component
+	// (./scripts/test.sh, tools/gen.py); empty for bare names, absolute
+	// paths, and home references. The hook checks it against the workspace
+	// boundary and passes it to the policy as params.program, where
+	// exec_match.program_patterns can match it.
+	Program string
 	// Cwd is the most likely working directory for this command, relative to
 	// the hook's cwd; empty means the hook's cwd itself.
 	Cwd string
@@ -238,6 +246,9 @@ type token struct {
 	kind   tokenKind
 	text   string
 	quoted bool
+	// quotedStart marks a word that began with a quote character, so
+	// `"FOO=bar"` is a command name while `FOO="bar"` is an assignment.
+	quotedStart bool
 	// expands marks a word that carries a simple parameter expansion
 	// (`$NAME`, `${NAME}`, `$?`); the normalizer accepts it only for
 	// print-only commands.
@@ -270,6 +281,7 @@ func lex(command string) ([]token, []Unsupported) {
 	var findings []Unsupported
 	var word strings.Builder
 	quoted := false
+	quotedStart := false
 	haveWord := false
 	expands := false
 	runes := []rune(command)
@@ -289,10 +301,11 @@ func lex(command string) ([]token, []Unsupported) {
 	}
 	endWord := func() {
 		if haveWord {
-			tokens = append(tokens, token{kind: tokWord, text: word.String(), quoted: quoted, expands: expands})
+			tokens = append(tokens, token{kind: tokWord, text: word.String(), quoted: quoted, quotedStart: quotedStart, expands: expands})
 		}
 		word.Reset()
 		quoted = false
+		quotedStart = false
 		haveWord = false
 		expands = false
 	}
@@ -359,11 +372,17 @@ func lex(command string) ([]token, []Unsupported) {
 			if j >= n {
 				return reject("unterminated single quote", i)
 			}
+			if !haveWord {
+				quotedStart = true
+			}
 			word.WriteString(string(runes[i+1 : j]))
 			quoted = true
 			haveWord = true
 			i = j
 		case r == '"':
+			if !haveWord {
+				quotedStart = true
+			}
 			j := i + 1
 			for j < n && runes[j] != '"' {
 				switch runes[j] {
@@ -567,7 +586,10 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 		return normalizedCommand{}
 	}
 	snippet := truncate(strings.Join(argv, " "))
-	if !words[0].quoted && assignmentPattern.MatchString(argv[0]) {
+	// A leading NAME=value word is a shell assignment however its value is
+	// quoted (`DIR="x"`); only a word that begins with a quote (`"A=b"`) is
+	// a command name.
+	if !words[0].quotedStart && assignmentPattern.MatchString(argv[0]) {
 		return unsupported("environment assignment prefix", snippet)
 	}
 	expandsAny := false
@@ -665,6 +687,7 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 	if argv[0] != name {
 		original = argv[0]
 	}
+	program := relativeProgram(argv[0])
 	switch name {
 	case "cd":
 		target := "~"
@@ -701,9 +724,29 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 		argv = append([]string{name}, argv[1:]...)
 	}
 	return normalizedCommand{
-		commands: []SimpleCommand{{Argv: argv, Original: original, Cwd: cwds[0], Cwds: append([]string{}, cwds...)}},
+		commands: []SimpleCommand{{Argv: argv, Original: original, Program: program, Cwd: cwds[0], Cwds: append([]string{}, cwds...)}},
 		targets:  targets,
 	}
+}
+
+// relativeProgram returns the cleaned relative path of a program that was
+// started by a path with a directory component, or "" when it was a bare
+// name, an absolute path, a drive path, or a home reference. Backslashes
+// are read as separators so a Windows spelling gets the same treatment.
+func relativeProgram(command string) string {
+	command = strings.TrimSpace(command)
+	slashed := strings.ReplaceAll(command, "\\", "/")
+	if !strings.Contains(slashed, "/") || strings.HasPrefix(slashed, "/") || strings.HasPrefix(slashed, "~") {
+		return ""
+	}
+	if len(slashed) >= 2 && slashed[1] == ':' {
+		return ""
+	}
+	cleaned := path.Clean(slashed)
+	if cleaned == "." || cleaned == "/" || strings.HasPrefix(cleaned, "/") {
+		return ""
+	}
+	return cleaned
 }
 
 func unwrapPOSIXShell(argv []string, snippet string) (string, bool, []Unsupported) {

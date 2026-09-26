@@ -8,7 +8,8 @@ import (
 )
 
 type execParams struct {
-	Argv []string `json:"argv"`
+	Argv    []string `json:"argv"`
+	Program string   `json:"program"`
 }
 
 func matchExec(rule Rule, action normalize.NormalizedAction) bool {
@@ -22,8 +23,27 @@ func matchExec(rule Rule, action normalize.NormalizedAction) bool {
 	if !ok || len(params.Argv) == 0 {
 		return false
 	}
+	argvMatched := false
 	for _, pattern := range rule.ExecMatch.ArgvPatterns {
 		if matchArgvPattern(pattern, params.Argv) {
+			argvMatched = true
+			break
+		}
+	}
+	if !argvMatched {
+		return false
+	}
+	if len(rule.ExecMatch.ProgramPatterns) == 0 {
+		return true
+	}
+	// A program pattern needs a program path: an action without one (a bare
+	// name, an absolute path, or a caller that does not set it) never
+	// matches such a rule.
+	if params.Program == "" {
+		return false
+	}
+	for _, pattern := range rule.ExecMatch.ProgramPatterns {
+		if normalize.MatchWildcard(pattern, params.Program) {
 			return true
 		}
 	}

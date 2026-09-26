@@ -8,6 +8,32 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ### Added
 
+- `exec_match.program_patterns`: a rule can be narrowed to programs that
+  were started by a relative path with a directory component
+  (`./scripts/test.sh`, `tools/gen.py`). The hooks clean that path, check
+  it against the workspace boundary like any other path argument, and pass
+  it to the policy as `params.program`; a rule with program patterns never
+  matches a bare name, an absolute path, or a caller that does not set the
+  field. See `docs/policy-language.md`.
+
+### Changed
+
+- `safe-dev` allows the project's own scripts started by a relative path
+  inside the workspace (`safe-dev-allow-workspace-scripts`), the task
+  runners `tsx`, `ts-node`, `turbo`, `nx`, `pixi`, `hatch`, `nox`,
+  `pre-commit`, and `just`, and `git config user.name|user.email`. Deny
+  and approval rules on the program's name still win, a script outside the
+  workspace asks, and one started by an absolute path or a bare name has no
+  rule. On the corpus `safe-dev` allows went from 669 to 777 of 1,526
+  commands with no new deny.
+- The shell parser refuses a leading `NAME=value` word as an assignment
+  however its value is quoted (`DIR="x"` was previously read as a command
+  named `DIR=x`); a word that begins with a quote is still a command name.
+
+## [0.16.0] - 2026-09-26
+
+### Added
+
 - `nomos hook codex`: a Codex `PreToolUse` and `PermissionRequest` hook
   that decides `Bash` commands and `apply_patch` files with the same
   parser, profiles, and audit as the Claude Code hook. A deny is returned
@@ -24,18 +50,6 @@ The format is based on Keep a Changelog and semantic versioning.
   a file Codex would drop. The contract was verified from the Codex
   source at a pinned commit and reviewed adversarially against it; a live
   end-to-end run is still pending. See `docs/codex-hook.md`.
-- `nomos hook claude-code --replay <file>` and `--replay-transcripts`: replay
-  recorded tool calls (a corpus JSONL, hook input JSON, Claude Code
-  transcript lines, or plain commands) through a profile or bundle and
-  report the allow, deny, and ask counts, why calls ask, the programs that
-  ask most, and every deny with its reason. Replay writes no audit and runs
-  nothing.
-- `scripts/e2e-claude-code-hook/`: a re-runnable end-to-end validation of
-  the hook against headless Claude Code sessions in throwaway projects with
-  canary files, and the resulting record in
-  `docs/validation-claude-code-hook.md`.
-- Issue templates for bypass reports and noisy decisions, and a roadmap
-  built on the verified incident research.
 - A real-world command corpus (`testdata/realworld/`, 1,526 build and test
   commands from ten permissively licensed repositories) with a decision
   golden that fails when a profile change denies a benign command or frees
@@ -82,6 +96,23 @@ The format is based on Keep a Changelog and semantic versioning.
   anywhere else, command substitution, heredocs, and redirection targets
   that carry a quote or an expansion are still refused. On the corpus this
   moved `safe-dev` from 578 to 675 allows.
+
+## [0.15.0] - 2026-09-26
+
+### Added
+
+- `nomos hook claude-code --replay <file>` and `--replay-transcripts`: replay
+  recorded tool calls (a corpus JSONL, hook input JSON, Claude Code
+  transcript lines, or plain commands) through a profile or bundle and
+  report the allow, deny, and ask counts, why calls ask, the programs that
+  ask most, and every deny with its reason. Replay writes no audit and runs
+  nothing.
+- `scripts/e2e-claude-code-hook/`: a re-runnable end-to-end validation of
+  the hook against headless Claude Code sessions in throwaway projects with
+  canary files, and the resulting record in
+  `docs/validation-claude-code-hook.md`.
+- Issue templates for bypass reports and noisy decisions, and a roadmap
+  built on the verified incident research.
 
 ## [0.14.0] - 2026-09-26
 

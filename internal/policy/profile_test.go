@@ -106,6 +106,14 @@ func TestDefaultPolicyProfileDecisions(t *testing.T) {
 		{name: "prod locked denies a python debugger session", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "-m", "pdb", "app.py"), want: DecisionDeny},
 		{name: "safe dev asks before a perl in-place edit program", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("perl", "-0", "-i.bak", "-pe", "s/a/b/", "Cargo.toml"), want: DecisionRequireApproval},
 		{name: "ci strict denies a perl in-place edit program", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("perl", "-0", "-i.bak", "-pe", "s/a/b/", "Cargo.toml"), want: DecisionDeny},
+		{name: "safe dev allows a workspace script by relative path", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsWithProgram("scripts/test.sh", "test.sh", "--fast"), want: DecisionAllow},
+		{name: "safe dev has no rule for the same script without a program path", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("test.sh", "--fast"), want: DecisionDeny},
+		{name: "safe dev still denies a workspace script named rm", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsWithProgram("bin/rm", "rm", "-rf", "~/"), want: DecisionDeny},
+		{name: "safe dev still asks before a workspace deno eval", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsWithProgram("target/debug/deno", "deno", "eval", "1"), want: DecisionRequireApproval},
+		{name: "safe dev allows git identity config", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("git", "config", "user.email", "dev@example.test"), want: DecisionAllow},
+		{name: "safe dev has no rule for other git config writes", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("git", "config", "core.sshCommand", "evil"), want: DecisionDeny},
+		{name: "safe dev allows a task runner", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("turbo", "run", "build"), want: DecisionAllow},
+		{name: "ci strict has no workspace script rule", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsWithProgram("scripts/test.sh", "test.sh"), want: DecisionDeny},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -168,6 +176,12 @@ func execParamsForTest(argv ...string) map[string]any {
 		"cwd":                "",
 		"env_allowlist_keys": []string{},
 	}
+}
+
+func execParamsWithProgram(program string, argv ...string) map[string]any {
+	params := execParamsForTest(argv...)
+	params["program"] = program
+	return params
 }
 
 func httpParamsForTest(method string, headers map[string]string) map[string]any {

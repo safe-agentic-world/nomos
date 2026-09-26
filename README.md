@@ -84,15 +84,15 @@ commit reports:
 
 ```text
 replay of 1526 tool calls against profile safe-dev
-  allow           669   43.8%
-  ask             848   55.6%
+  allow           777   50.9%
+  ask             740   48.5%
   deny              2    0.1%
   passthrough       7    0.5%
 why calls ask:
-  unsupported_shell       523
+  unsupported_shell       553
   outside_workspace        55
-  approval_required        25
-  no_matching_rule        245
+  approval_required        27
+  no_matching_rule        105
 ```
 
 The corpus is deliberately hard: CI lines lean on `$VARIABLES`,
