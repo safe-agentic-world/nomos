@@ -250,6 +250,13 @@ This keeps policy as the only authorization source while still letting the execu
   `/`: `["**", "*.pem", "**"]` matches any argv that carries a `.pem` path in
   any position, such as `cp certs/server.pem /tmp/`. Tokens without wildcard
   characters match exactly.
+- A backslash escapes the next character: `'~/\*'` matches only the literal
+  token `~/*` (the glob an agent would write to wipe a home directory), not
+  `~/.cache/build`; `\?` and `\\` match a literal question mark and
+  backslash. A backslash before any other character is an ordinary backslash,
+  so `C:\Users` needs no escaping. The default profiles use this to deny
+  `rm -rf ~/*` and `rm -rf /*` outright while a delete of some other path
+  outside the workspace is left to the hook's boundary check, which asks.
 - Matching is over normalized argv tokens only. Shell syntax such as
   variable expansion, command substitution, or redirection never reaches the
   matcher; the MCP `run_command` tool rejects it and the Claude Code hook

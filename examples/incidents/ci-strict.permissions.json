@@ -46,7 +46,7 @@
       ]
     },
     {
-      "name": "absolute path delete is denied",
+      "name": "absolute path delete has no allow rule",
       "action": {
         "action_type": "process.exec",
         "resource": "file://workspace/",
@@ -59,12 +59,10 @@
         }
       },
       "expect": "DENY",
-      "rules": [
-        "ci-strict-deny-catastrophic-delete"
-      ]
+      "rules": []
     },
     {
-      "name": "parent directory delete is denied",
+      "name": "parent directory delete has no allow rule",
       "action": {
         "action_type": "process.exec",
         "resource": "file://workspace/",
@@ -77,9 +75,7 @@
         }
       },
       "expect": "DENY",
-      "rules": [
-        "ci-strict-deny-catastrophic-delete"
-      ]
+      "rules": []
     },
     {
       "name": "rmdir of a drive root is denied",

@@ -94,6 +94,24 @@ type Input struct {
 	ToolName       string          `json:"tool_name"`
 	ToolInput      json.RawMessage `json:"tool_input"`
 	ToolUseID      string          `json:"tool_use_id"`
+	// TurnID is sent by Codex; it identifies a call when tool_use_id is
+	// absent (PermissionRequest).
+	TurnID string `json:"turn_id"`
+}
+
+// callID identifies the tool call in audit records and action ids: the
+// harness's tool_use_id when present, else the turn id joined with a hash
+// of the tool input so two requests in one turn stay distinct.
+func (in Input) callID() string {
+	if strings.TrimSpace(in.ToolUseID) != "" {
+		return sanitizeID(in.ToolUseID, "hook")
+	}
+	sum := sha256.Sum256(append([]byte(in.ToolName+"\x00"), in.ToolInput...))
+	prefix := "hook"
+	if strings.TrimSpace(in.TurnID) != "" {
+		prefix = sanitizeID(in.TurnID, "turn")
+	}
+	return prefix + "-" + hex.EncodeToString(sum[:4])
 }
 
 // MappedAction is one normalized Nomos action derived from a tool call.
@@ -169,7 +187,18 @@ func Evaluate(engine *policy.Engine, in Input, opts Options) (Result, error) {
 	if err := opts.validate(); err != nil {
 		return Result{}, err
 	}
-	mapping := MapToolCall(in, opts)
+	return EvaluateMapping(engine, in, MapToolCall(in, opts), opts)
+}
+
+// EvaluateMapping decides an already mapped tool call. Adapters for other
+// harnesses map their own tool shapes and share this evaluation.
+func EvaluateMapping(engine *policy.Engine, in Input, mapping Mapping, opts Options) (Result, error) {
+	if engine == nil {
+		return Result{}, errors.New("policy engine is required")
+	}
+	if err := opts.validate(); err != nil {
+		return Result{}, err
+	}
 	res := Result{Mapping: mapping}
 	if mapping.Passthrough {
 		return res, nil
@@ -274,6 +303,9 @@ func mapShell(command string, in Input, opts Options) Mapping {
 				}
 			}
 		}
+		for _, r := range cmd.Redirects {
+			m.merge(mapRedirect(r, cmd, in, opts))
+		}
 		params := map[string]any{"argv": toAnySlice(cmd.Argv), "cwd": filepath.ToSlash(cmd.Cwd)}
 		m.Actions = append(m.Actions, MappedAction{
 			ActionType: "process.exec",
@@ -290,6 +322,54 @@ func mapShell(command string, in Input, opts Options) Mapping {
 	return m
 }
 
+// merge appends another mapping's actions and findings.
+func (m *Mapping) merge(other Mapping) {
+	m.Actions = append(m.Actions, other.Actions...)
+	m.Findings = append(m.Findings, other.Findings...)
+	if other.Passthrough && len(other.Actions) == 0 && len(other.Findings) == 0 {
+		// A part without an opinion must not vanish: record it so the
+		// whole call cannot be decided by its other parts alone.
+		m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "part of the call is left to the agent's own permission flow"})
+	}
+}
+
+// mapRedirect turns a file redirection into the fs.read or fs.write it
+// performs, resolved against every working directory the command may run
+// in; a target outside the workspace is a finding like any other path.
+func mapRedirect(r Redirect, cmd SimpleCommand, in Input, opts Options) Mapping {
+	var m Mapping
+	actionType := "fs.read"
+	if r.Kind == "write" {
+		actionType = "fs.write"
+	}
+	var rel string
+	for i, cwd := range cmd.Cwds {
+		class, resolved := classifyPath(r.Target, cwd, in, opts)
+		switch class {
+		case pathOutside:
+			m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "redirection " + strconvQuote(r.Target) + " resolves to " + strconvQuote(resolved)})
+			return m
+		case pathUnknown:
+			m.Findings = append(m.Findings, Finding{Kind: FindingUnsupported, Detail: "cannot resolve redirection target " + strconvQuote(r.Target)})
+			return m
+		}
+		if i == 0 {
+			rel = resolved
+		}
+	}
+	resource := "file://workspace/" + escapePathSegments(rel)
+	if rel == "." || rel == "" {
+		resource = "file://workspace/"
+	}
+	m.Actions = append(m.Actions, MappedAction{
+		ActionType: actionType,
+		Resource:   resource,
+		Params:     map[string]any{"path": filepath.ToSlash(rel), "redirect": r.Kind},
+		Summary:    actionType + " " + filepath.ToSlash(rel) + " (redirection)",
+	})
+	return m
+}
+
 func mapFile(actionType, rawPath string, in Input, opts Options) Mapping {
 	var m Mapping
 	if strings.TrimSpace(rawPath) == "" {
@@ -299,10 +379,9 @@ func mapFile(actionType, rawPath string, in Input, opts Options) Mapping {
 	class, resolved := classifyPath(rawPath, "", in, opts)
 	switch class {
 	case pathOutside:
-		if opts.OutsideWorkspace == ModePassthrough {
-			m.Passthrough = true
-			return m
-		}
+		// Under --outside-workspace passthrough the finding lowers the
+		// decision to "no opinion" without letting other parts of the same
+		// call decide it (see aggregate).
 		m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: strconvQuote(resolved)})
 		return m
 	case pathUnknown:
@@ -608,7 +687,7 @@ func evaluateAction(engine *policy.Engine, in Input, act MappedAction, opts Opti
 	}
 	req := action.Request{
 		SchemaVersion: "v1",
-		ActionID:      sanitizeID(in.ToolUseID, "hook"),
+		ActionID:      in.callID(),
 		ActionType:    act.ActionType,
 		Resource:      act.Resource,
 		Params:        params,
@@ -679,7 +758,7 @@ func aggregate(outcomes []Outcome, findings []Finding, opts Options) (string, st
 			default:
 				// Passthrough: Nomos withholds its decision so the agent's
 				// own permission flow applies. It never becomes an allow.
-				contribs = append(contribs, contribution{levelDefer, "path outside the workspace, left to Claude Code: " + f.Detail})
+				contribs = append(contribs, contribution{levelDefer, "path outside the workspace, left to the agent's own permission flow: " + f.Detail})
 			}
 		default:
 			if opts.OnUnsupported == ModeDeny {
@@ -733,25 +812,38 @@ func (r Result) HookOutput() ([]byte, error) {
 	return json.Marshal(payload)
 }
 
+// eventName is the hook event recorded in audit: the harness's own name
+// when the input carries one, else PreToolUse.
+func eventName(in Input) string {
+	if strings.TrimSpace(in.HookEventName) != "" {
+		return in.HookEventName
+	}
+	return hookEventName
+}
+
 // AuditEvents builds one audit record per evaluated action and per finding.
 func AuditEvents(in Input, res Result, opts Options, now time.Time) []audit.Event {
 	base := func(index int) audit.Event {
+		md := map[string]any{
+			"hook_event":      eventName(in),
+			"hook_permission": res.Permission,
+			"tool_name":       in.ToolName,
+			"permission_mode": in.PermissionMode,
+			"policy_label":    opts.BundleLabel,
+		}
+		if strings.TrimSpace(in.TurnID) != "" {
+			md["turn_id"] = in.TurnID
+		}
 		return audit.Event{
-			SchemaVersion: "v1",
-			Timestamp:     now.UTC(),
-			EventType:     hookEventType,
-			TraceID:       sanitizeID(in.SessionID, "session"),
-			ActionID:      sanitizeID(in.ToolUseID, "hook") + fmt.Sprintf("-%d", index),
-			Principal:     opts.Identity.Principal,
-			Agent:         opts.Identity.Agent,
-			Environment:   opts.Identity.Environment,
-			ExecutorMetadata: map[string]any{
-				"hook_event":      hookEventName,
-				"hook_permission": res.Permission,
-				"tool_name":       in.ToolName,
-				"permission_mode": in.PermissionMode,
-				"policy_label":    opts.BundleLabel,
-			},
+			SchemaVersion:    "v1",
+			Timestamp:        now.UTC(),
+			EventType:        hookEventType,
+			TraceID:          sanitizeID(in.SessionID, "session"),
+			ActionID:         in.callID() + fmt.Sprintf("-%d", index),
+			Principal:        opts.Identity.Principal,
+			Agent:            opts.Identity.Agent,
+			Environment:      opts.Identity.Environment,
+			ExecutorMetadata: md,
 		}
 	}
 	events := make([]audit.Event, 0, len(res.Outcomes)+len(res.Mapping.Findings))
@@ -771,6 +863,9 @@ func AuditEvents(in Input, res Result, opts Options, now time.Time) []audit.Even
 		ev.ResultRedactedSummary = o.Action.Summary
 		if o.Action.Original != "" {
 			ev.ExecutorMetadata["command_as_written"] = o.Action.Original
+		}
+		if argv, ok := o.Action.Params["argv"].([]any); ok {
+			ev.ExecutorMetadata["argv"] = argv
 		}
 		events = append(events, ev)
 	}

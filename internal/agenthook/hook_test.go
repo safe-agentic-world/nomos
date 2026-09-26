@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/safe-agentic-world/nomos/internal/identity"
+	"github.com/safe-agentic-world/nomos/internal/launcher"
 	"github.com/safe-agentic-world/nomos/internal/policy"
 )
 
@@ -693,5 +694,107 @@ func TestSanitizeIDKeepsDistinctRawIDsDistinct(t *testing.T) {
 	}
 	if sanitizeID("   ", "hook") != "hook" {
 		t.Fatal("empty id must use the fallback")
+	}
+}
+
+func TestSafeDevProfileTuningKeepsDeniesAndCutsNoise(t *testing.T) {
+	root := newWorkspace(t)
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	bundle, err := launcher.EmbeddedProfileBundle("safe-dev")
+	if err != nil {
+		t.Fatalf("profile: %v", err)
+	}
+	engine := policy.NewEngine(bundle)
+	opts := testOptions(t, root)
+	opts.BundleLabel = "profile safe-dev"
+	cases := []struct {
+		command string
+		want    string
+		reason  string
+	}{
+		{"rm -rf ~/", PermissionDeny, "catastrophic-delete"},
+		{"rm -rf ~/*", PermissionDeny, "catastrophic-delete"},
+		{"rm -rf /", PermissionDeny, "catastrophic-delete"},
+		{"rm -rf ../*", PermissionDeny, "catastrophic-delete"},
+		{"rmdir /s /q E:\\", PermissionDeny, "catastrophic-delete"},
+		{"rm -rf ~/.cache/e2e-build", PermissionAsk, "outside the workspace"},
+		{"rm -rf /tmp/build", PermissionAsk, "outside the workspace"},
+		{"rm -rf tests/ patches/", PermissionAsk, "requires confirmation"},
+		{"git remote -v", PermissionAllow, "git-readonly"},
+		{"git status && git log --oneline -5 && git remote -v && git branch -vv", PermissionAllow, "git-readonly"},
+		{"git commit --amend -m x", PermissionAsk, "requires confirmation"},
+		{"git push --force-with-lease=main origin main", PermissionAsk, "requires confirmation"},
+		{"git add -A && git commit -m 'fix'", PermissionAllow, "git-workflow"},
+		{"printenv BUILD_DIR", PermissionAllow, "local-inspection"},
+		{"env", PermissionAllow, "local-inspection"},
+		{"du -sh .", PermissionAllow, "local-inspection"},
+		{"cargo test --workspace", PermissionAllow, "dev-toolchain"},
+		{"yarn install && yarn build", PermissionAllow, "dev-toolchain"},
+		{"mkdir -p build && cp -r src build/", PermissionAllow, "workspace-file-ops"},
+		{"cp ~/.ssh/id_rsa .", PermissionDeny, "secret-file-args"},
+		{"cp /etc/hostname .", PermissionAsk, "outside the workspace"},
+		{"sudo apt-get install jq", PermissionAsk, "cannot safely interpret"},
+	}
+	for _, tc := range cases {
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": tc.command}), opts)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.command, err)
+		}
+		if res.Permission != tc.want || !strings.Contains(res.Reason, tc.reason) {
+			t.Errorf("%s: got %s %q, want %s mentioning %q", tc.command, res.Permission, res.Reason, tc.want, tc.reason)
+		}
+	}
+	res, err := Evaluate(engine, toolInput(root, "Write", map[string]any{"file_path": "config/.env", "content": "X=1"}), opts)
+	if err != nil || res.Permission != PermissionAsk || !strings.Contains(res.Reason, "requires confirmation") {
+		t.Fatalf("writing a secrets file must ask: %s %q err=%v", res.Permission, res.Reason, err)
+	}
+	res, err = Evaluate(engine, toolInput(root, "Read", map[string]any{"file_path": "config/.env"}), opts)
+	if err != nil || res.Permission != PermissionDeny {
+		t.Fatalf("reading a secrets file must stay denied: %s %q err=%v", res.Permission, res.Reason, err)
+	}
+}
+
+func TestEvaluateDecidesRedirectionsAndPrintOnlyExpansions(t *testing.T) {
+	root := newWorkspace(t)
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	bundle, err := launcher.EmbeddedProfileBundle("safe-dev")
+	if err != nil {
+		t.Fatalf("profile: %v", err)
+	}
+	engine := policy.NewEngine(bundle)
+	opts := testOptions(t, root)
+	opts.BundleLabel = "profile safe-dev"
+	cases := []struct {
+		command string
+		want    string
+		reason  string
+	}{
+		{"go test ./... > out.txt", PermissionAllow, "fs.write out.txt"},
+		{"go test ./... 2>&1 | tee build.log", PermissionAllow, "allows"},
+		{"sort < src/main.go", PermissionAllow, "fs.read src/main.go"},
+		{"cat src/main.go > /tmp/copy.go", PermissionAsk, "outside the workspace"},
+		{"echo hi > ~/.bashrc", PermissionAsk, "outside the workspace"},
+		{"sort < ../secret.txt", PermissionAsk, "outside the workspace"},
+		{"echo KEY=1 > config/.env", PermissionAsk, "requires confirmation"},
+		{"echo $HOME", PermissionAllow, "allows"},
+		{`echo "BUILD_DIR=[$BUILD_DIR]"`, PermissionAllow, "allows"},
+		{"printenv $NAME", PermissionAllow, "allows"},
+		{"cat <<< hello", PermissionAllow, "allows"},
+		{"rm -rf $DIR", PermissionAsk, "cannot safely interpret"},
+		{`bash -c "echo $X"`, PermissionAsk, "cannot safely interpret"},
+		{"cat > \"$OUT\"", PermissionAsk, "cannot safely interpret"},
+	}
+	for _, tc := range cases {
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": tc.command}), opts)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.command, err)
+		}
+		if res.Permission != tc.want || !strings.Contains(res.Reason, tc.reason) {
+			t.Errorf("%s: got %s %q, want %s mentioning %q", tc.command, res.Permission, res.Reason, tc.want, tc.reason)
+		}
 	}
 }

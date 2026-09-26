@@ -121,6 +121,11 @@ func ParseReplayLine(line string, source string) ([]ReplayRecord, error) {
 	if raw, ok := obj["message"]; ok {
 		return transcriptRecords(raw, stringField(obj, "cwd"), source)
 	}
+	if _, ok := obj["type"]; ok {
+		// Transcript bookkeeping (summaries, attachments, progress) carries
+		// no tool call.
+		return nil, nil
+	}
 	return nil, fmt.Errorf("%s: unrecognized record shape", source)
 }
 

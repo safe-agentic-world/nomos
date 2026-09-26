@@ -8,6 +8,22 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ### Added
 
+- `nomos hook codex`: a Codex `PreToolUse` and `PermissionRequest` hook
+  that decides `Bash` commands and `apply_patch` files with the same
+  parser, profiles, and audit as the Claude Code hook. A deny is returned
+  where Codex acts on it. Codex's `PreToolUse` cannot ask and its usual
+  on-request mode runs an unblocked command sandboxed without a prompt, so
+  an ask is a deny by default (`--ask passthrough` to leave it to Codex).
+  An allow prints nothing, and never answers a `PermissionRequest`,
+  because Codex routes retries outside the sandbox through the same
+  prompt shape as a plain confirmation. Patch
+  headers are matched the way Codex's parser matches them, a patch is
+  decided as a whole, the audit records what Codex received
+  (`wire_decision`) next to the computed permission, and `--install`
+  writes `.codex/hooks.json` with only the keys Codex accepts and refuses
+  a file Codex would drop. The contract was verified from the Codex
+  source at a pinned commit and reviewed adversarially against it; a live
+  end-to-end run is still pending. See `docs/codex-hook.md`.
 - `nomos hook claude-code --replay <file>` and `--replay-transcripts`: replay
   recorded tool calls (a corpus JSONL, hook input JSON, Claude Code
   transcript lines, or plain commands) through a profile or bundle and
@@ -20,6 +36,52 @@ The format is based on Keep a Changelog and semantic versioning.
   `docs/validation-claude-code-hook.md`.
 - Issue templates for bypass reports and noisy decisions, and a roadmap
   built on the verified incident research.
+- A real-world command corpus (`testdata/realworld/`, 1,526 build and test
+  commands from ten permissively licensed repositories) with a decision
+  golden that fails when a profile change denies a benign command or frees
+  a dangerous one.
+- Backslash escapes in argv patterns (`'~/\*'` matches the literal glob).
+
+### Changed
+
+- Default profiles: the catastrophic-delete rules now match the home
+  directory, filesystem root, drive roots, and parent directory as a whole
+  or as a literal glob, instead of every absolute path; other deletes
+  outside the workspace are asked about by the hook's boundary check.
+  `safe-dev` asks before any `rm` inside the workspace and before writing
+  a secrets file, and allows the everyday git workflow, the project
+  toolchain (Go, Rust, Node, Python, Make, and friends), workspace file
+  operations, and more read-only git and inspection commands; `ci-strict`
+  gains conservative file operations and denies secret-file writes. On the
+  corpus, `safe-dev` allows went from 157 to 578 of 1,526 commands and
+  denies from 13 to 2, with every incident case still denied or reviewed.
+- A bare `env` is treated as the read-only command it is, not as a wrapper.
+- Default profiles: inline interpreter code (`python -c`, `node -e`,
+  `ruby -e`, `perl -e`, `php -r`, `deno eval`) and bare interpreters or
+  shells (`python`, `node`, `bash`, `sh`, ...) now ask for confirmation in
+  `safe-dev` and are denied in `ci-strict` and `prod-locked`, because the
+  policy cannot see what they run and Codex can feed a running interpreter
+  without a hook event. The rules cover the common option clusters
+  (`-uc`, `-pe`), two-token options before the code flag, the REPL
+  modules (`python -m pdb`), `awk` programs that call `system` or
+  `getline` or pipe, and `tar` or `zip` options that run a command;
+  `ci-strict` no longer allows `sed`, whose scripts can read, write, and
+  run commands. On the corpus the interpreter rules moved 6 `safe-dev`
+  allows to asks (675 to 669) and added 7 denies to `ci-strict` (38 to
+  45) and `prod-locked` (92 to 99), among them `curl ... | sh`; the
+  second round's numbers are in the golden.
+- Hook installers (`--install`, `--print-settings`, `--print-hooks`) quote
+  the generated command's arguments for the shell the harness runs hooks
+  through, so a bundle or audit path with a space works, and the Codex
+  `--mcp` matcher is anchored so `Edit` cannot match an unrelated tool.
+- The shell parser now maps file redirections (`> out.txt`, `>> log`,
+  `2> err`, `&> all`, `< input`) to `fs.write` and `fs.read` actions the
+  policy decides, instead of refusing them, and accepts simple parameter
+  expansions (`$NAME`, `${NAME}`, `$?`) in the arguments of print-only
+  commands (`echo`, `printf`, `printenv`, `test`, `true`). Expansions
+  anywhere else, command substitution, heredocs, and redirection targets
+  that carry a quote or an expansion are still refused. On the corpus this
+  moved `safe-dev` from 578 to 675 allows.
 
 ## [0.14.0] - 2026-09-26
 

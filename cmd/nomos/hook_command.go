@@ -37,6 +37,8 @@ func runHook(args []string) {
 	switch args[0] {
 	case "claude-code":
 		os.Exit(runClaudeCodeHook(args[1:], os.Stdin, os.Stdout, os.Stderr, os.Getenv))
+	case "codex":
+		os.Exit(runCodexHook(args[1:], os.Stdin, os.Stdout, os.Stderr, os.Getenv))
 	default:
 		writeHelpText(os.Stderr, hookHelpText())
 		os.Exit(2)
@@ -72,6 +74,8 @@ type claudeHookFlags struct {
 	format           string
 	top              int
 	showAsks         bool
+	postToolUse      bool
+	suggest          bool
 }
 
 // runClaudeCodeHook implements `nomos hook claude-code`. It returns the
@@ -110,6 +114,8 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 	fs.StringVar(&f.format, "format", "text", "report format for --replay: text|json")
 	fs.IntVar(&f.top, "top", 25, "list length for programs and commands in a replay report")
 	fs.BoolVar(&f.showAsks, "show-asks", false, "list every call that would ask in a replay report")
+	fs.BoolVar(&f.postToolUse, "post-tool-use", true, "also register a PostToolUse hook so approved calls are recorded for --suggest")
+	fs.BoolVar(&f.suggest, "suggest", false, "propose allow rules from the audit log's asked-then-approved calls and exit")
 	fs.Usage = func() { writeHelpText(fs.Output(), hookHelpText()) }
 	if err := fs.Parse(args); err != nil {
 		return hookExitError
@@ -150,6 +156,9 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 		return hookExitOK
 	}
 
+	if f.suggest {
+		return runClaudeCodeHookSuggest(f, stdout, stderr, getenv)
+	}
 	engine, label, err := resolveHookEngine(f.bundlePath, f.profile)
 	if err != nil {
 		fmt.Fprintf(stderr, "hook: load policy: %v\n", err)
@@ -185,6 +194,23 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 		OutsideWorkspace: f.outsideWorkspace,
 		BundleLabel:      label,
 		HomeDir:          agenthook.DefaultHomeDir(),
+	}
+	if in.HookEventName == "PostToolUse" {
+		// The call already ran; record that so --suggest can learn which
+		// asks were approved. PostToolUse hooks cannot block, so nothing is
+		// printed and a failure only costs the record.
+		if path := hookAuditPath(f.auditPath, root); path != "" {
+			recorder, err := audit.NewFileChainRecorder(path, redact.DefaultRedactor())
+			if err != nil {
+				fmt.Fprintf(stderr, "hook: audit: %v\n", err)
+				return hookExitError
+			}
+			if err := recorder.WriteEvent(agenthook.CompletionEvent(in, opts, time.Now())); err != nil {
+				fmt.Fprintf(stderr, "hook: audit write failed: %v\n", err)
+				return hookExitError
+			}
+		}
+		return hookExitOK
 	}
 	res, err := agenthook.Evaluate(engine, in, opts)
 	if err != nil {
@@ -302,27 +328,68 @@ func runClaudeCodeHookReplay(f claudeHookFlags, engine *policy.Engine, label str
 	return hookExitOK
 }
 
+// runClaudeCodeHookSuggest proposes allow rules from the audit log. It
+// reads only; the user decides what to add to the bundle.
+func runClaudeCodeHookSuggest(f claudeHookFlags, stdout, stderr io.Writer, getenv func(string) string) int {
+	if f.format != "text" && f.format != "json" {
+		fmt.Fprintf(stderr, "hook: --format must be text or json\n")
+		return hookExitError
+	}
+	root, err := resolveHookWorkspace(f.workspace, "", getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "hook: %v\n", err)
+		return hookExitError
+	}
+	path := hookAuditPath(f.auditPath, root)
+	if path == "" {
+		fmt.Fprintln(stderr, "hook: --audit none leaves nothing to learn from")
+		return hookExitError
+	}
+	file, err := agenthook.ReadAuditFile(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "hook: suggest: %v\n", err)
+		return hookExitError
+	}
+	defer file.Close()
+	report, err := agenthook.Suggest(file, f.top)
+	if err != nil {
+		fmt.Fprintf(stderr, "hook: suggest: %v\n", err)
+		return hookExitError
+	}
+	if f.format == "json" {
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			fmt.Fprintf(stderr, "hook: encode report: %v\n", err)
+			return hookExitError
+		}
+		fmt.Fprintln(stdout, string(data))
+		return hookExitOK
+	}
+	fmt.Fprint(stdout, report.Text(path))
+	return hookExitOK
+}
+
 func runClaudeCodeHookSetup(f claudeHookFlags, stdout, stderr io.Writer, getenv func(string) string) int {
 	command := strings.TrimSpace(f.hookCommand)
 	if command == "" {
 		command = "nomos hook claude-code"
 		switch {
 		case f.bundlePath != "":
-			command += " -p " + f.bundlePath
+			command += " -p " + shellQuote(f.bundlePath)
 		case f.profile != "":
-			command += " --profile " + f.profile
+			command += " --profile " + shellQuote(f.profile)
 		}
 		if f.onDefault != agenthook.ModeAsk {
-			command += " --on-default " + f.onDefault
+			command += " --on-default " + shellQuote(f.onDefault)
 		}
 		if f.onUnsupported != agenthook.ModeAsk {
-			command += " --on-unsupported " + f.onUnsupported
+			command += " --on-unsupported " + shellQuote(f.onUnsupported)
 		}
 		if f.outsideWorkspace != agenthook.ModeAsk {
-			command += " --outside-workspace " + f.outsideWorkspace
+			command += " --outside-workspace " + shellQuote(f.outsideWorkspace)
 		}
 		if f.auditPath != "" {
-			command += " --audit " + f.auditPath
+			command += " --audit " + shellQuote(f.auditPath)
 		}
 	}
 	matcher := f.matcher
@@ -330,7 +397,7 @@ func runClaudeCodeHookSetup(f claudeHookFlags, stdout, stderr io.Writer, getenv 
 		matcher += "|mcp__.*"
 	}
 	if f.printSettings {
-		data, err := json.MarshalIndent(agenthook.SettingsSnippet(command, matcher, f.timeoutSeconds), "", "  ")
+		data, err := json.MarshalIndent(agenthook.SettingsSnippet(command, matcher, f.timeoutSeconds, f.postToolUse), "", "  ")
 		if err != nil {
 			fmt.Fprintf(stderr, "hook: %v\n", err)
 			return hookExitError
@@ -347,7 +414,7 @@ func runClaudeCodeHookSetup(f claudeHookFlags, stdout, stderr io.Writer, getenv 
 	if settingsPath == "" {
 		settingsPath = filepath.Join(root, ".claude", "settings.json")
 	}
-	changed, err := agenthook.InstallHook(settingsPath, command, matcher, f.timeoutSeconds)
+	changed, err := agenthook.InstallHook(settingsPath, command, matcher, f.timeoutSeconds, f.postToolUse)
 	if err != nil {
 		fmt.Fprintf(stderr, "hook: install: %v\n", err)
 		return hookExitError
@@ -378,10 +445,23 @@ func resolveHookEngine(bundlePath, profile string) (*policy.Engine, string, erro
 	return policy.NewEngine(bundle), "profile " + profile, nil
 }
 
+// resolveHookWorkspace picks the Claude Code hook's workspace root: the
+// flag, then CLAUDE_PROJECT_DIR (which Claude Code sets for its hooks), then
+// the hook input's cwd, then the process working directory.
 func resolveHookWorkspace(flagValue, inputCwd string, getenv func(string) string) (string, error) {
+	projectDir := ""
+	if getenv != nil {
+		projectDir = getenv("CLAUDE_PROJECT_DIR")
+	}
+	return resolveWorkspaceRoot(flagValue, projectDir, inputCwd)
+}
+
+// resolveWorkspaceRoot returns the first non-empty candidate as an absolute,
+// cleaned path, falling back to the process working directory.
+func resolveWorkspaceRoot(flagValue, envValue, inputCwd string) (string, error) {
 	candidate := strings.TrimSpace(flagValue)
-	if candidate == "" && getenv != nil {
-		candidate = strings.TrimSpace(getenv("CLAUDE_PROJECT_DIR"))
+	if candidate == "" {
+		candidate = strings.TrimSpace(envValue)
 	}
 	if candidate == "" {
 		candidate = strings.TrimSpace(inputCwd)
@@ -398,6 +478,32 @@ func resolveHookWorkspace(flagValue, inputCwd string, getenv func(string) string
 		return "", fmt.Errorf("resolve workspace: %w", err)
 	}
 	return filepath.Clean(abs), nil
+}
+
+// shellQuote quotes one argument for the POSIX shell that Claude Code and
+// Codex run hook commands through (`sh -c`, `$SHELL -lc`), so a bundle or
+// audit path with a space or a quote survives the round trip. Plain
+// tokens are returned unchanged to keep generated commands readable.
+func shellQuote(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	plain := true
+	for _, r := range arg {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune("_@%+=:,./-", r):
+		default:
+			plain = false
+		}
+		if !plain {
+			break
+		}
+	}
+	if plain {
+		return arg
+	}
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
 }
 
 func hookAuditPath(flagValue, root string) string {
@@ -450,7 +556,7 @@ func simulatedHookInput(f claudeHookFlags) (agenthook.Input, error) {
 }
 
 func hookHelpText() string {
-	return "usage: nomos hook claude-code [flags]\n" +
+	return "usage: nomos hook claude-code [flags]   (nomos hook codex --help for the Codex hook)\n" +
 		"Claude Code PreToolUse hook: decides native Bash/Read/Write/Edit/WebFetch (and optionally MCP) tool calls\n" +
 		"with a Nomos policy. Reads the hook JSON on stdin and prints allow/deny/ask JSON. Exit code 2 blocks the call.\n\n" +
 		"policy:\n" +
@@ -468,7 +574,9 @@ func hookHelpText() string {
 		"setup:\n" +
 		"      --install [--settings <path>] [--matcher <regex>] [--mcp] [--timeout <s>] [--hook-command <cmd>]\n" +
 		"      --print-settings         print the hooks block instead of writing it\n" +
-		"      --verify-audit           verify the audit file's hash chain\n\n" +
+		"      --verify-audit           verify the audit file's hash chain\n" +
+		"      --suggest [--top <n>]    propose allow rules from asked-then-approved calls in the audit log\n" +
+		"      --post-tool-use=false    do not register the PostToolUse hook that records approved calls\n\n" +
 		"try it:\n" +
 		"      --simulate --command \"rm -rf ~/\"\n" +
 		"      --simulate --tool Read --input '{\"file_path\":\".env\"}'\n\n" +

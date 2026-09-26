@@ -413,7 +413,7 @@ func matchSegment(pattern, value string) bool {
 	if pattern == "*" {
 		return true
 	}
-	if !strings.ContainsAny(pattern, "*?") {
+	if !strings.ContainsAny(pattern, `*?\`) {
 		return pattern == value
 	}
 	return matchWildcard(pattern, value)
@@ -421,24 +421,52 @@ func matchSegment(pattern, value string) bool {
 
 // MatchWildcard reports whether value matches a shell-style pattern where
 // `*` matches any run of characters (including `/`) and `?` matches exactly
-// one character. It is used for whole-token matching, unlike MatchPattern,
-// which splits on `/` segments.
+// one character. A backslash escapes the character after it, so `\*`, `\?`,
+// and `\\` match a literal star, question mark, and backslash; a backslash
+// before any other character is an ordinary backslash, which keeps Windows
+// paths such as `C:\Users` readable. It is used for whole-token matching,
+// unlike MatchPattern, which splits on `/` segments.
 func MatchWildcard(pattern, value string) bool {
 	return matchWildcard(pattern, value)
 }
 
+type wildcardElem struct {
+	kind byte // 'l' literal, '?' any single byte, '*' any run
+	ch   byte
+}
+
+func compileWildcard(pattern string) []wildcardElem {
+	elems := make([]wildcardElem, 0, len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		c := pattern[i]
+		switch {
+		case c == '\\' && i+1 < len(pattern) && (pattern[i+1] == '*' || pattern[i+1] == '?' || pattern[i+1] == '\\'):
+			elems = append(elems, wildcardElem{kind: 'l', ch: pattern[i+1]})
+			i++
+		case c == '*':
+			elems = append(elems, wildcardElem{kind: '*'})
+		case c == '?':
+			elems = append(elems, wildcardElem{kind: '?'})
+		default:
+			elems = append(elems, wildcardElem{kind: 'l', ch: c})
+		}
+	}
+	return elems
+}
+
 func matchWildcard(pattern, value string) bool {
+	elems := compileWildcard(pattern)
 	pIdx := 0
 	vIdx := 0
 	starIdx := -1
 	matchIdx := 0
 	for vIdx < len(value) {
-		if pIdx < len(pattern) && (pattern[pIdx] == value[vIdx] || pattern[pIdx] == '?') {
+		if pIdx < len(elems) && (elems[pIdx].kind == '?' || (elems[pIdx].kind == 'l' && elems[pIdx].ch == value[vIdx])) {
 			pIdx++
 			vIdx++
 			continue
 		}
-		if pIdx < len(pattern) && pattern[pIdx] == '*' {
+		if pIdx < len(elems) && elems[pIdx].kind == '*' {
 			starIdx = pIdx
 			matchIdx = vIdx
 			pIdx++
@@ -452,10 +480,10 @@ func matchWildcard(pattern, value string) bool {
 		}
 		return false
 	}
-	for pIdx < len(pattern) && pattern[pIdx] == '*' {
+	for pIdx < len(elems) && elems[pIdx].kind == '*' {
 		pIdx++
 	}
-	return pIdx == len(pattern)
+	return pIdx == len(elems)
 }
 
 func StableKeys(m map[string]any) []string {

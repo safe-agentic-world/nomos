@@ -104,16 +104,21 @@ func TestSplitShellCommandRefusesUnsafeSyntaxFailClosed(t *testing.T) {
 		cmd    string
 		reason string
 	}{
-		{"variable", "rm -rf $HOME", "variable or command substitution"},
-		{"variable in double quotes", `rm -rf "$HOME"`, "inside double quotes"},
+		{"variable", "rm -rf $HOME", "variable expansion in an argument of rm"},
+		{"variable in double quotes", `rm -rf "$HOME"`, "variable expansion in an argument of rm"},
 		{"command substitution", "echo $(rm -rf /)", "variable or command substitution"},
 		{"backticks", "echo `rm -rf /`", "command substitution"},
 		{"cygpath substitution", `rm -rf "$(cygpath -u 'C:\')"`, "inside double quotes"},
-		{"heredoc", "cat <<EOF\nrm -rf /\nEOF", "input redirection"},
-		{"input redirect", "python3 < script.py", "input redirection"},
-		{"output redirect", "echo x > ~/.bashrc", "output redirection to a file"},
-		{"append redirect", "echo x >> notes.txt", "output redirection to a file"},
-		{"all output redirect", "make &> build.log", "output redirection to a file"},
+		{"heredoc", "cat <<EOF\nrm -rf /\nEOF", "heredoc"},
+		{"quoted redirect target with a space", `cat > "out file.txt"`, "cannot be named"},
+		{"redirect target with expansion", `cat > "$OUT"`, "cannot be named"},
+		{"here-string with substitution", `cat <<< "$X"`, "here-string"},
+		{"expansion in a shell wrapper", `bash -c "echo $X"`, "shell wrapper"},
+		{"expansion as the command", "$CMD --version", "command name"},
+		{"positional parameter", "echo $1", "variable or command substitution"},
+		{"special parameter", "echo $$", "variable or command substitution"},
+		{"expansion modifier", "echo ${X:-y}", "variable or command substitution"},
+		{"expansion in rm", "rm -rf $DIR/*", "variable expansion in an argument of rm"},
 		{"subshell", "(cd /tmp && rm -rf x)", "subshell"},
 		{"brace group", "{ rm -rf x; }", "brace grouping"},
 		{"assignment prefix", "HOME=/ rm -rf ~", "environment assignment prefix"},
@@ -124,8 +129,10 @@ func TestSplitShellCommandRefusesUnsafeSyntaxFailClosed(t *testing.T) {
 		{"find delete", "find . -name '*.log' -delete", "find executes commands or deletes"},
 		{"find exec", `find . -type f -exec rm {} \;`, "brace grouping"},
 		{"trap", "trap 'rm -rf x' EXIT", "shell builtin"},
-		{"export", "export PATH=/tmp:$PATH", "variable or command substitution"},
+		{"export", "export PATH=/tmp:$PATH", "variable expansion"},
 		{"export literal", "export FOO=bar", "shell builtin"},
+		{"for loop", "for f in *.go; do gofmt -l $f; done", "shell control flow"},
+		{"if statement", "if test -f x; then cat x; fi", "shell control flow"},
 		{"source", "source ./env.sh", "executes commands"},
 		{"dot source", ". ./env.sh", "executes commands"},
 		{"unterminated quote", "echo 'oops", "unterminated single quote"},
@@ -249,5 +256,51 @@ func TestLexFollowsShellQuotingAndWhitespaceRules(t *testing.T) {
 	nbsp := SplitShellCommand("ls\u00a0-la")
 	if got := nbsp.Commands[0].Argv; !reflect.DeepEqual(got, []string{"ls\u00a0-la"}) {
 		t.Fatalf("non-breaking space must not split words: %q", got)
+	}
+}
+
+func TestSplitShellCommandMapsRedirectionsAndPrintOnlyExpansions(t *testing.T) {
+	cases := []struct {
+		cmd       string
+		argv      [][]string
+		redirects [][]Redirect
+	}{
+		{"python3 < script.py", [][]string{{"python3"}}, [][]Redirect{{{Kind: "read", Target: "script.py"}}}},
+		{"echo x > ~/.bashrc", [][]string{{"echo", "x"}}, [][]Redirect{{{Kind: "write", Target: "~/.bashrc"}}}},
+		{"echo x >> notes.txt", [][]string{{"echo", "x"}}, [][]Redirect{{{Kind: "write", Target: "notes.txt"}}}},
+		{"make &> build.log", [][]string{{"make"}}, [][]Redirect{{{Kind: "write", Target: "build.log"}}}},
+		{"go test ./... 2> errors.log", [][]string{{"go", "test", "./..."}}, [][]Redirect{{{Kind: "write", Target: "errors.log"}}}},
+		{"go test ./... 2>&1 > /dev/null", [][]string{{"go", "test", "./..."}}, [][]Redirect{nil}},
+		{"cat > 'out.txt'", [][]string{{"cat"}}, [][]Redirect{{{Kind: "write", Target: "out.txt"}}}},
+		{"sort < input.txt | head -3", [][]string{{"sort"}, {"head", "-3"}}, [][]Redirect{{{Kind: "read", Target: "input.txt"}}, nil}},
+		{"cat <<< hello", [][]string{{"cat"}}, [][]Redirect{nil}},
+		{"echo $HOME", [][]string{{"echo", "$HOME"}}, [][]Redirect{nil}},
+		{`echo "BUILD_DIR=[$BUILD_DIR]"`, [][]string{{"echo", "BUILD_DIR=[$BUILD_DIR]"}}, [][]Redirect{nil}},
+		{`printf '%s\n' "${VAR}" $?`, [][]string{{"printf", `%s\n`, "${VAR}", "$?"}}, [][]Redirect{nil}},
+		{"printenv $NAME", [][]string{{"printenv", "$NAME"}}, [][]Redirect{nil}},
+		{"env echo $X", [][]string{{"echo", "$X"}}, [][]Redirect{nil}},
+	}
+	for _, tc := range cases {
+		list := SplitShellCommand(tc.cmd)
+		if len(list.Unsupported) != 0 {
+			t.Fatalf("%s: unexpected findings %+v", tc.cmd, list.Unsupported)
+		}
+		if len(list.Commands) != len(tc.argv) {
+			t.Fatalf("%s: got %d commands, want %d: %+v", tc.cmd, len(list.Commands), len(tc.argv), list.Commands)
+		}
+		for i, cmd := range list.Commands {
+			if strings.Join(cmd.Argv, " ") != strings.Join(tc.argv[i], " ") {
+				t.Errorf("%s: command %d argv %q, want %q", tc.cmd, i, cmd.Argv, tc.argv[i])
+			}
+			if len(cmd.Redirects) != len(tc.redirects[i]) {
+				t.Errorf("%s: command %d redirects %+v, want %+v", tc.cmd, i, cmd.Redirects, tc.redirects[i])
+				continue
+			}
+			for j, r := range cmd.Redirects {
+				if r != tc.redirects[i][j] {
+					t.Errorf("%s: command %d redirect %d = %+v, want %+v", tc.cmd, i, j, r, tc.redirects[i][j])
+				}
+			}
+		}
 	}
 }

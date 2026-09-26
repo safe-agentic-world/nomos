@@ -73,11 +73,11 @@ func matchArgvSegments(pattern, argv []string) bool {
 // which lets a rule match a sensitive path wherever it appears in argv:
 // `["**", "*.pem", "**"]`. Tokens without wildcard characters match exactly.
 func matchArgvToken(pattern, token string) bool {
-	if pattern == "*" || pattern == token {
+	if pattern == "*" {
 		return true
 	}
-	if strings.ContainsAny(pattern, "*?") {
+	if strings.ContainsAny(pattern, `*?\`) {
 		return normalize.MatchWildcard(pattern, token)
 	}
-	return false
+	return pattern == token
 }

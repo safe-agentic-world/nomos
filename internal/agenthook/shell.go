@@ -41,6 +41,9 @@ type SimpleCommand struct {
 	// contains Cwd). The caller must treat the command as escaping the
 	// workspace if any candidate resolves a path outside it.
 	Cwds []string
+	// Redirects are the files the command's standard streams are redirected
+	// to or from; each is a file read or write the policy decides.
+	Redirects []Redirect
 }
 
 // Unsupported records shell syntax the parser refuses to interpret.
@@ -75,9 +78,18 @@ func SplitShellCommand(command string) CommandList {
 	return splitShellCommand(command, 0, []string{""})
 }
 
+// Redirect is one file redirection attached to a simple command.
+type Redirect struct {
+	// Kind is "read" for `< file` and "write" for `> file`, `>> file`,
+	// `2> file`, and `&> file`.
+	Kind   string
+	Target string
+}
+
 type commandGroup struct {
-	words  []token
-	prevOp string
+	words     []token
+	redirects []Redirect
+	prevOp    string
 }
 
 func splitShellCommand(command string, depth int, initialCwds []string) CommandList {
@@ -94,14 +106,17 @@ func splitShellCommand(command string, depth int, initialCwds []string) CommandL
 	groups := make([]commandGroup, 0)
 	current := commandGroup{}
 	for _, tok := range tokens {
-		if tok.kind == tokOp {
+		switch tok.kind {
+		case tokOp:
 			if len(current.words) > 0 {
 				groups = append(groups, current)
 			}
 			current = commandGroup{prevOp: tok.text}
-			continue
+		case tokRedirect:
+			current.redirects = append(current.redirects, Redirect{Kind: tok.redirect, Target: tok.text})
+		default:
+			current.words = append(current.words, tok)
 		}
-		current.words = append(current.words, tok)
 	}
 	if len(current.words) > 0 {
 		groups = append(groups, current)
@@ -123,6 +138,9 @@ func splitShellCommand(command string, depth int, initialCwds []string) CommandL
 			runCwds = branchCwds(branches, running)
 		}
 		result := normalizeCommand(g.words, depth, runCwds)
+		for i := range result.commands {
+			result.commands[i].Redirects = append(result.commands[i].Redirects, g.redirects...)
+		}
 		out.Commands = append(out.Commands, result.commands...)
 		out.Unsupported = append(out.Unsupported, result.findings...)
 		out.PathTargets = append(out.PathTargets, result.targets...)
@@ -213,13 +231,33 @@ type tokenKind int
 const (
 	tokWord tokenKind = iota
 	tokOp
+	tokRedirect
 )
 
 type token struct {
 	kind   tokenKind
 	text   string
 	quoted bool
+	// expands marks a word that carries a simple parameter expansion
+	// (`$NAME`, `${NAME}`, `$?`); the normalizer accepts it only for
+	// print-only commands.
+	expands bool
+	// redirect is "read" or "write" for tokRedirect tokens.
+	redirect string
 }
+
+// parameterExpansion matches the expansions the lexer keeps as text:
+// `$NAME`, `${NAME}`, and `$?`. Everything else (`$(...)`, backticks,
+// positional and special parameters, `${NAME:-...}` modifiers) is refused.
+var parameterExpansion = regexp.MustCompile(`^\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*|\?)`)
+
+// printOnlyPrograms may receive parameter expansions in their arguments:
+// they only print or test their arguments and never run, open, or write
+// anything on their own (a redirection is decided separately).
+// shellKeywords start compound commands the parser does not model.
+var shellKeywords = map[string]bool{"for": true, "while": true, "until": true, "if": true, "then": true, "else": true, "elif": true, "fi": true, "do": true, "done": true, "case": true, "esac": true, "function": true, "select": true, "in": true, "!": true}
+
+var printOnlyPrograms = map[string]bool{"echo": true, "printf": true, "printenv": true, "test": true, "[": true, "true": true, "false": true}
 
 func isShellBlank(r rune) bool {
 	// POSIX field splitting uses IFS (space, tab, newline); other Unicode
@@ -233,6 +271,7 @@ func lex(command string) ([]token, []Unsupported) {
 	var word strings.Builder
 	quoted := false
 	haveWord := false
+	expands := false
 	runes := []rune(command)
 	n := len(runes)
 
@@ -250,16 +289,24 @@ func lex(command string) ([]token, []Unsupported) {
 	}
 	endWord := func() {
 		if haveWord {
-			tokens = append(tokens, token{kind: tokWord, text: word.String(), quoted: quoted})
+			tokens = append(tokens, token{kind: tokWord, text: word.String(), quoted: quoted, expands: expands})
 		}
 		word.Reset()
 		quoted = false
 		haveWord = false
+		expands = false
 	}
-	emitOp := func(text string) {
-		endWord()
-		tokens = append(tokens, token{kind: tokOp, text: text})
+	// expansionAt keeps a simple parameter expansion starting at runes[i]
+	// as literal text and reports how many runes it consumed, or 0 when the
+	// `$` starts something the parser refuses.
+	expansionAt := func(i int) int {
+		m := parameterExpansion.FindString(string(runes[i:min(n, i+80)]))
+		return len([]rune(m))
 	}
+	// redirectTarget reads the file operand of a redirection. Quotes around
+	// the whole operand are stripped; an operand that still carries a quote,
+	// an expansion, or a substitution is refused, because the file it names
+	// cannot be known.
 	consumeRedirectTarget := func(i int) (string, int) {
 		for i < n && isShellBlank(runes[i]) {
 			i++
@@ -272,6 +319,20 @@ func lex(command string) ([]token, []Unsupported) {
 		return b.String(), i
 	}
 
+	redirectTarget := func(i int) (string, int, bool) {
+		target, next := consumeRedirectTarget(i)
+		if len(target) >= 2 && ((target[0] == '"' && target[len(target)-1] == '"') || (target[0] == '\'' && target[len(target)-1] == '\'')) {
+			target = target[1 : len(target)-1]
+		}
+		if target == "" || strings.ContainsAny(target, "$`\"'\\") {
+			return target, next, false
+		}
+		return target, next, true
+	}
+	emitOp := func(text string) {
+		endWord()
+		tokens = append(tokens, token{kind: tokOp, text: text})
+	}
 	for i := 0; i < n; i++ {
 		r := runes[i]
 		switch {
@@ -320,6 +381,12 @@ func lex(command string) ([]token, []Unsupported) {
 						word.WriteRune('\\')
 					}
 				case '$':
+					if k := expansionAt(j); k > 0 {
+						word.WriteString(string(runes[j : j+k]))
+						expands = true
+						j += k - 1
+						break
+					}
 					return reject("variable or command substitution inside double quotes", j)
 				case '`':
 					return reject("command substitution inside double quotes", j)
@@ -335,6 +402,13 @@ func lex(command string) ([]token, []Unsupported) {
 			haveWord = true
 			i = j
 		case r == '$':
+			if k := expansionAt(i); k > 0 {
+				word.WriteString(string(runes[i : i+k]))
+				expands = true
+				haveWord = true
+				i += k - 1
+				continue
+			}
 			return reject("variable or command substitution", i)
 		case r == '`':
 			return reject("command substitution", i)
@@ -367,11 +441,14 @@ func lex(command string) ([]token, []Unsupported) {
 				if j < n && runes[j] == '>' {
 					j++
 				}
-				target, next := consumeRedirectTarget(j)
-				if target != "/dev/null" {
-					return reject("output redirection to a file", i)
-				}
 				endWord()
+				target, next, ok := redirectTarget(j)
+				if !ok {
+					return reject("redirection to a file that cannot be named", i)
+				}
+				if target != "/dev/null" {
+					tokens = append(tokens, token{kind: tokRedirect, text: target, redirect: "write"})
+				}
 				i = next - 1
 				continue
 			}
@@ -384,7 +461,50 @@ func lex(command string) ([]token, []Unsupported) {
 			}
 			emitOp("|")
 		case r == '<':
-			return reject("input redirection, heredoc, or process substitution", i)
+			if haveWord && !quoted && fdPattern.MatchString(word.String()) {
+				word.Reset()
+				haveWord = false
+			} else {
+				endWord()
+			}
+			j := i + 1
+			if j < n && runes[j] == '<' {
+				if j+1 < n && runes[j+1] == '<' {
+					// A here-string feeds literal text on stdin; it is data,
+					// unless it carries a substitution.
+					target, next := consumeRedirectTarget(j + 2)
+					if strings.ContainsAny(target, "$`") {
+						return reject("substitution inside a here-string", i)
+					}
+					i = next - 1
+					continue
+				}
+				return reject("heredoc", i)
+			}
+			if j < n && runes[j] == '(' {
+				return reject("process substitution", i)
+			}
+			if j < n && runes[j] == '&' {
+				target, next := consumeRedirectTarget(j + 1)
+				if fdPattern.MatchString(target) || target == "-" {
+					i = next - 1
+					continue
+				}
+				return reject("input redirection from a descriptor that cannot be named", i)
+			}
+			kind := "read"
+			if j < n && runes[j] == '>' {
+				kind = "write"
+				j++
+			}
+			target, next, ok := redirectTarget(j)
+			if !ok {
+				return reject("redirection from a file that cannot be named", i)
+			}
+			if target != "/dev/null" {
+				tokens = append(tokens, token{kind: tokRedirect, text: target, redirect: kind})
+			}
+			i = next - 1
 		case r == '>':
 			if haveWord && !quoted && fdPattern.MatchString(word.String()) {
 				word.Reset()
@@ -410,9 +530,12 @@ func lex(command string) ([]token, []Unsupported) {
 			if j < n && runes[j] == '(' {
 				return reject("process substitution", i)
 			}
-			target, next := consumeRedirectTarget(j)
+			target, next, ok := redirectTarget(j)
+			if !ok {
+				return reject("redirection to a file that cannot be named", i)
+			}
 			if target != "/dev/null" {
-				return reject("output redirection to a file", i)
+				tokens = append(tokens, token{kind: tokRedirect, text: target, redirect: "write"})
 			}
 			i = next - 1
 		default:
@@ -447,12 +570,26 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 	if !words[0].quoted && assignmentPattern.MatchString(argv[0]) {
 		return unsupported("environment assignment prefix", snippet)
 	}
+	expandsAny := false
+	for _, w := range words {
+		expandsAny = expandsAny || w.expands
+	}
+	if words[0].expands {
+		return unsupported("variable expansion in the command name", snippet)
+	}
+	if !words[0].quoted && shellKeywords[argv[0]] {
+		return unsupported("shell control flow ("+argv[0]+")", snippet)
+	}
 	// Unwrap transparent wrappers.
 	for guard := 0; guard < 8 && len(argv) > 0; guard++ {
 		name := baseName(argv[0])
 		switch name {
 		case "env":
-			if len(argv) < 2 || strings.HasPrefix(argv[1], "-") || assignmentPattern.MatchString(argv[1]) {
+			if len(argv) == 1 {
+				// A bare `env` prints the environment; it wraps nothing.
+				break
+			}
+			if strings.HasPrefix(argv[1], "-") || assignmentPattern.MatchString(argv[1]) {
 				return unsupported("env with options or assignments", snippet)
 			}
 			argv = argv[1:]
@@ -480,6 +617,9 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 		case "eval", "source", ".", "xargs", "parallel", "watch":
 			return unsupported(name+" executes commands from arguments or input", snippet)
 		case "sh", "bash", "dash", "zsh", "ksh", "fish":
+			if expandsAny {
+				return unsupported("variable expansion inside a shell wrapper", snippet)
+			}
 			inner, ok, findings := unwrapPOSIXShell(argv, snippet)
 			if len(findings) > 0 {
 				return normalizedCommand{findings: findings}
@@ -489,6 +629,9 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 				return normalizedCommand{commands: nested.Commands, findings: nested.Unsupported, targets: nested.PathTargets}
 			}
 		case "pwsh", "powershell":
+			if expandsAny {
+				return unsupported("variable expansion inside a shell wrapper", snippet)
+			}
 			inner, ok, findings := unwrapPowerShell(argv, snippet)
 			if len(findings) > 0 {
 				return normalizedCommand{findings: findings}
@@ -499,6 +642,9 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 			}
 		case "cmd":
 			if len(argv) >= 2 && strings.EqualFold(argv[1], "/c") {
+				if expandsAny {
+					return unsupported("variable expansion inside a shell wrapper", snippet)
+				}
 				if len(argv) != 3 {
 					return unsupported("cmd /c with more than one argument", snippet)
 				}
@@ -512,6 +658,9 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 		return normalizedCommand{}
 	}
 	name := baseName(argv[0])
+	if expandsAny && !printOnlyPrograms[name] {
+		return unsupported("variable expansion in an argument of "+name, snippet)
+	}
 	original := ""
 	if argv[0] != name {
 		original = argv[0]

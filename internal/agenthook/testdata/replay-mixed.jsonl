@@ -3,7 +3,7 @@
 {"command":"cat config/.env","cwd":""}
 {"tool_name":"Read","tool_input":{"file_path":"src/main.go"}}
 {"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}
-{"type":"assistant","cwd":"","message":{"role":"assistant","content":[{"type":"text","text":"Running"},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"echo $HOME"}},{"type":"tool_use","id":"toolu_2","name":"Write","input":{"file_path":"notes.txt","content":"x"}}]}}
+{"type":"assistant","cwd":"","message":{"role":"assistant","content":[{"type":"text","text":"Running"},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"echo $(whoami)"}},{"type":"tool_use","id":"toolu_2","name":"Write","input":{"file_path":"notes.txt","content":"x"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"ok"}]}}
 {"tool_name":"mcp__github__search_repositories","tool_input":{"query":"nomos"}}
 {"tool_name":"TodoWrite","tool_input":{"todos":[]}}

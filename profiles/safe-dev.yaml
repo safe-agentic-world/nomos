@@ -184,6 +184,31 @@ rules:
         - ["git", "show", "**"]
         - ["git", "branch"]
         - ["git", "branch", "**"]
+        - ["git", "remote"]
+        - ["git", "remote", "-v"]
+        - ["git", "remote", "--verbose"]
+        - ["git", "remote", "show", "**"]
+        - ["git", "remote", "get-url", "**"]
+        - ["git", "blame", "**"]
+        - ["git", "rev-parse", "**"]
+        - ["git", "describe", "**"]
+        - ["git", "tag"]
+        - ["git", "tag", "-l", "**"]
+        - ["git", "tag", "--list", "**"]
+        - ["git", "stash", "list"]
+        - ["git", "shortlog", "**"]
+        - ["git", "ls-files"]
+        - ["git", "ls-files", "**"]
+        - ["git", "reflog"]
+        - ["git", "reflog", "show", "**"]
+        - ["git", "cat-file", "**"]
+        - ["git", "merge-base", "**"]
+        - ["git", "worktree", "list"]
+        - ["git", "config", "--get", "**"]
+        - ["git", "config", "--list"]
+        - ["git", "config", "-l"]
+        - ["git", "count-objects", "**"]
+        - ["git", "check-ignore", "**"]
     obligations:
       sandbox_mode: local
 
@@ -244,6 +269,25 @@ rules:
         - ["node", "--version"]
         - ["python", "--version"]
         - ["py", "--version"]
+        - ["printenv"]
+        - ["printenv", "**"]
+        - ["env"]
+        - ["du", "**"]
+        - ["df", "**"]
+        - ["uname", "**"]
+        - ["id"]
+        - ["whoami"]
+        - ["date"]
+        - ["date", "**"]
+        - ["hostname"]
+        - ["nproc"]
+        - ["arch"]
+        - ["basename", "**"]
+        - ["dirname", "**"]
+        - ["realpath", "**"]
+        - ["readlink", "**"]
+        - ["type", "**"]
+        - ["command", "-v", "**"]
     obligations:
       sandbox_mode: local
 
@@ -338,7 +382,7 @@ rules:
         - ["**", "*kubeconfig*", "**"]
         - ["**", "*.netrc", "**"]
 
-  # Deny deletes that target the home directory, the filesystem root, any absolute path, or a parent directory; workspace-relative deletes stay subject to the other rules.
+  # Deny deletes that target the home directory, the filesystem root, a drive root, or a parent directory, as a whole or through a literal glob (`\*` is a literal star). Other paths outside the workspace are left to the hook's boundary check, which asks.
   - id: safe-dev-deny-catastrophic-delete
     action_type: process.exec
     resource: file://workspace/
@@ -347,14 +391,28 @@ rules:
       argv_patterns:
         - ["rm", "**", "~", "**"]
         - ["rm", "**", "~/", "**"]
-        - ["rm", "**", "~/*", "**"]
+        - ['rm', '**', '~/\*', '**']
         - ["rm", "**", "/", "**"]
-        - ["rm", "**", "/*", "**"]
+        - ['rm', '**', '/\*', '**']
         - ["rm", "**", "..", "**"]
-        - ["rm", "**", "../*", "**"]
-        - ["rmdir", "**", "~*", "**"]
-        - ["rmdir", "**", "/*", "**"]
+        - ['rm', '**', '../\*', '**']
+        - ["rm", "**", "?:", "**"]
+        - ['rm', '**', '?:\', '**']
+        - ["rm", "**", "?:/", "**"]
+        - ["rm", "**", "/mnt/?", "**"]
+        - ["rm", "**", "/mnt/?/", "**"]
+        - ["rmdir", "**", "~", "**"]
+        - ["rmdir", "**", "~/", "**"]
+        - ['rmdir', '**', '~/\*', '**']
+        - ["rmdir", "**", "/", "**"]
+        - ['rmdir', '**', '/\*', '**']
         - ["rmdir", "**", "..", "**"]
+        - ['rmdir', '**', '../\*', '**']
+        - ["rmdir", "**", "?:", "**"]
+        - ['rmdir', '**', '?:\', '**']
+        - ["rmdir", "**", "?:/", "**"]
+        - ["rmdir", "**", "/mnt/?", "**"]
+        - ["rmdir", "**", "/mnt/?/", "**"]
 
   # Allow common read-only inspection tools so they do not prompt; secret-file arguments are still denied above (deny wins).
   - id: safe-dev-allow-readonly-file-tools
@@ -395,6 +453,298 @@ rules:
         - ["git", "push", "--force", "**"]
         - ["git", "push", "-f", "**"]
         - ["git", "push", "--force-with-lease", "**"]
+        - ["git", "push", "--force*", "**"]
+        - ["git", "push", "**", "--force*", "**"]
+        - ["git", "push", "**", "-f", "**"]
+        - ["git", "commit", "--amend"]
+        - ["git", "commit", "--amend", "**"]
+        - ["git", "commit", "**", "--amend", "**"]
+        - ["git", "restore", "**"]
+        - ["git", "checkout", "."]
+        - ["git", "checkout", "**", "--", "**"]
     obligations:
       approval_scope_class: action_type_resource
       reason: destructive git operations require human confirmation
+
+  # Everyday git workflow inside the workspace. Destructive forms (history rewrite, force push, discarding changes) are caught above by the REQUIRE_APPROVAL rules, which win over this allow.
+  - id: safe-dev-allow-git-workflow
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["git", "add", "**"]
+        - ["git", "commit", "**"]
+        - ["git", "checkout", "**"]
+        - ["git", "switch", "**"]
+        - ["git", "fetch"]
+        - ["git", "fetch", "**"]
+        - ["git", "pull"]
+        - ["git", "pull", "**"]
+        - ["git", "merge", "**"]
+        - ["git", "stash"]
+        - ["git", "stash", "**"]
+        - ["git", "tag", "**"]
+        - ["git", "rm", "**"]
+        - ["git", "mv", "**"]
+        - ["git", "init"]
+        - ["git", "init", "**"]
+        - ["git", "submodule", "**"]
+        - ["git", "cherry-pick", "**"]
+    obligations:
+      sandbox_mode: local
+
+  # The project's own toolchain: build, test, lint, format, and package managers. Allowing a tool that runs project code allows that code; this is the developer's own environment.
+  - id: safe-dev-allow-dev-toolchain
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["go", "**"]
+        - ["gofmt", "**"]
+        - ["goimports", "**"]
+        - ["golangci-lint", "**"]
+        - ["staticcheck", "**"]
+        - ["cargo", "**"]
+        - ["rustc", "**"]
+        - ["rustup", "**"]
+        - ["rustfmt", "**"]
+        - ["node", "**"]
+        - ["npm", "**"]
+        - ["npx", "**"]
+        - ["yarn", "**"]
+        - ["pnpm", "**"]
+        - ["bun", "**"]
+        - ["deno", "**"]
+        - ["tsc", "**"]
+        - ["eslint", "**"]
+        - ["prettier", "**"]
+        - ["jest", "**"]
+        - ["vitest", "**"]
+        - ["python", "**"]
+        - ["python3", "**"]
+        - ["py", "**"]
+        - ["pip", "**"]
+        - ["pip3", "**"]
+        - ["uv", "**"]
+        - ["uvx", "**"]
+        - ["poetry", "**"]
+        - ["pipx", "**"]
+        - ["pytest", "**"]
+        - ["tox", "**"]
+        - ["ruff", "**"]
+        - ["black", "**"]
+        - ["isort", "**"]
+        - ["mypy", "**"]
+        - ["flake8", "**"]
+        - ["make"]
+        - ["make", "**"]
+        - ["cmake", "**"]
+        - ["ninja", "**"]
+        - ["gradle", "**"]
+        - ["gradlew", "**"]
+        - ["mvn", "**"]
+        - ["dotnet", "**"]
+        - ["java", "**"]
+        - ["javac", "**"]
+        - ["ruby", "**"]
+        - ["bundle", "**"]
+        - ["gem", "**"]
+        - ["php", "**"]
+        - ["composer", "**"]
+        - ["shellcheck", "**"]
+        - ["yamllint", "**"]
+        - ["markdownlint", "**"]
+    obligations:
+      sandbox_mode: local
+
+  # Workspace file operations. The hook checks every path against the workspace boundary and asks for anything outside it; secret-file arguments are still denied above.
+  - id: safe-dev-allow-workspace-file-ops
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["mkdir", "**"]
+        - ["touch", "**"]
+        - ["cp", "**"]
+        - ["mv", "**"]
+        - ["ln", "**"]
+        - ["chmod", "**"]
+        - ["tar", "**"]
+        - ["zip", "**"]
+        - ["unzip", "**"]
+        - ["gzip", "**"]
+        - ["gunzip", "**"]
+        - ["xz", "**"]
+        - ["sed", "**"]
+        - ["awk", "**"]
+        - ["jq", "**"]
+        - ["yq", "**"]
+        - ["tee", "**"]
+        - ["tr", "**"]
+        - ["base64", "**"]
+        - ["sha256sum", "**"]
+        - ["shasum", "**"]
+        - ["md5sum", "**"]
+        - ["true"]
+        - ["false"]
+        - ["sleep", "**"]
+        - ["test", "**"]
+        - ["[", "**"]
+    obligations:
+      sandbox_mode: local
+
+  # Deleting files asks for confirmation (the catastrophic targets above are denied outright).
+  - id: safe-dev-approve-delete
+    action_type: process.exec
+    resource: file://workspace/
+    decision: REQUIRE_APPROVAL
+    exec_match:
+      argv_patterns:
+        - ["rm", "**"]
+        - ["rmdir", "**"]
+    obligations:
+      approval_scope_class: action_type_resource
+      reason: deleting files requires human confirmation
+
+  # Inline interpreter code (python -c, node -e, ruby -e, ...) and interactive interpreters or shells run
+  # code the policy cannot see: they ask for confirmation. Scripts started by name are decided by the toolchain rules
+  # above. Common clusters (-uc, -pe) are listed; glued forms (-c'code'), rarer clusters, and program
+  # text (a sed script, an awk program without system/getline/|) are a documented limit.
+  - id: safe-dev-approve-inline-interpreter-code
+    action_type: process.exec
+    resource: file://workspace/
+    decision: REQUIRE_APPROVAL
+    exec_match:
+      argv_patterns:
+        # Inline code passed on the command line.
+        - ["python*", "-c", "**"]
+        - ["python*", "-*", "-c", "**"]
+        - ["python*", "-*", "-*", "-c", "**"]
+        - ["python*", "-W", "*", "-c", "**"]
+        - ["python*", "-X", "*", "-c", "**"]
+        - ["py", "-c", "**"]
+        - ["py", "-*", "-c", "**"]
+        - ["uv", "run", "python*", "-c", "**"]
+        - ["uv", "run", "python*", "-*", "-c", "**"]
+        - ["poetry", "run", "python*", "-c", "**"]
+        - ["pipenv", "run", "python*", "-c", "**"]
+        - ["node", "-e", "**"]
+        - ["node", "--eval", "**"]
+        - ["node", "--eval=*", "**"]
+        - ["node", "-p", "**"]
+        - ["node", "--print", "**"]
+        - ["node", "--print=*", "**"]
+        - ["node", "-*", "-e", "**"]
+        - ["node", "-*", "--eval", "**"]
+        - ["node", "-*", "--eval=*", "**"]
+        - ["node", "-*", "-p", "**"]
+        - ["node", "-*", "--print", "**"]
+        - ["node", "-*", "--print=*", "**"]
+        - ["bun", "-e", "**"]
+        - ["bun", "--eval", "**"]
+        - ["bun", "-p", "**"]
+        - ["bun", "--print", "**"]
+        - ["deno", "eval", "**"]
+        - ["ruby", "-e", "**"]
+        - ["ruby", "-*", "-e", "**"]
+        - ["perl", "**", "-e", "**"]
+        - ["perl", "**", "-E", "**"]
+        - ["perl", "**", "-?e", "**"]
+        - ["perl", "**", "-??e", "**"]
+        - ["perl", "**", "-?E", "**"]
+        - ["php", "-r", "**"]
+        - ["php", "-*", "-r", "**"]
+        # Interactive interpreters and shells, and programs read from stdin.
+        - ["python*"]
+        - ["python*", "-"]
+        - ["python*", "-i", "**"]
+        - ["py"]
+        - ["node"]
+        - ["node", "-"]
+        - ["node", "-i"]
+        - ["node", "--interactive"]
+        - ["bun", "repl"]
+        - ["deno"]
+        - ["deno", "repl"]
+        - ["ruby"]
+        - ["ruby", "-"]
+        - ["irb", "**"]
+        - ["perl"]
+        - ["perl", "-"]
+        - ["php", "-a"]
+        - ["bash"]
+        - ["bash", "-"]
+        - ["sh"]
+        - ["sh", "-"]
+        - ["zsh"]
+        - ["dash"]
+        - ["fish"]
+        - ["ksh"]
+        # Clusters, two-token options, and REPL modules the plain forms above miss.
+        - ["python*", "-?c", "**"]
+        - ["python*", "-??c", "**"]
+        - ["python*", "-m", "code", "**"]
+        - ["python*", "-m", "pdb", "**"]
+        - ["python*", "-m", "timeit", "**"]
+        - ["python*", "-m", "asyncio", "**"]
+        - ["python*", "-*", "-m", "code", "**"]
+        - ["python*", "-*", "-m", "pdb", "**"]
+        - ["python*", "-*", "-m", "timeit", "**"]
+        - ["python*", "-*", "-m", "asyncio", "**"]
+        - ["node", "-pe", "**"]
+        - ["node", "-ep", "**"]
+        - ["node", "-*", "*", "-e", "**"]
+        - ["node", "-*", "*", "--eval", "**"]
+        - ["node", "-*", "*", "--eval=*", "**"]
+        - ["node", "-*", "*", "-p", "**"]
+        - ["node", "-*", "*", "--print", "**"]
+        - ["node", "-*", "*", "--print=*", "**"]
+        - ["ruby", "-?e", "**"]
+        - ["ruby", "-??e", "**"]
+        - ["ruby", "-*", "-?e", "**"]
+        - ["php", "-*", "*", "-r", "**"]
+        - ["deno", "run", "**", "-"]
+        # Programs whose own scripts or options run commands.
+        - ["*awk", "**", "*system(*", "**"]
+        - ["*awk", "**", "*getline*", "**"]
+        - ["*awk", "**", "*|*", "**"]
+        - ["*awk", "**", "-f", "**"]
+        - ["*awk", "**", "-f*", "**"]
+        - ["*awk", "**", "--file*", "**"]
+        - ["tar", "**", "--to-command*", "**"]
+        - ["tar", "**", "--use-compress-program*", "**"]
+        - ["tar", "**", "-I", "**"]
+        - ["tar", "**", "--rsh-command*", "**"]
+        - ["tar", "**", "--rmt-command*", "**"]
+        - ["zip", "**", "-TT", "**"]
+        - ["zip", "**", "--unzip-command*", "**"]
+    obligations:
+      approval_scope_class: action_type_resource
+      reason: inline interpreter code and interactive interpreters require human confirmation
+
+  # Writing to secret material asks for confirmation; reading it stays denied above.
+  - id: safe-dev-approve-secret-file-write
+    action_type: fs.write
+    resource: file://workspace/**/.env
+    decision: REQUIRE_APPROVAL
+    obligations:
+      reason: writing a secrets file requires human confirmation
+  - id: safe-dev-approve-secret-file-variant-write
+    action_type: fs.write
+    resource: file://workspace/**/.env.*
+    decision: REQUIRE_APPROVAL
+  - id: safe-dev-approve-root-secret-file-write
+    action_type: fs.write
+    resource: file://workspace/.env
+    decision: REQUIRE_APPROVAL
+  - id: safe-dev-approve-key-file-write
+    action_type: fs.write
+    resource: file://workspace/**/*.key
+    decision: REQUIRE_APPROVAL
+  - id: safe-dev-approve-pem-file-write
+    action_type: fs.write
+    resource: file://workspace/**/*.pem
+    decision: REQUIRE_APPROVAL
