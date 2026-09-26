@@ -18,6 +18,12 @@ type ExecParams struct {
 	EnvAllowlistKeys   []string          `json:"env_allowlist_keys"`
 	CredentialLeaseIDs []string          `json:"credential_lease_ids,omitempty"`
 	InjectedEnv        map[string]string `json:"-"`
+	// ArgvConstrainedByPolicy is set by the service when the allowing rules
+	// carried exec_match argv patterns that the executor re-checked, so the
+	// policy has already decided which flags may appear. Without it (a
+	// legacy exec_allowlist or a rule without argv patterns) the runner
+	// keeps refusing arguments that start with "--".
+	ArgvConstrainedByPolicy bool `json:"-"`
 }
 
 type ExecResult struct {
@@ -71,12 +77,14 @@ func (r *ExecRunner) Run(params ExecParams) (ExecResult, error) {
 	if _, blocked := prohibitedShellCommands[commandRootName(command)]; blocked {
 		return ExecResult{}, errors.New("shell interpreter commands are not supported")
 	}
-	for _, arg := range params.Argv[1:] {
-		if arg == "--" {
-			continue
-		}
-		if strings.HasPrefix(arg, "--") {
-			return ExecResult{}, errors.New("argv arguments must not start with --")
+	if !params.ArgvConstrainedByPolicy {
+		for _, arg := range params.Argv[1:] {
+			if arg == "--" {
+				continue
+			}
+			if strings.HasPrefix(arg, "--") {
+				return ExecResult{}, errors.New("argv arguments must not start with -- unless an exec_match rule allows them")
+			}
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)

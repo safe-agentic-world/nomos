@@ -969,6 +969,7 @@ func executePolicyExplain(args []string, stdout io.Writer, getenv func(string) s
 	if err != nil {
 		return policyCommandSummary{}, wrapPolicyError(policyResultValidationError, "derive explain settings", err)
 	}
+	settings.BundleWarnings = policy.LintBundle(bundle)
 	payload := buildPolicyExplainPayload(explanation, normalized, settings)
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
@@ -989,6 +990,7 @@ type explainSettings struct {
 	SuggestRemediation    bool
 	ExecCompatibilityMode string
 	Redactor              *redact.Redactor
+	BundleWarnings        []policy.LintWarning
 }
 
 func buildPolicyExplainPayload(explanation policy.ExplainDetails, normalized normalize.NormalizedAction, settings explainSettings) map[string]any {
@@ -1021,6 +1023,9 @@ func buildPolicyExplainPayload(explanation policy.ExplainDetails, normalized nor
 	}
 	if len(explanation.MatchedRuleProvenance) > 0 {
 		payload["matched_rule_provenance"] = explanation.MatchedRuleProvenance
+	}
+	if len(settings.BundleWarnings) > 0 {
+		payload["bundle_warnings"] = settings.BundleWarnings
 	}
 	if explanation.Decision.Decision != policy.DecisionAllow {
 		whyDenied := map[string]any{

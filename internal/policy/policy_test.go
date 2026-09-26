@@ -815,3 +815,31 @@ func TestExecMatchProgramPatternsNarrowRulesToWorkspaceScripts(t *testing.T) {
 		t.Fatalf("yaml program pattern: %+v", got)
 	}
 }
+
+func TestLintBundleFlagsExactLengthFlagPatterns(t *testing.T) {
+	bundle := Bundle{
+		Version: "v1",
+		Rules: []Rule{
+			{ID: "deny-force-push", ActionType: "process.exec", Resource: "file://workspace/", Decision: DecisionDeny, ExecMatch: &ExecMatch{ArgvPatterns: [][]string{{"git", "push", "--force"}}}},
+			{ID: "deny-force-push-family", ActionType: "process.exec", Resource: "file://workspace/", Decision: DecisionDeny, ExecMatch: &ExecMatch{ArgvPatterns: [][]string{{"git", "push", "--force"}, {"git", "push", "--force", "**"}}}},
+			{ID: "deny-force-glob", ActionType: "process.exec", Resource: "file://workspace/", Decision: DecisionDeny, ExecMatch: &ExecMatch{ArgvPatterns: [][]string{{"git", "push", "**", "--force*", "**"}}}},
+			{ID: "allow-version", ActionType: "process.exec", Resource: "file://workspace/", Decision: DecisionAllow, ExecMatch: &ExecMatch{ArgvPatterns: [][]string{{"node", "--version"}, {"git", "status"}}}},
+			{ID: "read", ActionType: "fs.read", Resource: "file://workspace/**", Decision: DecisionAllow},
+		},
+	}
+	warnings := LintBundle(bundle)
+	if len(warnings) != 2 {
+		t.Fatalf("warnings = %+v", warnings)
+	}
+	if warnings[0].RuleID != "deny-force-push" || warnings[0].Code != LintCodeExactLengthFlagPattern || !strings.Contains(warnings[0].Message, `["git", "push", "--force"]`) || !strings.Contains(warnings[0].Message, "exactly 3 tokens") {
+		t.Fatalf("first warning: %+v", warnings[0])
+	}
+	// node --version is an exact-length flag pattern too: the lint cannot
+	// know it is intended, so it says so and the author decides.
+	if warnings[1].RuleID != "allow-version" {
+		t.Fatalf("second warning: %+v", warnings[1])
+	}
+	if got := LintBundle(Bundle{Version: "v1"}); len(got) != 0 {
+		t.Fatalf("empty bundle must lint clean: %+v", got)
+	}
+}

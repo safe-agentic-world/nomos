@@ -296,7 +296,7 @@ agent:
 | LangGraph adapter | Checkpointed review pauses and authorization checks on resume |
 | Local inbox example | Account-free allow, deny, approval, and SQLite delivery |
 | Go / TypeScript clients | HTTP clients and generic custom-action guards; application-owned review and reporting |
-| MCP server, HTTP gateway, launcher | Routes into the same decision pipeline for tools that are not native to a coding agent |
+| MCP server, HTTP gateway, launcher | Routes into the same decision pipeline for tools that are not native to a coding agent; upstream MCP tool definitions are pinned and a changed definition is denied until an operator accepts it |
 
 For existing users, see the [compatibility guide](docs/integration-kit.md)
 and the [changelog](CHANGELOG.md).

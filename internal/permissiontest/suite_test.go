@@ -64,3 +64,25 @@ func write(t *testing.T, path, text string) {
 		t.Fatal(err)
 	}
 }
+
+func TestRunReportsBundleLintWarnings(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "policy.yaml")
+	if err := os.WriteFile(bundle, []byte("version: v1\nrules:\n  - id: deny-force-push\n    action_type: process.exec\n    resource: file://workspace/\n    decision: DENY\n    exec_match:\n      argv_patterns:\n        - [\"git\", \"push\", \"--force\"]\n"), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	suite := filepath.Join(dir, "suite.json")
+	if err := os.WriteFile(suite, []byte(`{"schema_version":"v1","identity":{"principal":"dev","agent":"agent","environment":"local"},"cases":[{"name":"force push with a remote is not caught","action":{"action_type":"process.exec","resource":"file://workspace/","params":{"argv":["git","push","--force","origin","main"],"cwd":"","env_allowlist_keys":[]}},"expect":"DENY","rules":["deny-force-push"]}]}`), 0o600); err != nil {
+		t.Fatalf("write suite: %v", err)
+	}
+	report, err := Run(suite, bundle)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if report.Failed != 1 || len(report.Results[0].MatchedRules) != 0 {
+		t.Fatalf("the exact-length pattern must not match the longer argv (deny by default, not by the rule): %+v", report.Results)
+	}
+	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0].Message, "deny-force-push") {
+		t.Fatalf("warnings: %+v", report.Warnings)
+	}
+}
