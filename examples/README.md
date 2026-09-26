@@ -12,6 +12,14 @@ Its `permissions.json` is also a standalone CI regression suite:
 go run ./cmd/nomos test --suite examples/local-inbox/permissions.json --bundle examples/local-inbox/policy.yaml
 ```
 
+## Standalone Agent
+
+[DispatchDesk](https://github.com/safe-agentic-world/dispatchdesk) is a separate
+Ollama-driven support agent using Nomos's public SDK. Its application owns the
+tools and SQLite data; Nomos gates reviewed sends and refunds. Start there for
+a model-driven example with durable pause/resume and external-consumer tests.
+It is maintained by the Nomos author, and sends/refunds are local records only.
+
 ## Incident Regression Suites
 
 [examples/incidents](incidents/README.md) turns documented coding-agent
