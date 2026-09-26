@@ -104,6 +104,8 @@ func TestDefaultPolicyProfileDecisions(t *testing.T) {
 		{name: "ci strict allows a plain tar", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("tar", "czf", "dist.tgz", "build/"), want: DecisionAllow},
 		{name: "ci strict denies tar with a compress program", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("tar", "-I", "sh", "-xf", "x.tar"), want: DecisionDeny},
 		{name: "prod locked denies a python debugger session", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "-m", "pdb", "app.py"), want: DecisionDeny},
+		{name: "safe dev asks before a perl in-place edit program", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("perl", "-0", "-i.bak", "-pe", "s/a/b/", "Cargo.toml"), want: DecisionRequireApproval},
+		{name: "ci strict denies a perl in-place edit program", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("perl", "-0", "-i.bak", "-pe", "s/a/b/", "Cargo.toml"), want: DecisionDeny},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -3,12 +3,12 @@
     "records": 1526,
     "permissions": {
       "allow": 96,
-      "ask": 1378,
-      "deny": 45,
+      "ask": 1376,
+      "deny": 47,
       "passthrough": 7
     },
     "ask_classes": {
-      "no_matching_rule": 801,
+      "no_matching_rule": 799,
       "outside_workspace": 54,
       "unsupported_shell": 523
     },
@@ -27,6 +27,8 @@
       "npm install",
       "npm install --global pnpm",
       "npm install -g pnpm",
+      "perl -0 -i -pe 's/\\[patch\\.crates-io\\].+\\n\\[/[/s' Cargo.toml",
+      "perl -0 -i.bak -pe 's/\\[patch\\.crates-io\\].+\\n\\[/[/s' Cargo.toml",
       "python -c \"from django.contrib.gis import gdal, geos; print(f'GDAL: {gdal.gdal_version()}'); print(f'GEOS: {geos.geos_version()}')\"",
       "python -c \"import sys; print('GIL enabled:', sys._is_gil_enabled())\"",
       "python -m pip install \"pytest\u003e=8.3.4\" pytest-cov",
@@ -64,12 +66,12 @@
     "records": 1526,
     "permissions": {
       "allow": 14,
-      "ask": 1406,
-      "deny": 99,
+      "ask": 1404,
+      "deny": 101,
       "passthrough": 7
     },
     "ask_classes": {
-      "no_matching_rule": 830,
+      "no_matching_rule": 828,
       "outside_workspace": 53,
       "unsupported_shell": 523
     },
@@ -114,6 +116,8 @@
       "npm install",
       "npm install --global pnpm",
       "npm install -g pnpm",
+      "perl -0 -i -pe 's/\\[patch\\.crates-io\\].+\\n\\[/[/s' Cargo.toml",
+      "perl -0 -i.bak -pe 's/\\[patch\\.crates-io\\].+\\n\\[/[/s' Cargo.toml",
       "pixi update --json | pixi exec pixi-diff-to-markdown \u003e\u003e diff.md",
       "printf 'allowBuilds:\\n  deno: true\\n' \u003e pnpm-workspace.yaml",
       "python -c \"from django.contrib.gis import gdal, geos; print(f'GDAL: {gdal.gdal_version()}'); print(f'GEOS: {geos.geos_version()}')\"",
@@ -184,8 +188,8 @@
       "passthrough": 7
     },
     "ask_classes": {
-      "approval_required": 25,
-      "no_matching_rule": 245,
+      "approval_required": 27,
+      "no_matching_rule": 243,
       "outside_workspace": 55,
       "unsupported_shell": 523
     },
