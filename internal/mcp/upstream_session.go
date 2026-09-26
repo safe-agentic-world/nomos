@@ -756,17 +756,19 @@ type upstreamSupervisor struct {
 	registryVersion uint64
 	closed          bool
 	refreshHook     func(server string)
+	pins            *ToolPinStore
 
 	notifyCh   chan upstreamNotificationEvent
 	notifyDone chan struct{}
 	closeCh    chan struct{}
 }
 
-func newUpstreamSupervisor(configs []UpstreamServerConfig, logger *runtimeLogger, emitter *telemetry.Emitter, id identity.VerifiedIdentity, credentialBroker UpstreamCredentialBroker, recorder audit.Recorder) (*upstreamSupervisor, error) {
+func newUpstreamSupervisor(configs []UpstreamServerConfig, logger *runtimeLogger, emitter *telemetry.Emitter, id identity.VerifiedIdentity, credentialBroker UpstreamCredentialBroker, recorder audit.Recorder, pins *ToolPinStore) (*upstreamSupervisor, error) {
 	sup := &upstreamSupervisor{
 		logger:          logger,
 		clock:           time.Now,
 		emitter:         emitter,
+		pins:            pins,
 		sessions:        map[string]*upstreamSession{},
 		serversByName:   map[string]UpstreamServerConfig{},
 		toolsByName:     map[string]upstreamTool{},
@@ -1115,6 +1117,10 @@ func parseUpstreamTools(config UpstreamServerConfig, result any) ([]upstreamTool
 		}
 		description, _ := raw["description"].(string)
 		schema, _ := raw["inputSchema"].(map[string]any)
+		definitionHash, err := ToolDefinitionHash(toolName, description, schema)
+		if err != nil {
+			return nil, fmt.Errorf("hash upstream tool %q definition: %w", toolName, err)
+		}
 		tools = append(tools, upstreamTool{
 			ServerName:              config.Name,
 			ToolName:                toolName,
@@ -1122,6 +1128,7 @@ func parseUpstreamTools(config UpstreamServerConfig, result any) ([]upstreamTool
 			Description:             description,
 			InputSchema:             cloneMap(schema),
 			AllowMissingInputSchema: config.AllowMissingToolSchemas,
+			DefinitionHash:          definitionHash,
 		})
 	}
 	return tools, nil
@@ -1421,6 +1428,25 @@ func (s *upstreamSupervisor) setBackoffForTest(initial, max time.Duration) {
 func (s *upstreamSupervisor) setRefreshHookForTest(hook func(server string)) {
 	s.mu.Lock()
 	s.refreshHook = hook
+	s.mu.Unlock()
+}
+
+// toolPins returns the definition pin store enforced on forwarded calls; nil when pinning is off.
+func (s *upstreamSupervisor) toolPins() *ToolPinStore {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pins
+}
+
+func (s *upstreamSupervisor) setToolPins(store *ToolPinStore) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.pins = store
 	s.mu.Unlock()
 }
 

@@ -18,6 +18,9 @@ type upstreamTool struct {
 	Description             string
 	InputSchema             map[string]any
 	AllowMissingInputSchema bool
+	// DefinitionHash is ToolDefinitionHash over the advertised name, description, and
+	// inputSchema; it is what upstream tool definition pins bind to.
+	DefinitionHash string
 }
 
 type upstreamToolCallResult struct {

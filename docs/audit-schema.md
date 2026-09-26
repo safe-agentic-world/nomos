@@ -59,6 +59,7 @@ Additional MCP gateway events:
 
 - `mcp.content_blocks`
 - `mcp.response_scan`
+- `mcp.tool_definition_pin` (`result_classification` is `PINNED`, `DENIED_TOOL_DEFINITION`, or `TOOL_PIN_STORE_ERROR`; `executor_metadata` carries `tool_definition_hash` and `tool_definition_pinned_hash`)
 
 ## Result Classification
 
