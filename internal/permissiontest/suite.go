@@ -52,6 +52,10 @@ type Report struct {
 	Passed           int      `json:"passed"`
 	Failed           int      `json:"failed"`
 	Results          []Result `json:"results"`
+	// Warnings are bundle authoring problems from policy.LintBundle, such as
+	// an argv pattern that ends with a flag and can only match an argv of
+	// exactly that length. They never fail the suite.
+	Warnings []policy.LintWarning `json:"warnings,omitempty"`
 }
 
 // Run evaluates policy only. It never starts a gateway, agent, or executor.
@@ -81,7 +85,7 @@ func Run(suitePath, bundlePath string) (Report, error) {
 		return Report{}, err
 	}
 	engine := policy.NewEngine(bundle)
-	report := Report{PolicyBundleHash: bundle.Hash, Results: []Result{}}
+	report := Report{PolicyBundleHash: bundle.Hash, Results: []Result{}, Warnings: policy.LintBundle(bundle)}
 	names := map[string]bool{}
 	for i, c := range suite.Cases {
 		if strings.TrimSpace(c.Name) == "" || names[c.Name] {

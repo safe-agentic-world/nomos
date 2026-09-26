@@ -46,6 +46,9 @@ func runPermissionTests(args []string, stdout, stderr io.Writer) int {
 				fmt.Fprintf(stdout, "  expected rules: %v\n", *result.ExpectedRules)
 			}
 		}
+		for _, warning := range report.Warnings {
+			fmt.Fprintf(stdout, "WARN %s: %s\n", warning.Code, warning.Message)
+		}
 		fmt.Fprintf(stdout, "%d passed, %d failed | policy %s\n", report.Passed, report.Failed, report.PolicyBundleHash)
 	}
 	if report.Failed != 0 {

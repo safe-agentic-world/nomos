@@ -24,8 +24,21 @@ The format is based on Keep a Changelog and semantic versioning.
   `--hash`). The `mcp.call` action params now carry `tool_definition_hash`
   and `tool_definition_pinned_hash`.
 
+- A bundle lint for the most common argv-pattern mistake: `nomos test`
+  prints a `WARN` line (and `warnings` in JSON output) and `nomos policy
+  explain` adds `bundle_warnings` for each `exec_match` pattern that ends
+  with a flag and has no trailing `"**"`, which matches only an argv of
+  exactly that length (`["git", "push", "--force"]` never fires on `git
+  push --force origin main`). Warnings never change a decision.
+
 ### Changed
 
+- The executor no longer refuses arguments that start with `--` when the
+  allowing rules carried `exec_match` argv patterns: the policy decided
+  the flags and the executor re-checked them as derived
+  `exec_constraints`, so `npm test --silent` runs when a rule allows it.
+  The refusal stays for the legacy `exec_allowlist` model and for
+  `process.exec` rules without argv patterns.
 - Gateway deployments that forward upstream MCP tools now write
   `upstream-tool-pins.json` next to the config on the first forwarded call
   (`upstream.tool_pins.mode` defaults to `record`). A config directory

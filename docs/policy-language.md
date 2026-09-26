@@ -287,6 +287,29 @@ The `safe-dev` profile uses `program_patterns: ["*"]` with
 `argv_patterns: [["**"]]` to allow the project's own scripts inside the
 workspace; a script outside it asks through the hook's boundary check.
 
+### Flags Are The Policy's Decision
+
+Which flags are dangerous depends on the program (`git push --force` is
+not `npm test --silent`), which is exactly what argv patterns express, so
+the executor no longer refuses arguments that start with `--` when the
+allowing rules carried `exec_match` patterns: those patterns were matched
+by the policy and re-checked by the executor as derived
+`exec_constraints`, and a flag they admit runs. The refusal stays in
+force for the legacy `exec_allowlist` model and for `process.exec` rules
+without argv patterns, because nothing else there constrains the
+arguments. Deny the flags you fear explicitly, with a wildcard where the
+flag takes a value: `["git", "push", "**", "--force*", "**"]`.
+
+### Authoring Lint
+
+`nomos test` prints a `WARN` line (and `warnings` in JSON output) and
+`nomos policy explain` adds `bundle_warnings` for each argv pattern that
+ends with a flag and has no trailing `"**"`: `["git", "push", "--force"]`
+matches only an argv of exactly three tokens, so `git push --force origin
+main` slips past it. Append `"**"` to gate the command family, or keep the
+exact form deliberately for a fixed invocation such as `["node",
+"--version"]`. Warnings never change a decision or fail a suite.
+
 - Matching is over normalized argv tokens only. Shell syntax such as
   variable expansion, command substitution, or redirection never reaches the
   matcher; the MCP `run_command` tool rejects it and the Claude Code hook

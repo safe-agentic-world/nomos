@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1183,5 +1184,44 @@ func TestServiceFailsClosedOnExternalPolicyError(t *testing.T) {
 	}
 	if resp.Output != "" {
 		t.Fatalf("expected no output on fail-closed deny, got %+v", resp)
+	}
+}
+
+func TestServiceLeavesFlagsToExecMatchRules(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("echo is a cmd builtin on windows")
+	}
+	run := func(t *testing.T, rule policy.Rule) (action.Response, error) {
+		t.Helper()
+		dir := t.TempDir()
+		engine := policy.NewEngine(policy.Bundle{Version: "v1", Rules: []policy.Rule{rule}, Hash: "test"})
+		svc := New(engine, executor.NewFSReader(dir, 32, 10), executor.NewFSWriter(dir, 32), executor.NewPatchApplier(dir, 32), executor.NewExecRunner(dir, 64), executor.NewHTTPRunner(32), &recordSink{}, redact.DefaultRedactor(), nil, nil, "local", func() time.Time { return time.Unix(0, 0) })
+		act, err := action.ToAction(action.Request{
+			SchemaVersion: "v1",
+			ActionID:      "act-flags",
+			ActionType:    "process.exec",
+			Resource:      "file://workspace/",
+			Params:        []byte(`{"argv":["echo","--silent"],"cwd":"","env_allowlist_keys":[]}`),
+			TraceID:       "trace-flags",
+			Context:       action.Context{Extensions: map[string]json.RawMessage{}},
+		}, identity.VerifiedIdentity{Principal: "system", Agent: "nomos", Environment: "dev"})
+		if err != nil {
+			t.Fatalf("to action: %v", err)
+		}
+		return svc.Process(act)
+	}
+	// An exec_match rule decides the flags: the executor runs what it admits.
+	resp, err := run(t, policy.Rule{ID: "allow-echo", ActionType: "process.exec", Resource: "file://workspace/", Decision: policy.DecisionAllow, ExecMatch: &policy.ExecMatch{ArgvPatterns: [][]string{{"echo", "**"}}}})
+	if err != nil || resp.Decision != policy.DecisionAllow || !strings.Contains(resp.Stdout, "--silent") {
+		t.Fatalf("exec_match allow with a flag: decision=%s stdout=%q err=%v", resp.Decision, resp.Stdout, err)
+	}
+	// A legacy allowlist constrains only the program, so the runner's own
+	// refusal of -- arguments stays.
+	if _, err := run(t, policy.Rule{ID: "allow-echo-legacy", ActionType: "process.exec", Resource: "file://workspace/", Decision: policy.DecisionAllow, Obligations: map[string]any{"exec_allowlist": []any{[]any{"echo"}}}}); err == nil || !strings.Contains(err.Error(), "must not start with --") {
+		t.Fatalf("legacy allowlist must keep the -- refusal, got %v", err)
+	}
+	// A rule without argv patterns constrains nothing, so the refusal stays.
+	if _, err := run(t, policy.Rule{ID: "allow-any-exec", ActionType: "process.exec", Resource: "file://workspace/", Decision: policy.DecisionAllow}); err == nil || !strings.Contains(err.Error(), "must not start with --") {
+		t.Fatalf("pattern-less rule must keep the -- refusal, got %v", err)
 	}
 }

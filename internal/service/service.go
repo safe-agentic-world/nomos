@@ -654,6 +654,10 @@ func (s *Service) handleAllowedAction(normalized normalize.NormalizedAction, act
 			response.Reason = "invalid_params"
 			return response, nil, nil
 		}
+		// Flags are the policy's decision once exec_match patterns were
+		// matched and re-checked above; the runner's own "--" refusal stays
+		// for the legacy allowlist and pattern-less rules.
+		params.ArgvConstrainedByPolicy = enforcementMode == "exec_constraints"
 		if s.credentials != nil && len(params.CredentialLeaseIDs) > 0 {
 			injected, secretValues, err := s.credentials.MaterializeEnv(params.CredentialLeaseIDs, params.EnvAllowlistKeys, normalized.Principal, normalized.Agent, normalized.Environment, normalized.TraceID)
 			if err != nil {
