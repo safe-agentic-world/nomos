@@ -15,7 +15,11 @@ Go 1.25+. Use Makefile targets or `go` directly.
 - Single package: `go test ./internal/policy`
 - Single test: `go test ./internal/policy -run TestName`
 - Focused MCP compat: `go test ./internal/mcp`
-- Fast iteration set: `go test ./cmd/nomos ./internal/policy ./internal/service ./internal/gateway ./internal/mcp`
+- Fast iteration set: `go test ./cmd/nomos ./internal/policy ./internal/service ./internal/gateway ./internal/mcp ./internal/agenthook`
+- Hook adapters: `go test ./internal/agenthook ./cmd/nomos`
+- Corpus golden: `go test ./internal/agenthook -run Corpus`; after an intended decision change, regenerate with `-update-corpus` and review the diff of `testdata/realworld/expected.json`
+- Profile hashes: `go run scripts/pin_profile_hashes.go` (or `make pin-profile-hashes`) after editing `profiles/*.yaml`
+- Docs links: `python3 scripts/check_docs.py`
 
 Smoke checks using the built binary (run after `make build` / `go build`):
 
@@ -42,6 +46,8 @@ Nomos is an execution firewall for AI agents: an agent-agnostic control plane th
 8. **Redact + cap** (`internal/redact`) applies before any output leaves Nomos — to the agent, logs, and audit sinks. Per-rule caps are enforced post-redaction so policy caps cannot be bypassed by larger executor defaults.
 9. **Audit + telemetry** (`internal/audit`, `internal/telemetry`): `action.completed` is the canonical replay-level `AuditEvent v1` record. Hash chaining runs over canonicalized payloads with `prev_event_hash` attached for cross-platform-deterministic verification. Telemetry is additive (OTLP/HTTP) — audit remains the authoritative evidence surface.
 
+**Coding-agent hooks** (`internal/agenthook`): `nomos hook claude-code` and `nomos hook codex` decide an agent's native tool calls before they run. A shell parser splits command lists, unwraps `bash -c` and similar wrappers, and refuses syntax it cannot resolve statically (substitution, heredocs, most expansions) instead of guessing. Every path, including a program started by a relative path, is checked against the workspace lexically and physically from every directory the command could run in. Calls map to `process.exec`, `fs.read`, `fs.write`, `net.http_request`, or `mcp.call` actions and go through the same deny-wins engine; decisions are appended to a hash-chained audit file under `.nomos/`. Codex's `PreToolUse` cannot ask, so an ask is a deny there by default (`--ask passthrough` leaves it to Codex), and Nomos never answers a Codex `PermissionRequest` with allow. Replay (`--replay`, `--replay-transcripts`) and `--suggest` run nothing and write no policy.
+
 **Assurance levels** (`internal/assurance`): `STRONG` / `GUARDED` / `BEST_EFFORT` are derived strictly from operator-controlled `runtime.deployment_mode` + `runtime.strong_guarantee` and propagate into explain/audit output only. They never alter policy decisions. `nomos doctor` uses conservative proxy checks (container sandbox, mTLS, OIDC workload identity, durable audit sink, deployment-bound environment) and fails closed when signals are absent.
 
 **Config path resolution**: filesystem-backed fields in config (policy bundles, workspace roots, approval store, TLS files, OIDC public keys, sqlite audit sinks) resolve relative to the **config file directory**, not the process CWD. Absolute paths still win.
@@ -55,7 +61,10 @@ Nomos is an execution firewall for AI agents: an agent-agnostic control plane th
 ## Package map
 
 - `cmd/nomos` — CLI entrypoint (commands: `doctor`, `policy test|explain`, `mcp`, `serve`, `version`, …)
-- `internal/policy` — bundle loading, matching, deny-wins evaluation, explain
+- `internal/policy` — bundle loading, matching, deny-wins evaluation, explain, bundle lint
+- `internal/agenthook` — Claude Code and Codex hooks: shell parser, action mapping, replay, suggest, installers
+- `internal/launcher` — embedded default profiles and the coding-agent launcher (`nomos run`)
+- `internal/permissiontest` — `nomos test` permission suites
 - `internal/service`, `internal/gateway` — HTTP boundary + shared action handler
 - `internal/mcp` — MCP server and upstream MCP gateway (stdio newline-delimited JSON, framed responses accepted for compat)
 - `internal/normalize`, `internal/action`, `internal/canonicaljson` — determinism layer
@@ -67,7 +76,8 @@ Nomos is an execution firewall for AI agents: an agent-agnostic control plane th
 - `internal/bypasssuite`, `internal/owaspmapping`, `internal/supplychain` — standards/bypass verification
 - `pkg/sdk` — public Go SDK for HTTP integrations
 - `examples/` — configs, policies, quickstart actions (used by smoke tests — keep working)
-- `testdata/` — checked-in fixtures; prefer relative paths
+- `profiles/` — default profiles; embedded copies in `internal/launcher/embedded_profiles`, pinned hashes in `testdata/policy-profiles/hashes.json`
+- `testdata/` — checked-in fixtures; prefer relative paths. `testdata/realworld/` holds the 1,526-command corpus and its decision golden
 
 ## Conventions to preserve
 
@@ -78,3 +88,6 @@ Nomos is an execution firewall for AI agents: an agent-agnostic control plane th
 - Never log raw secrets or return them to agents; broker via lease IDs.
 - Redact before any output leaves Nomos.
 - Keep example configs and quickstart commands green — they are smoke-tested by CI and documented in README.
+- Hooks never allow what they cannot parse: unsupported shell syntax asks, or denies with `--on-unsupported deny`.
+- A profile change needs re-pinned hashes and a regenerated corpus golden, with every moved decision reviewed in the diff.
+- Merge titles drive releases: `feat:` cuts a minor release and `fix:` a patch; `docs:` and `chore:` do not release.

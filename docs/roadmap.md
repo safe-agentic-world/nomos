@@ -89,6 +89,25 @@ Verified by: templates in `.github/ISSUE_TEMPLATE`, a Discussions
 announcement per release, and the contribution paths in
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+Done on 26 September 2026: the repository description and topics lead
+with the hook, and Discussions is open with a pinned welcome post and the
+v0.19.0 announcement. The issue chooser sends questions to Discussions and
+vulnerabilities to private reporting.
+
+## Next
+
+- Run the Codex hook end to end against a live Codex binary and publish
+  the record ([#90](https://github.com/safe-agentic-world/nomos/issues/90)).
+- A Gemini CLI adapter for its blocking `BeforeTool` hook
+  ([#91](https://github.com/safe-agentic-world/nomos/issues/91)).
+- A `nomos doctor` check for the MCP tool-pin file
+  ([#86](https://github.com/safe-agentic-world/nomos/issues/86)), and
+  secret-file argument patterns that stop matching URLs
+  ([#85](https://github.com/safe-agentic-world/nomos/issues/85)).
+- More incident cases from public reports
+  ([#78](https://github.com/safe-agentic-world/nomos/issues/78), open to
+  contributors).
+
 ## Not planned
 
 Hosted accounts, billing, cluster manifests, Helm packaging, infrastructure
@@ -98,14 +117,19 @@ routes into the same decision pipeline.
 
 ## Status
 
-Delivered so far: the `nomos test` permission suites, the Python SDK and
-LangGraph adapter, the local inbox example, the MCP server and HTTP gateway,
-in v0.14.0 the Claude Code hook with the incident regression suites, in
-v0.15.0 the real-world corpus with its decision golden, replay mode, the
-end-to-end validation record, and the first profile tuning, and in v0.16.0
-the Codex hook, the `PostToolUse` record with `--suggest`, redirection and
-expansion handling in the parser, and the interpreter rules, in v0.17.0
-workspace scripts by relative path, in v0.18.0 upstream MCP tool
-definition pinning, and in v0.19.0 the executor's flag handling by policy
-with the exact-length pattern lint. Adoption is an outcome to measure with
-users, not a claim to make in advance.
+Delivered before the hook work: the `nomos test` permission suites, the
+Python SDK and LangGraph adapter, the local inbox example, and the MCP
+server and HTTP gateway. Since then:
+
+- **v0.14.0:** the Claude Code hook and the incident regression suites.
+- **v0.15.0:** replay mode and the end-to-end validation record.
+- **v0.16.0:** the Codex hook, the real-world corpus with its decision
+  golden, the first profile tuning, the `PostToolUse` record with
+  `--suggest`, redirection and expansion handling in the parser, and the
+  interpreter rules.
+- **v0.17.0:** workspace scripts by relative path.
+- **v0.18.0:** upstream MCP tool-definition pinning.
+- **v0.19.0:** flags decided by policy, and the exact-length pattern lint.
+
+Adoption is an outcome to measure with users, not a claim to make in
+advance.

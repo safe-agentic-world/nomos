@@ -24,6 +24,8 @@ decisions better on real commands.
 - **A harness contract.** Primary-source details (file path, quote) of how
   another coding agent's pre-tool hook receives and returns decisions.
 
+Questions, policy examples, and ideas belong in
+[Discussions](https://github.com/safe-agentic-world/nomos/discussions).
 Discuss new frameworks or substantial abstractions in an issue first. We
 are not expanding into cluster deployment, hosted dashboards, or a general
 enterprise control plane.
@@ -35,7 +37,10 @@ Go 1.25+. The CLI is in `cmd/nomos`; the hook adapter is in
 `internal/`. Public Go clients live in `pkg/sdk`; Python and TypeScript
 sources in `sdk/`. Default profiles are in `profiles/` and are embedded at
 build time: after editing one, run `go run scripts/pin_profile_hashes.go`
-to refresh the embedded copy and the pinned hashes.
+to refresh the embedded copy and the pinned hashes. A profile change also
+moves decisions on the real-world corpus: regenerate the golden with
+`go test ./internal/agenthook -run Corpus -update-corpus` and review every
+changed line of `testdata/realworld/expected.json` in your diff.
 
 Fast iteration:
 
@@ -57,7 +62,8 @@ meaningful failure-path assertions are required for behavior changes.
 Use a focused imperative subject with a conventional prefix, such as
 `fix: reject expired tool approvals` or `feat: add ticket permission
 fixtures`. A merge whose title starts with `feat:` releases a minor version
-and `fix:` a patch, automatically. Fill in the pull request template: the
+and `fix:` a patch, automatically. Other prefixes, such as `docs:` and
+`chore:`, do not release. Fill in the pull request template: the
 problem, the change, the commands you actually ran with their results, and
 migration notes for behavior changes. Do not claim unrun tests passed.
 

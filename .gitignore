@@ -31,6 +31,8 @@ Thumbs.db
 TASKS.md
 tmp/
 .nomos/
+# Written by running the example gateway configs (upstream.tool_pins record mode)
+/examples/configs/upstream-tool-pins.json
 
 # Python packaging and local environments
 __pycache__/

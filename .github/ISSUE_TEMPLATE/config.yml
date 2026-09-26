@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/safe-agentic-world/nomos/discussions
+    about: Ask how to write a rule, read a decision, or install a hook, and share your policies and ideas.
+  - name: Report a vulnerability
+    url: https://github.com/safe-agentic-world/nomos/security/advisories/new
+    about: Report security issues privately. Please do not open a public issue.

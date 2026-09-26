@@ -79,7 +79,7 @@ mkdir -p Formula
 
 cat > Formula/nomos.rb <<EOF
 class Nomos < Formula
-  desc "Zero-trust control plane for AI agent side effects"
+  desc "Deny-wins policy hook for Claude Code and Codex"
   homepage "https://github.com/${SOURCE_REPOSITORY}"
   version "${VERSION}"
   license "Apache-2.0"
@@ -113,7 +113,7 @@ mkdir -p bucket
 cat > bucket/nomos.json <<EOF
 {
   "version": "${VERSION}",
-  "description": "Zero-trust control plane for AI agent side effects",
+  "description": "Deny-wins policy hook for Claude Code and Codex",
   "homepage": "https://github.com/${SOURCE_REPOSITORY}",
   "license": "Apache-2.0",
   "architecture": {
