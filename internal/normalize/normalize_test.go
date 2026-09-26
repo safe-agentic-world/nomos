@@ -174,3 +174,34 @@ func TestNormalizationIsPure(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchWildcardEscapes(t *testing.T) {
+	cases := []struct {
+		pattern, value string
+		want           bool
+	}{
+		{`~/\*`, `~/*`, true},
+		{`~/\*`, `~/.cache/build`, false},
+		{`~/*`, `~/.cache/build`, true},
+		{`/\*`, `/*`, true},
+		{`/\*`, `/tmp/build`, false},
+		{`../\*`, `../*`, true},
+		{`../\*`, `../other`, false},
+		{`a\?b`, `a?b`, true},
+		{`a\?b`, `axb`, false},
+		{`a?b`, `axb`, true},
+		{`a\\b`, `a\b`, true},
+		{`C:\Users\*`, `C:\Users\alice`, false},
+		{`C:\Users\*`, `C:\Users*`, true},
+		{`C:\Users`, `C:\Users`, true},
+		{`?:\`, `E:\`, true},
+		{`*.pem`, `certs/server.pem`, true},
+		{`\*.pem`, `*.pem`, true},
+		{`\*.pem`, `x.pem`, false},
+	}
+	for _, tc := range cases {
+		if got := MatchWildcard(tc.pattern, tc.value); got != tc.want {
+			t.Errorf("MatchWildcard(%q, %q) = %v, want %v", tc.pattern, tc.value, got, tc.want)
+		}
+	}
+}

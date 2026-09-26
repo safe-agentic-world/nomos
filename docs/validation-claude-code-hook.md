@@ -51,7 +51,9 @@ honors that decision in bypass mode.
 
 ## Findings Worth Fixing
 
-The runs also measured noise, which the roadmap's next milestone tunes:
+The runs also measured noise. Each item below was fixed in the profile
+tuning that followed (the corpus golden in `testdata/realworld/` records
+the effect):
 
 - `git remote -v` has no allow entry in `safe-dev`, so an exploratory chain
   such as `git status && git log ... && git remote -v` asks as a whole.

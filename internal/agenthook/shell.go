@@ -452,7 +452,11 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 		name := baseName(argv[0])
 		switch name {
 		case "env":
-			if len(argv) < 2 || strings.HasPrefix(argv[1], "-") || assignmentPattern.MatchString(argv[1]) {
+			if len(argv) == 1 {
+				// A bare `env` prints the environment; it wraps nothing.
+				break
+			}
+			if strings.HasPrefix(argv[1], "-") || assignmentPattern.MatchString(argv[1]) {
 				return unsupported("env with options or assignments", snippet)
 			}
 			argv = argv[1:]

@@ -46,7 +46,7 @@
       ]
     },
     {
-      "name": "absolute path delete is denied",
+      "name": "absolute path delete requires confirmation",
       "action": {
         "action_type": "process.exec",
         "resource": "file://workspace/",
@@ -58,13 +58,13 @@
           ]
         }
       },
-      "expect": "DENY",
+      "expect": "REQUIRE_APPROVAL",
       "rules": [
-        "safe-dev-deny-catastrophic-delete"
+        "safe-dev-approve-delete"
       ]
     },
     {
-      "name": "parent directory delete is denied",
+      "name": "parent directory delete requires confirmation",
       "action": {
         "action_type": "process.exec",
         "resource": "file://workspace/",
@@ -76,9 +76,9 @@
           ]
         }
       },
-      "expect": "DENY",
+      "expect": "REQUIRE_APPROVAL",
       "rules": [
-        "safe-dev-deny-catastrophic-delete"
+        "safe-dev-approve-delete"
       ]
     },
     {
@@ -101,7 +101,7 @@
       ]
     },
     {
-      "name": "workspace delete has no allow rule",
+      "name": "workspace delete requires confirmation",
       "action": {
         "action_type": "process.exec",
         "resource": "file://workspace/",
@@ -113,8 +113,10 @@
           ]
         }
       },
-      "expect": "DENY",
-      "rules": []
+      "expect": "REQUIRE_APPROVAL",
+      "rules": [
+        "safe-dev-approve-delete"
+      ]
     },
     {
       "name": "dotenv read through cat is denied",
@@ -451,7 +453,8 @@
       },
       "expect": "ALLOW",
       "rules": [
-        "safe-dev-allow-build-test"
+        "safe-dev-allow-build-test",
+        "safe-dev-allow-dev-toolchain"
       ]
     },
     {

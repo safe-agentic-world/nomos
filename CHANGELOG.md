@@ -28,6 +28,26 @@ The format is based on Keep a Changelog and semantic versioning.
   `docs/validation-claude-code-hook.md`.
 - Issue templates for bypass reports and noisy decisions, and a roadmap
   built on the verified incident research.
+- A real-world command corpus (`testdata/realworld/`, 1,526 build and test
+  commands from ten permissively licensed repositories) with a decision
+  golden that fails when a profile change denies a benign command or frees
+  a dangerous one.
+- Backslash escapes in argv patterns (`'~/\*'` matches the literal glob).
+
+### Changed
+
+- Default profiles: the catastrophic-delete rules now match the home
+  directory, filesystem root, drive roots, and parent directory as a whole
+  or as a literal glob, instead of every absolute path; other deletes
+  outside the workspace are asked about by the hook's boundary check.
+  `safe-dev` asks before any `rm` inside the workspace and before writing
+  a secrets file, and allows the everyday git workflow, the project
+  toolchain (Go, Rust, Node, Python, Make, and friends), workspace file
+  operations, and more read-only git and inspection commands; `ci-strict`
+  gains conservative file operations and denies secret-file writes. On the
+  corpus, `safe-dev` allows went from 157 to 578 of 1,526 commands and
+  denies from 13 to 2, with every incident case still denied or reviewed.
+- A bare `env` is treated as the read-only command it is, not as a wrapper.
 
 ## [0.14.0] - 2026-09-26
 

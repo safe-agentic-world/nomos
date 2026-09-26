@@ -162,6 +162,39 @@ rules:
         - ["git", "log", "**"]
         - ["git", "show"]
         - ["git", "show", "**"]
+        - ["git", "remote"]
+        - ["git", "remote", "-v"]
+        - ["git", "remote", "--verbose"]
+        - ["git", "remote", "show", "**"]
+        - ["git", "remote", "get-url", "**"]
+        - ["git", "blame", "**"]
+        - ["git", "rev-parse", "**"]
+        - ["git", "describe", "**"]
+        - ["git", "tag"]
+        - ["git", "tag", "-l", "**"]
+        - ["git", "tag", "--list", "**"]
+        - ["git", "stash", "list"]
+        - ["git", "shortlog", "**"]
+        - ["git", "ls-files"]
+        - ["git", "ls-files", "**"]
+        - ["git", "reflog"]
+        - ["git", "reflog", "show", "**"]
+        - ["git", "cat-file", "**"]
+        - ["git", "merge-base", "**"]
+        - ["git", "worktree", "list"]
+        - ["git", "config", "--get", "**"]
+        - ["git", "config", "--list"]
+        - ["git", "config", "-l"]
+        - ["git", "count-objects", "**"]
+        - ["git", "check-ignore", "**"]
+        - ["git", "branch"]
+        - ["git", "branch", "-a"]
+        - ["git", "branch", "-r"]
+        - ["git", "branch", "-v"]
+        - ["git", "branch", "-vv"]
+        - ["git", "branch", "-a", "-v"]
+        - ["git", "branch", "--show-current"]
+        - ["git", "branch", "--list", "**"]
     obligations:
       sandbox_mode: ci
 
@@ -223,6 +256,25 @@ rules:
         - ["dir"]
         - ["dir", "**"]
         - ["go", "version"]
+        - ["printenv"]
+        - ["printenv", "**"]
+        - ["env"]
+        - ["du", "**"]
+        - ["df", "**"]
+        - ["uname", "**"]
+        - ["id"]
+        - ["whoami"]
+        - ["date"]
+        - ["date", "**"]
+        - ["hostname"]
+        - ["nproc"]
+        - ["arch"]
+        - ["basename", "**"]
+        - ["dirname", "**"]
+        - ["realpath", "**"]
+        - ["readlink", "**"]
+        - ["type", "**"]
+        - ["command", "-v", "**"]
     obligations:
       sandbox_mode: ci
 
@@ -303,7 +355,7 @@ rules:
         - ["**", "*kubeconfig*", "**"]
         - ["**", "*.netrc", "**"]
 
-  # Deny deletes that target the home directory, the filesystem root, any absolute path, or a parent directory; workspace-relative deletes stay subject to the other rules.
+  # Deny deletes that target the home directory, the filesystem root, a drive root, or a parent directory, as a whole or through a literal glob (`\*` is a literal star). Other paths outside the workspace are left to the hook's boundary check, which asks.
   - id: ci-strict-deny-catastrophic-delete
     action_type: process.exec
     resource: file://workspace/
@@ -312,14 +364,28 @@ rules:
       argv_patterns:
         - ["rm", "**", "~", "**"]
         - ["rm", "**", "~/", "**"]
-        - ["rm", "**", "~/*", "**"]
+        - ['rm', '**', '~/\*', '**']
         - ["rm", "**", "/", "**"]
-        - ["rm", "**", "/*", "**"]
+        - ['rm', '**', '/\*', '**']
         - ["rm", "**", "..", "**"]
-        - ["rm", "**", "../*", "**"]
-        - ["rmdir", "**", "~*", "**"]
-        - ["rmdir", "**", "/*", "**"]
+        - ['rm', '**', '../\*', '**']
+        - ["rm", "**", "?:", "**"]
+        - ['rm', '**', '?:\', '**']
+        - ["rm", "**", "?:/", "**"]
+        - ["rm", "**", "/mnt/?", "**"]
+        - ["rm", "**", "/mnt/?/", "**"]
+        - ["rmdir", "**", "~", "**"]
+        - ["rmdir", "**", "~/", "**"]
+        - ['rmdir', '**', '~/\*', '**']
+        - ["rmdir", "**", "/", "**"]
+        - ['rmdir', '**', '/\*', '**']
         - ["rmdir", "**", "..", "**"]
+        - ['rmdir', '**', '../\*', '**']
+        - ["rmdir", "**", "?:", "**"]
+        - ['rmdir', '**', '?:\', '**']
+        - ["rmdir", "**", "?:/", "**"]
+        - ["rmdir", "**", "/mnt/?", "**"]
+        - ["rmdir", "**", "/mnt/?/", "**"]
 
   # Deny destructive git operations however their arguments are spelled.
   - id: ci-strict-deny-git-destructive-with-args
@@ -334,3 +400,59 @@ rules:
         - ["git", "push", "--force", "**"]
         - ["git", "push", "-f", "**"]
         - ["git", "push", "--force-with-lease", "**"]
+        - ["git", "push", "--force*", "**"]
+        - ["git", "push", "**", "--force*", "**"]
+        - ["git", "push", "**", "-f", "**"]
+        - ["git", "commit", "--amend"]
+        - ["git", "commit", "--amend", "**"]
+        - ["git", "commit", "**", "--amend", "**"]
+        - ["git", "restore", "**"]
+        - ["git", "checkout", "."]
+        - ["git", "checkout", "**", "--", "**"]
+
+  # Conservative workspace file operations for CI runs; paths outside the workspace are asked about by the hook.
+  - id: ci-strict-allow-workspace-file-ops
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["mkdir", "**"]
+        - ["touch", "**"]
+        - ["cp", "**"]
+        - ["mv", "**"]
+        - ["tar", "**"]
+        - ["unzip", "**"]
+        - ["sha256sum", "**"]
+        - ["shasum", "**"]
+        - ["md5sum", "**"]
+        - ["sed", "**"]
+        - ["jq", "**"]
+        - ["true"]
+        - ["false"]
+        - ["test", "**"]
+        - ["[", "**"]
+    obligations:
+      sandbox_mode: local
+
+  # CI must never write secret material.
+  - id: ci-strict-deny-secret-file-write
+    action_type: fs.write
+    resource: file://workspace/**/.env
+    decision: DENY
+  - id: ci-strict-deny-secret-file-variant-write
+    action_type: fs.write
+    resource: file://workspace/**/.env.*
+    decision: DENY
+  - id: ci-strict-deny-root-secret-file-write
+    action_type: fs.write
+    resource: file://workspace/.env
+    decision: DENY
+  - id: ci-strict-deny-key-file-write
+    action_type: fs.write
+    resource: file://workspace/**/*.key
+    decision: DENY
+  - id: ci-strict-deny-pem-file-write
+    action_type: fs.write
+    resource: file://workspace/**/*.pem
+    decision: DENY
