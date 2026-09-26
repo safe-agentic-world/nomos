@@ -390,6 +390,7 @@ jobs:
           [[ "${hook_deny}" == *'"permissionDecision":"deny"'* ]]
           hook_allow="$("${BIN_PATH}" hook claude-code --profile safe-dev --workspace "${TEST_DIR}" --audit none --simulate --command 'git status' 2>/dev/null)"
           [[ "${hook_allow}" == *'"permissionDecision":"allow"'* ]]
+          # shellcheck disable=SC2016 # the literal $HOME must reach the hook unexpanded
           hook_ask="$("${BIN_PATH}" hook claude-code --profile safe-dev --workspace "${TEST_DIR}" --audit none --simulate --command 'rm -rf $HOME' 2>/dev/null)"
           [[ "${hook_ask}" == *'"permissionDecision":"ask"'* ]]
           "${BIN_PATH}" hook claude-code --install --workspace "${TEST_DIR}" --profile safe-dev
