@@ -66,6 +66,12 @@ type claudeHookFlags struct {
 	input            string
 	command          string
 	verifyAudit      bool
+	replayPath       string
+	replayTranscript bool
+	transcriptsDir   string
+	format           string
+	top              int
+	showAsks         bool
 }
 
 // runClaudeCodeHook implements `nomos hook claude-code`. It returns the
@@ -98,6 +104,12 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 	fs.StringVar(&f.input, "input", "", "tool_input JSON for --simulate")
 	fs.StringVar(&f.command, "command", "", "shell command for --simulate (Bash tool)")
 	fs.BoolVar(&f.verifyAudit, "verify-audit", false, "verify the audit file's hash chain and exit")
+	fs.StringVar(&f.replayPath, "replay", "", "replay recorded tool calls from a file (\"-\" for stdin) and report the decisions")
+	fs.BoolVar(&f.replayTranscript, "replay-transcripts", false, "replay every Claude Code transcript under --transcripts-dir")
+	fs.StringVar(&f.transcriptsDir, "transcripts-dir", "", "transcript directory for --replay-transcripts (default ~/.claude/projects)")
+	fs.StringVar(&f.format, "format", "text", "report format for --replay: text|json")
+	fs.IntVar(&f.top, "top", 25, "list length for programs and commands in a replay report")
+	fs.BoolVar(&f.showAsks, "show-asks", false, "list every call that would ask in a replay report")
 	fs.Usage = func() { writeHelpText(fs.Output(), hookHelpText()) }
 	if err := fs.Parse(args); err != nil {
 		return hookExitError
@@ -142,6 +154,9 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 	if err != nil {
 		fmt.Fprintf(stderr, "hook: load policy: %v\n", err)
 		return hookExitError
+	}
+	if f.replayPath != "" || f.replayTranscript {
+		return runClaudeCodeHookReplay(f, engine, label, stdin, stdout, stderr, getenv)
 	}
 
 	var in agenthook.Input
@@ -203,6 +218,86 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 	}
 	if out != nil {
 		fmt.Fprintln(stdout, string(out))
+	}
+	return hookExitOK
+}
+
+// runClaudeCodeHookReplay evaluates recorded tool calls with the live
+// pipeline and prints a report. It writes no audit and runs nothing.
+func runClaudeCodeHookReplay(f claudeHookFlags, engine *policy.Engine, label string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) int {
+	if f.format != "text" && f.format != "json" {
+		fmt.Fprintf(stderr, "hook: --format must be text or json\n")
+		return hookExitError
+	}
+	root, err := resolveHookWorkspace(f.workspace, "", getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "hook: %v\n", err)
+		return hookExitError
+	}
+	var records []agenthook.ReplayRecord
+	var errs []string
+	if f.replayPath != "" {
+		var r io.Reader = stdin
+		source := "stdin"
+		if f.replayPath != "-" {
+			file, err := os.Open(f.replayPath)
+			if err != nil {
+				fmt.Fprintf(stderr, "hook: replay: %v\n", err)
+				return hookExitError
+			}
+			defer file.Close()
+			r, source = file, f.replayPath
+		}
+		records, errs = agenthook.ReadReplayFile(r, source)
+	}
+	if f.replayTranscript {
+		dir := strings.TrimSpace(f.transcriptsDir)
+		if dir == "" {
+			home := agenthook.DefaultHomeDir()
+			if home == "" {
+				fmt.Fprintln(stderr, "hook: --transcripts-dir is required when the home directory is unknown")
+				return hookExitError
+			}
+			dir = filepath.Join(home, ".claude", "projects")
+		}
+		recs, readErrs, err := agenthook.ReadTranscriptDir(dir)
+		if err != nil {
+			fmt.Fprintf(stderr, "hook: replay transcripts: %v\n", err)
+			return hookExitError
+		}
+		records = append(records, recs...)
+		errs = append(errs, readErrs...)
+	}
+	opts := agenthook.Options{
+		WorkspaceRoot:    root,
+		Identity:         identity.VerifiedIdentity{Principal: f.principal, Agent: f.agent, Environment: f.environment},
+		OnDefaultDeny:    f.onDefault,
+		OnUnsupported:    f.onUnsupported,
+		OutsideWorkspace: f.outsideWorkspace,
+		BundleLabel:      label,
+		HomeDir:          agenthook.DefaultHomeDir(),
+	}
+	report, err := agenthook.Replay(engine, records, opts, agenthook.ReplayOptions{IncludeMCP: f.includeMCP, KeepAsks: f.showAsks || f.format == "json", Top: f.top})
+	if err != nil {
+		fmt.Fprintf(stderr, "hook: replay: %v\n", err)
+		return hookExitError
+	}
+	report.Errors = append(errs, report.Errors...)
+	if f.format == "json" {
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			fmt.Fprintf(stderr, "hook: encode report: %v\n", err)
+			return hookExitError
+		}
+		fmt.Fprintln(stdout, string(data))
+		return hookExitOK
+	}
+	fmt.Fprint(stdout, report.Text())
+	if f.showAsks {
+		fmt.Fprintln(stdout, "calls that would ask:")
+		for _, a := range report.Asks {
+			fmt.Fprintf(stdout, "  %-20s %s: %s\n", a.Class, a.Tool, a.Command)
+		}
 	}
 	return hookExitOK
 }
@@ -377,7 +472,13 @@ func hookHelpText() string {
 		"try it:\n" +
 		"      --simulate --command \"rm -rf ~/\"\n" +
 		"      --simulate --tool Read --input '{\"file_path\":\".env\"}'\n\n" +
+		"measure before you install:\n" +
+		"      --replay <file|->        replay recorded calls (corpus JSONL, hook input JSON, transcript lines, or plain commands)\n" +
+		"      --replay-transcripts [--transcripts-dir <dir>]\n" +
+		"                               replay your own Claude Code transcripts (default ~/.claude/projects), read-only\n" +
+		"      --format text|json --top <n> --show-asks\n\n" +
 		"examples:\n" +
 		"  nomos hook claude-code --install --profile safe-dev\n" +
-		"  nomos hook claude-code --simulate --profile ci-strict --command \"git push --force\"\n"
+		"  nomos hook claude-code --simulate --profile ci-strict --command \"git push --force\"\n" +
+		"  nomos hook claude-code --replay-transcripts --profile safe-dev\n"
 }

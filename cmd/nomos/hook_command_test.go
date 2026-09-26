@@ -226,3 +226,65 @@ func TestClaudeCodeHookEmbeddedProfileSafeDev(t *testing.T) {
 		t.Fatalf("safe-dev git status: %s (%s)", got, stderr.String())
 	}
 }
+
+func TestClaudeCodeHookReplayReportsDecisions(t *testing.T) {
+	dir := t.TempDir()
+	bundle := writeHookBundle(t, dir)
+	replay := filepath.Join(dir, "calls.jsonl")
+	lines := "git status\n" +
+		`{"command":"git push origin main"}` + "\n" +
+		`{"tool_name":"Read","tool_input":{"file_path":"src/main.go"}}` + "\n" +
+		`{"type":"assistant","cwd":"` + dir + `","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"rm -rf ~/"}}]}}` + "\n" +
+		`{"tool_name":"TodoWrite","tool_input":{}}` + "\n"
+	if err := os.WriteFile(replay, []byte(lines), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := runClaudeCodeHook([]string{"-p", bundle, "--workspace", dir, "--replay", replay, "--format", "json"}, strings.NewReader(""), &stdout, &stderr, noEnv)
+	if code != 0 {
+		t.Fatalf("replay exit %d stderr=%s", code, stderr.String())
+	}
+	var report struct {
+		Records     int            `json:"records"`
+		Skipped     int            `json:"skipped_tools"`
+		Permissions map[string]int `json:"permissions"`
+		Denies      []struct {
+			Command string `json:"command"`
+		} `json:"denies"`
+		Asks []struct {
+			Class string `json:"class"`
+		} `json:"asks"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("decode report: %v\n%s", err, stdout.String())
+	}
+	if report.Records != 4 || report.Skipped != 1 {
+		t.Fatalf("records=%d skipped=%d", report.Records, report.Skipped)
+	}
+	if report.Permissions["allow"] != 1 || report.Permissions["ask"] != 2 || report.Permissions["deny"] != 1 {
+		t.Fatalf("permissions: %+v", report.Permissions)
+	}
+	if len(report.Denies) != 1 || report.Denies[0].Command != "rm -rf ~/" {
+		t.Fatalf("denies: %+v", report.Denies)
+	}
+	if len(report.Asks) != 2 {
+		t.Fatalf("json report must list asks: %+v", report.Asks)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code = runClaudeCodeHook([]string{"-p", bundle, "--workspace", dir, "--replay", "-", "--show-asks"}, strings.NewReader("git status\ngit push origin main\n"), &stdout, &stderr, noEnv)
+	if code != 0 {
+		t.Fatalf("stdin replay exit %d stderr=%s", code, stderr.String())
+	}
+	for _, want := range []string{"replay of 2 tool calls", "calls that would ask:", "git push origin main"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("text report missing %q:\n%s", want, stdout.String())
+		}
+	}
+	if code := runClaudeCodeHook([]string{"-p", bundle, "--replay", replay, "--format", "xml"}, strings.NewReader(""), &stdout, &stderr, noEnv); code != hookExitError {
+		t.Fatalf("bad format must fail closed, got %d", code)
+	}
+	if code := runClaudeCodeHook([]string{"-p", bundle, "--replay-transcripts", "--transcripts-dir", filepath.Join(dir, "missing")}, strings.NewReader(""), &stdout, &stderr, noEnv); code != hookExitError {
+		t.Fatalf("missing transcript dir must fail, got %d", code)
+	}
+}
