@@ -170,6 +170,8 @@ func runCodexHook(args []string, stdin io.Reader, stdout, stderr io.Writer, gete
 		OutsideWorkspace: f.outsideWorkspace,
 		BundleLabel:      label,
 		HomeDir:          agenthook.DefaultHomeDir(),
+		ControlFiles:     hookControlFiles(f.bundlePath, hookExecutable()),
+		AuditFiles:       hookControlFiles(codexAuditPath(f.auditPath, root)),
 	}
 	copts := agenthook.CodexOptions{Ask: f.ask}
 	res, err := agenthook.EvaluateMapping(engine, in, agenthook.MapCodexToolCall(in, opts), opts)

@@ -317,6 +317,13 @@ and the [changelog](CHANGELOG.md).
   disable hooks in their settings. Keep the timeout short, prefer managed
   settings on shared machines, and treat the hook as policy enforcement
   inside the harness, not as a sandbox around it.
+- **The hook guards its own files.** A tool call that could change the
+  harness settings that register it, its policy bundle, its binary, or its
+  audit log asks for confirmation, and a write to the audit log is denied, however
+  the path is spelled. A program that writes those files without naming
+  them, such as a test script, is decided by its own rules; for a hook the
+  agent cannot remove, register it in managed settings
+  ([details](docs/claude-code-hook.md#the-hook-protects-its-own-files)).
 - **Allowing an interpreter allows what it runs.** A rule that allows
   `python3 build.py` or `make test` allows the program behind it. The
   default profiles ask or deny before inline code (`python -c`, `node -e`)

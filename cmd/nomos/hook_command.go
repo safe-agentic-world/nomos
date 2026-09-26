@@ -194,6 +194,8 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 		OutsideWorkspace: f.outsideWorkspace,
 		BundleLabel:      label,
 		HomeDir:          agenthook.DefaultHomeDir(),
+		ControlFiles:     hookControlFiles(f.bundlePath, hookExecutable()),
+		AuditFiles:       hookControlFiles(hookAuditPath(f.auditPath, root)),
 	}
 	if in.HookEventName == "PostToolUse" {
 		// The call already ran; record that so --suggest can learn which
@@ -302,6 +304,8 @@ func runClaudeCodeHookReplay(f claudeHookFlags, engine *policy.Engine, label str
 		OutsideWorkspace: f.outsideWorkspace,
 		BundleLabel:      label,
 		HomeDir:          agenthook.DefaultHomeDir(),
+		ControlFiles:     hookControlFiles(f.bundlePath, hookExecutable()),
+		AuditFiles:       hookControlFiles(hookAuditPath(f.auditPath, root)),
 	}
 	report, err := agenthook.Replay(engine, records, opts, agenthook.ReplayOptions{IncludeMCP: f.includeMCP, KeepAsks: f.showAsks || f.format == "json", Top: f.top})
 	if err != nil {
@@ -504,6 +508,30 @@ func shellQuote(arg string) string {
 		return arg
 	}
 	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+}
+
+// hookControlFiles lists the files the hook was started with (its policy
+// bundle or audit log) so the adapter protects them like the harness
+// settings; empty values are dropped.
+func hookControlFiles(paths ...string) []string {
+	var out []string
+	for _, p := range paths {
+		if strings.TrimSpace(p) != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// hookExecutable is the running nomos binary: replacing it would replace
+// the hook, so it is protected like the settings that start it. Empty when
+// the platform cannot tell.
+func hookExecutable() string {
+	path, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 func hookAuditPath(flagValue, root string) string {

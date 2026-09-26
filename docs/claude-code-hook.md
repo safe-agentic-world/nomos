@@ -190,8 +190,52 @@ nomos hook claude-code --verify-audit
 recomputes the whole chain and fails on the first modified, inserted, or
 removed record. The chain is integrity-linked, not signed: it detects
 tampering after the fact by anyone who does not also rewrite every later
-hash, and it does not prove who wrote a record. Add `.nomos/` to
-`.gitignore` unless you want the log in version control.
+hash, and it does not prove who wrote a record. The agent cannot write the
+log through its own tools (see the next section), but the chain alone
+cannot show that records were cut from the end or that the whole file was
+replaced; keep a copy outside the agent's reach when that evidence
+matters. Add `.nomos/` to `.gitignore` unless you want the log in version
+control.
+
+## The Hook Protects Its Own Files
+
+A hook only decides while the files that configure it stay out of the
+agent's reach. Claude Code picks up hook edits during a session ("Direct
+edits to hooks in settings files are normally picked up automatically by
+the file watcher"), and `disableAllHooks` in project or local settings
+turns off every hook that is not managed. So the hook treats these as
+control files, in the workspace and in your home directory:
+
+- `.claude/settings.json` and `.claude/settings.local.json`
+- `.codex/hooks.json` and `.codex/config.toml`
+- the policy bundle passed with `-p`, and the `nomos` binary the hook runs
+- the audit log, and everything under `.nomos/` in the workspace
+
+Every path a call names is resolved the way the workspace boundary check
+resolves it (the command's `cd`, `..`, symlinks, `~`, and globs such as
+`.claude/*.json`), ignoring case. Then:
+
+| Call | Decision |
+| --- | --- |
+| A file write to the audit log or under `.nomos/` (Write, Edit, a `>` redirection) | deny |
+| A file write to a settings file, the policy bundle, or the binary | ask |
+| A command that names a control file or its directory (`sed -i`, `cp`, `mv .claude`, `rm -rf .nomos`) | ask |
+| Reading one (the Read tool; `cat`, `grep`, `jq`, `rg`, or `git diff`, `status`, `log`, `show`, `blame` by name) | decided by the policy |
+
+The check runs next to the policy rather than inside it, so a bundle
+cannot switch it off, and like every hook decision it holds in every
+permission mode. Editing your settings through Claude now takes one
+confirmation.
+
+It does not see files a program writes without naming them: a test script,
+a build step, or `tar x` is decided by the rules for that program. Because
+`safe-dev` allows the project's own scripts, an agent that writes a script,
+marks it executable, and runs it can still change these files; every step
+is recorded in the audit log, but none asks. For a hook the agent cannot
+remove at all, register it in managed settings, which `disableAllHooks` in
+user or project settings cannot turn off (`allowManagedHooksOnly` also
+blocks user and project hooks), and keep the policy and the audit log where
+the agent's user cannot write.
 
 ## Test The Policy Before Claude Does
 
@@ -222,9 +266,10 @@ nomos hook claude-code --replay commands.jsonl --profile safe-dev --show-asks
 ```
 
 The report counts allow, deny, and ask decisions, explains why calls ask
-(refused syntax, a path outside the workspace, a rule that requires
-approval, or no matching rule), lists the programs that ask most, and
-prints every deny with its reason. `--format json` emits the same report
+(a change to the hook's own files, refused syntax, a path outside the
+workspace, a rule that requires approval, or no matching rule), lists the
+programs that ask most, and prints every deny with its reason. `--format
+json` emits the same report
 for scripts. Replay evaluates each call with the live pipeline, writes no
 audit, and never executes a command.
 
@@ -237,7 +282,10 @@ installed, in default and bypass permission modes.
 - **Claude Code runs the hook, so its rules bound it.** Per the hooks
   reference, "A timed-out `command`, `http`, or `mcp_tool` hook doesn't
   block the tool call", and users can set `disableAllHooks`; organizations
-  can restrict which hooks run with managed settings. The hook does no
+  can restrict which hooks run with managed settings. The hook guards its
+  own settings, policy, and audit log against the agent's tool calls
+  ([above](#the-hook-protects-its-own-files)), not against a program that
+  writes them without naming them. The hook does no
   network I/O and evaluates in milliseconds; keep the timeout short and
   treat the hook as policy enforcement inside the harness, not as a
   sandbox around it.

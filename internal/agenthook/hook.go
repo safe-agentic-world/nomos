@@ -48,6 +48,11 @@ const (
 	FindingUnsupported      = "unsupported_shell"
 	FindingOutsideWorkspace = "outside_workspace"
 	FindingNormalization    = "normalization_error"
+	// FindingControlConfig is a call that could change a file that registers,
+	// disables, or configures the hook (harness settings, the policy bundle).
+	FindingControlConfig = "hook_control_config"
+	// FindingControlAudit is a file write to the hook's audit log.
+	FindingControlAudit = "hook_control_audit"
 )
 
 const (
@@ -83,6 +88,16 @@ type Options struct {
 	// HomeDir resolves a leading `~`. Empty means unknown, which counts as
 	// outside the workspace.
 	HomeDir string
+	// ControlFiles are further files that configure the hook, such as the
+	// policy bundle it was started with. They are protected like the
+	// harness settings: a call that could change one asks (see control.go).
+	ControlFiles []string
+	// AuditFiles are the audit logs the hook writes. A file write to one is
+	// denied; the .nomos directory in the workspace is always protected.
+	AuditFiles []string
+
+	// controls caches the resolved control paths for one mapping.
+	controls *controlSet
 }
 
 // Input is the subset of the PreToolUse payload the adapter uses.
@@ -243,6 +258,7 @@ func (o Options) validate() error {
 
 // MapToolCall translates a tool call into Nomos actions and findings.
 func MapToolCall(in Input, opts Options) Mapping {
+	opts = opts.withControls()
 	var params map[string]any
 	if err := json.Unmarshal(in.ToolInput, &params); err != nil || params == nil {
 		params = map[string]any{}
@@ -292,6 +308,9 @@ func mapShell(command string, in Input, opts Options) Mapping {
 		}
 	}
 	for _, cmd := range list.Commands {
+		if f, ok := commandControlFinding(cmd, in, opts); ok {
+			m.Findings = append(m.Findings, f)
+		}
 		for _, tok := range cmd.Argv[1:] {
 		candidates:
 			for _, value := range pathCandidates(tok) {
@@ -354,6 +373,12 @@ func mapRedirect(r Redirect, cmd SimpleCommand, in Input, opts Options) Mapping 
 	actionType := "fs.read"
 	if r.Kind == "write" {
 		actionType = "fs.write"
+		for _, cwd := range cmd.Cwds {
+			if f, ok := controlFinding(r.Target, cwd, "redirection", true, in, opts); ok {
+				m.Findings = append(m.Findings, f)
+				break
+			}
+		}
 	}
 	var rel string
 	for i, cwd := range cmd.Cwds {
@@ -388,6 +413,14 @@ func mapFile(actionType, rawPath string, in Input, opts Options) Mapping {
 	if strings.TrimSpace(rawPath) == "" {
 		m.Findings = append(m.Findings, Finding{Kind: FindingUnsupported, Detail: "file tool call without a path"})
 		return m
+	}
+	if actionType == "fs.write" {
+		// Checked before the boundary so a control file outside the
+		// workspace (~/.claude/settings.json) is protected under
+		// --outside-workspace passthrough too.
+		if f, ok := controlFinding(rawPath, "", "path", true, in, opts); ok {
+			m.Findings = append(m.Findings, f)
+		}
 	}
 	class, resolved := classifyPath(rawPath, "", in, opts)
 	switch class {
@@ -477,37 +510,11 @@ func classifyPath(raw, cmdCwd string, in Input, opts Options) (pathClass, string
 	if raw == "" {
 		return pathUnknown, raw
 	}
-	expand := func(p string) (string, bool) {
-		if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
-			if opts.HomeDir == "" {
-				return "", false
-			}
-			return filepath.Join(opts.HomeDir, strings.TrimPrefix(p, "~")), true
-		}
-		if strings.HasPrefix(p, "~") {
-			// ~user forms are not resolvable without lookups.
-			return "", false
-		}
-		return p, true
+	base, ok := commandBase(cmdCwd, in, opts)
+	if !ok {
+		return pathOutside, cmdCwd
 	}
-	base := in.Cwd
-	if base == "" {
-		base = opts.WorkspaceRoot
-	}
-	if cmdCwd != "" {
-		expanded, ok := expand(cmdCwd)
-		if !ok {
-			return pathOutside, cmdCwd
-		}
-		if filepath.IsAbs(expanded) {
-			base = expanded
-		} else {
-			// `cd` is logical in POSIX shells: `..` is applied to the
-			// textual working directory, so the base is joined lexically.
-			base = filepath.Join(base, expanded)
-		}
-	}
-	expanded, ok := expand(raw)
+	expanded, ok := expandHome(raw, opts)
 	if !ok {
 		return pathOutside, raw
 	}
@@ -518,24 +525,11 @@ func classifyPath(raw, cmdCwd string, in Input, opts Options) (pathClass, string
 	//   - physical: symlinks resolved component by component before each
 	//     `..` (how the kernel opens it, so `link/../x` with `link`
 	//     pointing outside the workspace lands outside).
-	abs := expanded
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(base, abs)
-	}
-	abs = filepath.Clean(abs)
+	abs, lexical, physical := resolveViews(base, expanded)
 	root := filepath.Clean(opts.WorkspaceRoot)
 	if resolvedRoot, err := filepath.EvalSymlinks(root); err == nil {
 		root = resolvedRoot
 	}
-	lexical := abs
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		lexical = resolved
-	} else {
-		// The path may not exist yet (a new file); resolve the deepest
-		// existing ancestor so a symlinked parent cannot escape unnoticed.
-		lexical = resolveExistingPrefix(abs)
-	}
-	physical := physicalPath(base, expanded)
 	if outsideRoot(root, lexical) || outsideRoot(root, physical) {
 		return pathOutside, abs
 	}
@@ -546,6 +540,64 @@ func classifyPath(raw, cmdCwd string, in Input, opts Options) (pathClass, string
 	}
 	rel, _ := filepath.Rel(root, lexical)
 	return pathInside, filepath.ToSlash(rel)
+}
+
+// expandHome resolves a leading `~` against opts.HomeDir. `~user` forms and
+// an unknown home directory are not resolvable.
+func expandHome(p string, opts Options) (string, bool) {
+	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
+		if opts.HomeDir == "" {
+			return "", false
+		}
+		return filepath.Join(opts.HomeDir, strings.TrimPrefix(p, "~")), true
+	}
+	if strings.HasPrefix(p, "~") {
+		// ~user forms are not resolvable without lookups.
+		return "", false
+	}
+	return p, true
+}
+
+// commandBase is the directory a command runs in: the hook's cwd, moved by
+// the command's own `cd` when cmdCwd is set.
+func commandBase(cmdCwd string, in Input, opts Options) (string, bool) {
+	base := in.Cwd
+	if base == "" {
+		base = opts.WorkspaceRoot
+	}
+	if cmdCwd != "" {
+		expanded, ok := expandHome(cmdCwd, opts)
+		if !ok {
+			return "", false
+		}
+		if filepath.IsAbs(expanded) {
+			base = expanded
+		} else {
+			// `cd` is logical in POSIX shells: `..` is applied to the
+			// textual working directory, so the base is joined lexically.
+			base = filepath.Join(base, expanded)
+		}
+	}
+	return base, true
+}
+
+// resolveViews returns the cleaned absolute path of target in base and its
+// lexical and physical resolutions (see classifyPath).
+func resolveViews(base, target string) (abs, lexical, physical string) {
+	abs = target
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(base, abs)
+	}
+	abs = filepath.Clean(abs)
+	lexical = abs
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		lexical = resolved
+	} else {
+		// The path may not exist yet (a new file); resolve the deepest
+		// existing ancestor so a symlinked parent cannot escape unnoticed.
+		lexical = resolveExistingPrefix(abs)
+	}
+	return abs, lexical, physicalPath(base, target)
 }
 
 // outsideRoot reports whether candidate is not root itself or below it.
@@ -762,6 +814,10 @@ func aggregate(outcomes []Outcome, findings []Finding, opts Options) (string, st
 	}
 	for _, f := range findings {
 		switch f.Kind {
+		case FindingControlAudit:
+			contribs = append(contribs, contribution{levelDeny, "the agent may not write the hook's audit log: " + f.Detail})
+		case FindingControlConfig:
+			contribs = append(contribs, contribution{levelAsk, "the call could change the hook's own configuration, asking for confirmation: " + f.Detail})
 		case FindingOutsideWorkspace:
 			switch opts.OutsideWorkspace {
 			case ModeDeny:

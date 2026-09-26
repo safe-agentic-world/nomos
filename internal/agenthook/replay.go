@@ -25,6 +25,9 @@ type ReplayRecord struct {
 
 // Ask classes explain why a replayed call would prompt.
 const (
+	// AskHookControl is a call that could change the hook's own files; no
+	// policy rule can remove that prompt.
+	AskHookControl      = "hook_control"
 	AskUnsupportedShell = "unsupported_shell"
 	AskOutsideWorkspace = "outside_workspace"
 	AskApprovalRequired = "approval_required"
@@ -338,6 +341,11 @@ func replayCommand(rec ReplayRecord) string {
 // workspace, then rules that require approval, then no matching rule.
 func askClass(res Result) string {
 	for _, f := range res.Mapping.Findings {
+		if f.Kind == FindingControlConfig {
+			return AskHookControl
+		}
+	}
+	for _, f := range res.Mapping.Findings {
 		if f.Kind == FindingUnsupported || f.Kind == FindingNormalization {
 			return AskUnsupportedShell
 		}
@@ -411,7 +419,7 @@ func (r ReplayReport) Text() string {
 	}
 	if r.Permissions[PermissionAsk] > 0 {
 		b.WriteString("why calls ask:\n")
-		for _, c := range []string{AskUnsupportedShell, AskOutsideWorkspace, AskApprovalRequired, AskNoMatchingRule} {
+		for _, c := range []string{AskHookControl, AskUnsupportedShell, AskOutsideWorkspace, AskApprovalRequired, AskNoMatchingRule} {
 			if n := r.AskClasses[c]; n > 0 {
 				fmt.Fprintf(&b, "  %-20s %6d\n", c, n)
 			}
