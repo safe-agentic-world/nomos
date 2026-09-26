@@ -285,6 +285,9 @@ func mapShell(command string, in Input, opts Options) Mapping {
 				}
 			}
 		}
+		for _, r := range cmd.Redirects {
+			m.merge(mapRedirect(r, cmd, in, opts))
+		}
 		params := map[string]any{"argv": toAnySlice(cmd.Argv), "cwd": filepath.ToSlash(cmd.Cwd)}
 		m.Actions = append(m.Actions, MappedAction{
 			ActionType: "process.exec",
@@ -298,6 +301,53 @@ func mapShell(command string, in Input, opts Options) Mapping {
 		// Only builtins such as `cd` that do nothing on their own.
 		m.Passthrough = true
 	}
+	return m
+}
+
+// merge appends another mapping's actions and findings.
+func (m *Mapping) merge(other Mapping) {
+	m.Actions = append(m.Actions, other.Actions...)
+	m.Findings = append(m.Findings, other.Findings...)
+}
+
+// mapRedirect turns a file redirection into the fs.read or fs.write it
+// performs, resolved against every working directory the command may run
+// in; a target outside the workspace is a finding like any other path.
+func mapRedirect(r Redirect, cmd SimpleCommand, in Input, opts Options) Mapping {
+	var m Mapping
+	actionType := "fs.read"
+	if r.Kind == "write" {
+		actionType = "fs.write"
+	}
+	var rel string
+	for i, cwd := range cmd.Cwds {
+		class, resolved := classifyPath(r.Target, cwd, in, opts)
+		switch class {
+		case pathOutside:
+			if opts.OutsideWorkspace == ModePassthrough {
+				m.Passthrough = true
+				return m
+			}
+			m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "redirection " + strconvQuote(r.Target) + " resolves to " + strconvQuote(resolved)})
+			return m
+		case pathUnknown:
+			m.Findings = append(m.Findings, Finding{Kind: FindingUnsupported, Detail: "cannot resolve redirection target " + strconvQuote(r.Target)})
+			return m
+		}
+		if i == 0 {
+			rel = resolved
+		}
+	}
+	resource := "file://workspace/" + escapePathSegments(rel)
+	if rel == "." || rel == "" {
+		resource = "file://workspace/"
+	}
+	m.Actions = append(m.Actions, MappedAction{
+		ActionType: actionType,
+		Resource:   resource,
+		Params:     map[string]any{"path": filepath.ToSlash(rel), "redirect": r.Kind},
+		Summary:    actionType + " " + filepath.ToSlash(rel) + " (redirection)",
+	})
 	return m
 }
 

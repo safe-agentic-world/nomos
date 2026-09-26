@@ -48,6 +48,14 @@ The format is based on Keep a Changelog and semantic versioning.
   corpus, `safe-dev` allows went from 157 to 578 of 1,526 commands and
   denies from 13 to 2, with every incident case still denied or reviewed.
 - A bare `env` is treated as the read-only command it is, not as a wrapper.
+- The shell parser now maps file redirections (`> out.txt`, `>> log`,
+  `2> err`, `&> all`, `< input`) to `fs.write` and `fs.read` actions the
+  policy decides, instead of refusing them, and accepts simple parameter
+  expansions (`$NAME`, `${NAME}`, `$?`) in the arguments of print-only
+  commands (`echo`, `printf`, `printenv`, `test`, `true`). Expansions
+  anywhere else, command substitution, heredocs, and redirection targets
+  that carry a quote or an expansion are still refused. On the corpus this
+  moved `safe-dev` from 578 to 675 allows.
 
 ## [0.14.0] - 2026-09-26
 

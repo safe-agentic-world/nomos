@@ -69,6 +69,7 @@ check a rule set without running the agent:
 | Claude Code tool | Nomos action | Resource |
 | --- | --- | --- |
 | `Bash` / `PowerShell` | one `process.exec` per simple command in the command list | `file://workspace/` with `params.argv` and `params.cwd` |
+| `Bash` redirection (`> file`, `>> file`, `2> file`, `&> file`, `< file`) | `fs.write` or `fs.read` for the file, attached to the simple command | `file://workspace/<path relative to the workspace>` |
 | `Read` | `fs.read` | `file://workspace/<path relative to the workspace>` |
 | `Write`, `Edit`, `MultiEdit`, `NotebookEdit` | `fs.write` | same |
 | `WebFetch` | `net.http_request` with `params.method: GET` | `url://host/path` |
@@ -120,15 +121,23 @@ Normalization before evaluation:
 Two more inputs feed the answer:
 
 - Shell syntax the parser will not interpret yields `ask`, or `deny` with
-  `--on-unsupported deny`. This covers variable and command substitution
-  (`$HOME`, `$(pwd)`, backticks), heredocs and input redirection,
-  redirection to files (only `2>&1`-style descriptor duplication and
-  `/dev/null` are accepted), subshells and brace groups, leading
-  `VAR=value` assignments, `sudo`/`doas`/`su`, `eval`, `source`,
+  `--on-unsupported deny`. This covers command substitution (`$(pwd)`,
+  backticks), heredocs, process substitution, subshells and brace groups,
+  leading `VAR=value` assignments, `sudo`/`doas`/`su`, `eval`, `source`,
   `xargs`, `find -exec`/`-delete`, and builtins that change shell state
-  (`export`, `trap`, `set`, `pushd`, ...). The reason names the construct
-  and the position. The rule is deliberate: when the argv the policy would
-  evaluate might differ from what the shell will run, Nomos does not guess.
+  (`export`, `trap`, `set`, `pushd`, ...). A simple parameter expansion
+  (`$HOME`, `${NAME}`, `$?`) is kept as literal text and accepted only in
+  the arguments of a print-only command (`echo`, `printf`, `printenv`,
+  `test`, `true`); anywhere else (`rm -rf $DIR`, `bash -c "echo $X"`, a
+  redirection target, the command name itself) it is refused, because the
+  value could change what runs or what is touched. A file redirection
+  (`> out.txt`, `>> log`, `2> err`, `&> all`, `< input`) is not refused:
+  it becomes an `fs.write` or `fs.read` on that file, decided by the
+  policy and checked against the workspace boundary like any other path;
+  descriptor duplication (`2>&1`), `/dev/null`, and plain here-strings
+  stay transparent. The reason names the construct and the position. The
+  rule is deliberate: when the argv the policy would evaluate might differ
+  from what the shell will run, Nomos does not guess.
 - A path that resolves outside the workspace root yields `ask`, `deny`
   with `--outside-workspace deny`, or no decision with
   `--outside-workspace passthrough`. This applies to `Read`/`Write`/`Edit`

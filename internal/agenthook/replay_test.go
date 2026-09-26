@@ -69,7 +69,7 @@ func TestReplaySummarizesDecisionsFromMixedFile(t *testing.T) {
 		t.Fatalf("records: %d", report.Records)
 	}
 	// go test (no rule) asks, cat config/.env denies, Read allows, push asks
-	// (approval), echo $HOME asks (unsupported), Write allows, ls asks (no rule),
+	// (approval), echo $(whoami) asks (unsupported), Write allows, ls asks (no rule),
 	// cat ../secret.txt asks (outside).
 	want := map[string]int{PermissionAllow: 2, PermissionAsk: 5, PermissionDeny: 1}
 	for k, v := range want {

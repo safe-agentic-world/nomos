@@ -755,3 +755,46 @@ func TestSafeDevProfileTuningKeepsDeniesAndCutsNoise(t *testing.T) {
 		t.Fatalf("reading a secrets file must stay denied: %s %q err=%v", res.Permission, res.Reason, err)
 	}
 }
+
+func TestEvaluateDecidesRedirectionsAndPrintOnlyExpansions(t *testing.T) {
+	root := newWorkspace(t)
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	bundle, err := launcher.EmbeddedProfileBundle("safe-dev")
+	if err != nil {
+		t.Fatalf("profile: %v", err)
+	}
+	engine := policy.NewEngine(bundle)
+	opts := testOptions(t, root)
+	opts.BundleLabel = "profile safe-dev"
+	cases := []struct {
+		command string
+		want    string
+		reason  string
+	}{
+		{"go test ./... > out.txt", PermissionAllow, "fs.write out.txt"},
+		{"go test ./... 2>&1 | tee build.log", PermissionAllow, "allows"},
+		{"sort < src/main.go", PermissionAllow, "fs.read src/main.go"},
+		{"cat src/main.go > /tmp/copy.go", PermissionAsk, "outside the workspace"},
+		{"echo hi > ~/.bashrc", PermissionAsk, "outside the workspace"},
+		{"sort < ../secret.txt", PermissionAsk, "outside the workspace"},
+		{"echo KEY=1 > config/.env", PermissionAsk, "requires confirmation"},
+		{"echo $HOME", PermissionAllow, "allows"},
+		{`echo "BUILD_DIR=[$BUILD_DIR]"`, PermissionAllow, "allows"},
+		{"printenv $NAME", PermissionAllow, "allows"},
+		{"cat <<< hello", PermissionAllow, "allows"},
+		{"rm -rf $DIR", PermissionAsk, "cannot safely interpret"},
+		{`bash -c "echo $X"`, PermissionAsk, "cannot safely interpret"},
+		{"cat > \"$OUT\"", PermissionAsk, "cannot safely interpret"},
+	}
+	for _, tc := range cases {
+		res, err := Evaluate(engine, toolInput(root, "Bash", map[string]any{"command": tc.command}), opts)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.command, err)
+		}
+		if res.Permission != tc.want || !strings.Contains(res.Reason, tc.reason) {
+			t.Errorf("%s: got %s %q, want %s mentioning %q", tc.command, res.Permission, res.Reason, tc.want, tc.reason)
+		}
+	}
+}
