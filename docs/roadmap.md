@@ -68,7 +68,7 @@ next and the guide says so.
 Verified by: contract tests against the harness's documented input and
 output, plus an adversarial review like the one the Claude Code hook had.
 
-### 5. Trust holes named by the research (delivered in v0.18.0 and the next release)
+### 5. Trust holes named by the research (delivered in v0.18.0 and v0.19.0)
 
 - Pin upstream MCP tool definitions (name, description, input schema) and
   require re-approval when one changes, so a class approval cannot survive a
@@ -106,6 +106,6 @@ end-to-end validation record, and the first profile tuning, and in v0.16.0
 the Codex hook, the `PostToolUse` record with `--suggest`, redirection and
 expansion handling in the parser, and the interpreter rules, in v0.17.0
 workspace scripts by relative path, in v0.18.0 upstream MCP tool
-definition pinning, and next the executor's flag handling by policy with
-the exact-length pattern lint. Adoption is an outcome to measure with
+definition pinning, and in v0.19.0 the executor's flag handling by policy
+with the exact-length pattern lint. Adoption is an outcome to measure with
 users, not a claim to make in advance.
