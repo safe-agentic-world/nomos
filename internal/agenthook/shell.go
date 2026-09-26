@@ -707,9 +707,14 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 	targets := []string{}
 	if name == "git" {
 		var findings []Unsupported
-		argv, targets, findings = normalizeGitGlobals(argv, cwds, snippet)
+		var gitCwds []string
+		argv, targets, gitCwds, findings = normalizeGitGlobals(argv, cwds, snippet)
 		if len(findings) > 0 {
 			return normalizedCommand{findings: findings}
+		}
+		if len(gitCwds) > 0 {
+			// git resolves its own path arguments in the -C directory.
+			cwds = gitCwds
 		}
 	}
 	if name == "find" {
@@ -820,9 +825,13 @@ func unwrapPowerShell(argv []string, snippet string) (string, bool, []Unsupporte
 // ones that execute configured commands or relocate the repository:
 // `-c key=value` (core.pager, alias.*, core.sshCommand, core.hooksPath, ...),
 // `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`, `--namespace`.
-// `-C <dir>` is kept as a working-directory target for the boundary check.
-func normalizeGitGlobals(argv []string, cwds []string, snippet string) ([]string, []string, []Unsupported) {
+// `-C <dir>` is kept as a working-directory target for the boundary check
+// and becomes the directory git runs in: each later -C is relative to the
+// one before, as git applies them. The returned cwds are empty when no -C
+// was given.
+func normalizeGitGlobals(argv []string, cwds []string, snippet string) ([]string, []string, []string, []Unsupported) {
 	targets := []string{}
+	var runCwds []string
 	out := []string{"git"}
 	i := 1
 	for i < len(argv) {
@@ -830,24 +839,31 @@ func normalizeGitGlobals(argv []string, cwds []string, snippet string) ([]string
 		switch {
 		case arg == "-C":
 			if i+1 >= len(argv) {
-				return nil, nil, []Unsupported{{Reason: "git -C without a directory", Snippet: snippet}}
+				return nil, nil, nil, []Unsupported{{Reason: "git -C without a directory", Snippet: snippet}}
 			}
-			for _, c := range cwds {
-				targets = append(targets, joinCwd(c, argv[i+1]))
+			base := runCwds
+			if base == nil {
+				base = cwds
 			}
+			next := make([]string, 0, len(base))
+			for _, c := range base {
+				next = append(next, joinCwd(c, argv[i+1]))
+			}
+			runCwds = uniqueStrings(next)
+			targets = append(targets, runCwds...)
 			i += 2
 		case arg == "-c" || strings.HasPrefix(arg, "--config-env"):
-			return nil, nil, []Unsupported{{Reason: "git configuration override can execute commands", Snippet: snippet}}
+			return nil, nil, nil, []Unsupported{{Reason: "git configuration override can execute commands", Snippet: snippet}}
 		case arg == "--exec-path" || strings.HasPrefix(arg, "--exec-path="), arg == "--git-dir" || strings.HasPrefix(arg, "--git-dir="), arg == "--work-tree" || strings.HasPrefix(arg, "--work-tree="), arg == "--namespace" || strings.HasPrefix(arg, "--namespace="), arg == "--super-prefix" || strings.HasPrefix(arg, "--super-prefix="), arg == "--attr-source" || strings.HasPrefix(arg, "--attr-source="):
-			return nil, nil, []Unsupported{{Reason: "git option relocates the repository or its helpers", Snippet: snippet}}
+			return nil, nil, nil, []Unsupported{{Reason: "git option relocates the repository or its helpers", Snippet: snippet}}
 		case arg == "--no-pager", arg == "-p", arg == "--paginate", arg == "-P", arg == "--no-optional-locks", arg == "--bare", arg == "--literal-pathspecs", arg == "--glob-pathspecs", arg == "--noglob-pathspecs", arg == "--icase-pathspecs", arg == "--no-replace-objects", arg == "--no-advice", arg == "--no-lazy-fetch":
 			i++
 		default:
 			out = append(out, argv[i:]...)
-			return out, uniqueStrings(targets), nil
+			return out, uniqueStrings(targets), runCwds, nil
 		}
 	}
-	return out, uniqueStrings(targets), nil
+	return out, uniqueStrings(targets), runCwds, nil
 }
 
 func baseName(command string) string {

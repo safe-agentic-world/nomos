@@ -60,6 +60,55 @@ var readOnlyPrograms = map[string]bool{
 	"realpath": true, "readlink": true, "basename": true, "dirname": true,
 }
 
+// readOnlyGitSubcommands only read the paths they name, unless --output
+// sends their output to a file.
+var readOnlyGitSubcommands = map[string]bool{
+	"status": true, "diff": true, "log": true, "show": true,
+	"blame": true, "ls-files": true, "check-ignore": true,
+}
+
+// readOnlyCommand reports whether cmd only reads the files it names. A
+// program with an option that writes a file or runs another program (rg
+// --pre, tree -o, file -C, git --output) does not count.
+func readOnlyCommand(cmd SimpleCommand) bool {
+	if len(cmd.Argv) == 0 || cmd.Original != "" || cmd.Program != "" {
+		return false
+	}
+	args := cmd.Argv[1:]
+	switch cmd.Argv[0] {
+	case "git":
+		if len(args) == 0 || !readOnlyGitSubcommands[args[0]] {
+			return false
+		}
+		return !anyOption(args[1:], func(o string) bool { return o == "--output" || strings.HasPrefix(o, "--output=") })
+	case "rg":
+		return !anyOption(args, func(o string) bool { return strings.HasPrefix(o, "--pre") })
+	case "tree":
+		return !anyOption(args, func(o string) bool { return shortCluster(o, 'o') || strings.HasPrefix(o, "--output") })
+	case "file":
+		return !anyOption(args, func(o string) bool { return shortCluster(o, 'C') || strings.HasPrefix(o, "--compile") })
+	}
+	return readOnlyPrograms[cmd.Argv[0]]
+}
+
+// anyOption reports whether an option before a `--` separator matches.
+func anyOption(args []string, match func(string) bool) bool {
+	for _, a := range args {
+		if a == "--" {
+			return false
+		}
+		if strings.HasPrefix(a, "-") && match(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// shortCluster reports whether a short-option word such as -ao carries c.
+func shortCluster(opt string, c byte) bool {
+	return len(opt) > 1 && opt[0] == '-' && opt[1] != '-' && strings.IndexByte(opt[1:], c) >= 0
+}
+
 // withControls resolves the control paths once for a whole mapping.
 func (o Options) withControls() Options {
 	if o.controls == nil {
@@ -170,10 +219,7 @@ func controlFinding(raw, cmdCwd, what string, write bool, in Input, opts Options
 // commandControlFinding reports the first argument of cmd that names a
 // control file, unless the program only reads its operands.
 func commandControlFinding(cmd SimpleCommand, in Input, opts Options) (Finding, bool) {
-	if len(cmd.Argv) == 0 {
-		return Finding{}, false
-	}
-	if cmd.Original == "" && cmd.Program == "" && readOnlyPrograms[cmd.Argv[0]] {
+	if len(cmd.Argv) == 0 || readOnlyCommand(cmd) {
 		return Finding{}, false
 	}
 	cwds := cmd.Cwds

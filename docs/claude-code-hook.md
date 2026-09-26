@@ -220,7 +220,7 @@ resolves it (the command's `cd`, `..`, symlinks, `~`, and globs such as
 | A file write to the audit log or under `.nomos/` (Write, Edit, a `>` redirection) | deny |
 | A file write to a settings file, the policy bundle, or the binary | ask |
 | A command that names a control file or its directory (`sed -i`, `cp`, `mv .claude`, `rm -rf .nomos`) | ask |
-| Reading one (the Read tool, or `cat`, `head`, `tail`, `grep`, `jq` by name) | decided by the policy |
+| Reading one (the Read tool; `cat`, `grep`, `jq`, `rg`, or `git diff`, `status`, `log`, `show`, `blame` by name) | decided by the policy |
 
 The check runs next to the policy rather than inside it, so a bundle
 cannot switch it off, and like every hook decision it holds in every
@@ -228,11 +228,14 @@ permission mode. Editing your settings through Claude now takes one
 confirmation.
 
 It does not see files a program writes without naming them: a test script,
-a build step, `tar x`, or `git checkout` is decided by the rules for that
-program. For a hook the agent cannot remove at all, register it in managed
-settings, which `disableAllHooks` in user or project settings cannot turn
-off (`allowManagedHooksOnly` also blocks user and project hooks), and keep
-the policy and the audit log where the agent's user cannot write.
+a build step, or `tar x` is decided by the rules for that program. Because
+`safe-dev` allows the project's own scripts, an agent that writes a script,
+marks it executable, and runs it can still change these files; every step
+is recorded in the audit log, but none asks. For a hook the agent cannot
+remove at all, register it in managed settings, which `disableAllHooks` in
+user or project settings cannot turn off (`allowManagedHooksOnly` also
+blocks user and project hooks), and keep the policy and the audit log where
+the agent's user cannot write.
 
 ## Test The Policy Before Claude Does
 
@@ -263,9 +266,10 @@ nomos hook claude-code --replay commands.jsonl --profile safe-dev --show-asks
 ```
 
 The report counts allow, deny, and ask decisions, explains why calls ask
-(refused syntax, a path outside the workspace, a rule that requires
-approval, or no matching rule), lists the programs that ask most, and
-prints every deny with its reason. `--format json` emits the same report
+(a change to the hook's own files, refused syntax, a path outside the
+workspace, a rule that requires approval, or no matching rule), lists the
+programs that ask most, and prints every deny with its reason. `--format
+json` emits the same report
 for scripts. Replay evaluates each call with the live pipeline, writes no
 audit, and never executes a command.
 

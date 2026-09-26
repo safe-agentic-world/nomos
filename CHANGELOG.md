@@ -19,13 +19,24 @@ The format is based on Keep a Changelog and semantic versioning.
   `.claude/settings.local.json`, `.codex/hooks.json`, or
   `.codex/config.toml` (in the workspace or the home directory), the `-p`
   policy bundle, the running `nomos` binary, or a directory that holds one
-  of them now asks. Paths are
-  resolved first, so `cd`, `..`, symlinks, globs, and case do not get
-  around the check. Reads, including `cat` and `tail` by name, are
-  unchanged, and no decision moved on the 1,526-command corpus. A program
-  that writes those files without naming them is still decided by its own
-  rules; see "The Hook Protects Its Own Files" in
+  of them now asks. Paths are resolved first, so `cd`, `..`, symlinks,
+  globs, and case do not get around the check. Reads are unchanged,
+  including `cat`, `grep`, `rg`, and `git diff`, `status`, `log`, `show`,
+  and `blame` by name, and no decision moved on the 1,526-command corpus.
+  A program that writes those files without naming them is still decided
+  by its own rules, including a script the agent writes and then runs,
+  which `safe-dev` allows; for a hook the agent cannot remove, use managed
+  settings. See "The Hook Protects Its Own Files" in
   `docs/claude-code-hook.md`.
+- Replay reports count these asks as `hook_control`, since no policy rule
+  can remove them.
+
+### Fixed
+
+- `git -C <dir>` now sets the directory the hooks resolve git's path
+  arguments in, applying repeated `-C` options the way git does. The
+  arguments were resolved against the outer directory, for the workspace
+  boundary and for the control-file check alike.
 
 ### Changed
 

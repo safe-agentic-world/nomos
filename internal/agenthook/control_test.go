@@ -28,6 +28,10 @@ rules:
         - ["dd", "**"]
         - ["echo", "**"]
         - ["rm", "**"]
+        - ["git", "**"]
+        - ["rg", "**"]
+        - ["tree", "**"]
+        - ["file", "**"]
   - id: allow-workspace-read
     action_type: fs.read
     resource: file://workspace/**
@@ -273,5 +277,72 @@ func TestGlobComponentFollowsBash(t *testing.T) {
 		if got := globComponent(tc.pattern, tc.name); got != tc.want {
 			t.Errorf("globComponent(%q, %q) = %v, want %v", tc.pattern, tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestControlFilesReadOnlyExemptions(t *testing.T) {
+	root := controlWorkspace(t)
+	engine := controlEngine(t)
+	opts := testOptions(t, root)
+	for command, want := range map[string]string{
+		"git diff .claude/settings.json":                  PermissionAllow,
+		"git diff -- .codex/hooks.json":                   PermissionAllow,
+		"git log --oneline -- .claude/settings.json":      PermissionAllow,
+		"git status .claude":                              PermissionAllow,
+		"git blame .claude/settings.json":                 PermissionAllow,
+		"git ls-files .claude":                            PermissionAllow,
+		"git check-ignore .claude/settings.local.json":    PermissionAllow,
+		"git -C src diff ../.claude/settings.json":        PermissionAllow,
+		"rg -n PreToolUse .claude/settings.json":          PermissionAllow,
+		"tree .claude":                                    PermissionAllow,
+		"file .claude/settings.json":                      PermissionAllow,
+		"git diff --output=out.txt .claude/settings.json": PermissionAsk,
+		"git diff --output=.claude/settings.json":         PermissionAsk,
+		"git checkout .claude/settings.json":              PermissionAsk,
+		"git add .claude/settings.json":                   PermissionAsk,
+		"git -C .claude checkout settings.json":           PermissionAsk,
+		"git -C src -C ../.claude checkout settings.json": PermissionAsk,
+		"rg --pre=./conv.sh hooks .claude":                PermissionAsk,
+		"tree -o .claude/settings.json .":                 PermissionAsk,
+		"tree -ao out.txt .claude":                        PermissionAsk,
+		"file -C -m .claude/settings.json":                PermissionAsk,
+	} {
+		res, err := Evaluate(engine, bashInput(root, command), opts)
+		if err != nil {
+			t.Fatalf("evaluate %q: %v", command, err)
+		}
+		if res.Permission != want {
+			t.Errorf("%q: permission = %q, want %q (reason %q)", command, res.Permission, want, res.Reason)
+		}
+	}
+}
+
+func TestGitDashCSetsTheWorkingDirectory(t *testing.T) {
+	list := SplitShellCommand("git -C a -C b diff x")
+	if len(list.Commands) != 1 {
+		t.Fatalf("commands: %+v", list.Commands)
+	}
+	cmd := list.Commands[0]
+	if strings.Join(cmd.Argv, " ") != "git diff x" {
+		t.Fatalf("argv = %q", cmd.Argv)
+	}
+	want := filepath.Join("a", "b")
+	if len(cmd.Cwds) != 1 || filepath.Clean(cmd.Cwds[0]) != want || filepath.Clean(cmd.Cwd) != want {
+		t.Fatalf("cwds = %q (cwd %q), want %q", cmd.Cwds, cmd.Cwd, want)
+	}
+}
+
+func TestReplayClassifiesControlFileAsks(t *testing.T) {
+	root := controlWorkspace(t)
+	records, errs := ReadReplayFile(strings.NewReader("sed -i s/a/b/ .claude/settings.json\ncat .claude/settings.json\n"), "control")
+	if len(errs) != 0 || len(records) != 2 {
+		t.Fatalf("records %d, errors %v", len(records), errs)
+	}
+	report, err := Replay(controlEngine(t), records, testOptions(t, root), ReplayOptions{})
+	if err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	if report.AskClasses[AskHookControl] != 1 || report.Permissions[PermissionAllow] != 1 {
+		t.Fatalf("ask classes %v, permissions %v", report.AskClasses, report.Permissions)
 	}
 }
