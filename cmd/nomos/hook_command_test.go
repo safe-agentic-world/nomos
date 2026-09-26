@@ -300,38 +300,84 @@ func TestCodexHookDecidesBothEventsAndInstalls(t *testing.T) {
 	pre := func(command, mode string) string {
 		return `{"session_id":"s","turn_id":"t","cwd":"` + dir + `","hook_event_name":"PreToolUse","model":"gpt","permission_mode":"` + mode + `","tool_name":"Bash","tool_input":{"command":"` + command + `"},"tool_use_id":"call_1"}`
 	}
-	code, out, errOut := run([]string{"-p", bundle, "--workspace", dir, "--audit", "none"}, pre("rm -rf ~/", "default"))
+	base := []string{"-p", bundle, "--workspace", dir, "--audit", "none"}
+	code, out, errOut := run(base, pre("rm -rf ~/", "default"))
 	if code != 0 || !strings.Contains(out, `"permissionDecision":"deny"`) || !strings.Contains(out, "deny-home-wipe") {
 		t.Fatalf("deny: code=%d out=%q err=%q", code, out, errOut)
 	}
-	code, out, _ = run([]string{"-p", bundle, "--workspace", dir, "--audit", "none"}, pre("git push origin main", "default"))
-	if code != 0 || strings.TrimSpace(out) != "" {
-		t.Fatalf("ask in default mode must stay silent for PreToolUse: code=%d out=%q", code, out)
+	// PreToolUse cannot ask: an ask is a deny in both modes unless --ask passthrough.
+	code, out, _ = run(base, pre("git push origin main", "default"))
+	if code != 0 || !strings.Contains(out, `"permissionDecision":"deny"`) || !strings.Contains(out, "cannot request") {
+		t.Fatalf("ask in default mode must deny: code=%d out=%q", code, out)
 	}
-	code, out, _ = run([]string{"-p", bundle, "--workspace", dir, "--audit", "none"}, pre("git push origin main", "bypassPermissions"))
-	if code != 0 || !strings.Contains(out, `"permissionDecision":"deny"`) || !strings.Contains(out, "bypassPermissions") {
+	code, out, _ = run(base, pre("git push origin main", "bypassPermissions"))
+	if code != 0 || !strings.Contains(out, `"permissionDecision":"deny"`) || !strings.Contains(out, "approvals are disabled") {
 		t.Fatalf("ask in bypass mode must deny: code=%d out=%q", code, out)
 	}
-	code, out, _ = run([]string{"-p", bundle, "--workspace", dir, "--audit", "none", "--ask-in-bypass", "passthrough"}, pre("git push origin main", "bypassPermissions"))
-	if code != 0 || strings.TrimSpace(out) != "" {
-		t.Fatalf("ask-in-bypass passthrough must stay silent: code=%d out=%q", code, out)
+	for _, mode := range []string{"default", "bypassPermissions"} {
+		code, out, _ = run(append(append([]string{}, base...), "--ask", "passthrough"), pre("git push origin main", mode))
+		if code != 0 || strings.TrimSpace(out) != "" {
+			t.Fatalf("--ask passthrough must stay silent in %s mode: code=%d out=%q", mode, code, out)
+		}
 	}
-	code, out, _ = run([]string{"-p", bundle, "--workspace", dir, "--audit", "none"}, pre("git status", "default"))
+	code, out, _ = run(base, pre("git status", "default"))
 	if code != 0 || strings.TrimSpace(out) != "" {
 		t.Fatalf("allow must produce no PreToolUse output: code=%d out=%q", code, out)
 	}
-	perm := `{"session_id":"s","cwd":"` + dir + `","hook_event_name":"PermissionRequest","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"git status"}}`
-	code, out, _ = run([]string{"-p", bundle, "--workspace", dir, "--audit", "none"}, perm)
+	// PermissionRequest: deny answers, allow is silent unless opted in and never for escalations.
+	perm := func(input, mode string) string {
+		return `{"session_id":"s","turn_id":"t","cwd":"` + dir + `","hook_event_name":"PermissionRequest","permission_mode":"` + mode + `","tool_name":"Bash","tool_input":` + input + `}`
+	}
+	code, out, _ = run(base, perm(`{"command":"rm -rf ~/"}`, "default"))
+	if code != 0 || !strings.Contains(out, `"behavior":"deny"`) {
+		t.Fatalf("permission request deny: code=%d out=%q", code, out)
+	}
+	code, out, _ = run(base, perm(`{"command":"git status"}`, "default"))
+	if code != 0 || strings.TrimSpace(out) != "" {
+		t.Fatalf("permission request allow must be silent by default: code=%d out=%q", code, out)
+	}
+	withAllow := append(append([]string{}, base...), "--permission-request-allow")
+	code, out, _ = run(withAllow, perm(`{"command":"git status"}`, "default"))
 	if code != 0 || !strings.Contains(out, `"behavior":"allow"`) {
-		t.Fatalf("permission request allow: code=%d out=%q", code, out)
+		t.Fatalf("opted-in permission request allow: code=%d out=%q", code, out)
+	}
+	code, out, _ = run(withAllow, perm(`{"command":"git status","description":"network-access github.com"}`, "default"))
+	if code != 0 || strings.TrimSpace(out) != "" {
+		t.Fatalf("an escalation must never be allowed: code=%d out=%q", code, out)
+	}
+	code, out, _ = run(withAllow, perm(`{"command":"git status"}`, "bypassPermissions"))
+	if code != 0 || strings.TrimSpace(out) != "" {
+		t.Fatalf("no allow with approvals disabled: code=%d out=%q", code, out)
 	}
 	patch := `{"session_id":"s","cwd":"` + dir + `","hook_event_name":"PreToolUse","permission_mode":"default","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Add File: ../escape.txt\n+x\n*** End Patch"},"tool_use_id":"call_2"}`
-	code, out, _ = run([]string{"-p", bundle, "--workspace", dir, "--audit", "none", "--outside-workspace", "deny"}, patch)
+	code, out, _ = run(append(append([]string{}, base...), "--outside-workspace", "deny"), patch)
 	if code != 0 || !strings.Contains(out, `"permissionDecision":"deny"`) || !strings.Contains(out, "outside the workspace") {
 		t.Fatalf("escaping patch with outside-workspace deny: code=%d out=%q", code, out)
 	}
-	// Audit is written and verifiable.
-	code, _, errOut = run([]string{"-p", bundle, "--workspace", dir}, pre("rm -rf ~/", "default"))
+	// A lifecycle event that carries no tool call is ignored: nothing printed, nothing audited.
+	other := `{"session_id":"s","cwd":"` + dir + `","hook_event_name":"PostToolUse","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"rm -rf ~/"},"tool_response":{}}`
+	code, out, errOut = run([]string{"-p", bundle, "--workspace", dir}, other)
+	if code != 0 || strings.TrimSpace(out) != "" || strings.TrimSpace(errOut) != "" {
+		t.Fatalf("non-decision event must be ignored: code=%d out=%q err=%q", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".nomos", "codex-hook.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("non-decision event must not be audited: %v", err)
+	}
+	// CLAUDE_PROJECT_DIR never moves the Codex workspace root.
+	outside := t.TempDir()
+	env := func(key string) string {
+		if key == "CLAUDE_PROJECT_DIR" {
+			return outside
+		}
+		return ""
+	}
+	var stdout, stderr bytes.Buffer
+	code = runCodexHook([]string{"-p", bundle, "--audit", "none"}, strings.NewReader(pre("cat "+filepath.ToSlash(filepath.Join(outside, "target.txt")), "default")), &stdout, &stderr, env)
+	if code != 0 || !strings.Contains(stdout.String(), "outside the workspace") {
+		t.Fatalf("CLAUDE_PROJECT_DIR must be ignored: code=%d out=%q err=%q", code, stdout.String(), stderr.String())
+	}
+	// Audit is written with the wire decision and is verifiable.
+	code, _, errOut = run([]string{"-p", bundle, "--workspace", dir}, pre("git push origin main", "bypassPermissions"))
 	if code != 0 {
 		t.Fatalf("audited deny: %d %s", code, errOut)
 	}
@@ -339,13 +385,21 @@ func TestCodexHookDecidesBothEventsAndInstalls(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "verified") {
 		t.Fatalf("verify audit: code=%d out=%q err=%q", code, out, errOut)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".nomos", "codex-hook.jsonl")); err != nil {
+	audited, err := os.ReadFile(filepath.Join(dir, ".nomos", "codex-hook.jsonl"))
+	if err != nil {
 		t.Fatalf("audit file: %v", err)
 	}
-	// Simulate explains the effect; install writes hooks.json.
-	code, out, errOut = run([]string{"-p", bundle, "--workspace", dir, "--audit", "none", "--simulate", "--command", "rm -rf ~/"}, "")
+	if !strings.Contains(string(audited), `"hook_permission":"ask"`) || !strings.Contains(string(audited), `"wire_decision":"deny"`) || !strings.Contains(string(audited), `"ask_mode":"deny"`) || !strings.Contains(string(audited), `"turn_id":"t"`) {
+		t.Fatalf("audit must record the wire decision: %s", audited)
+	}
+	// Simulate explains the effect; install writes hooks.json with an anchored matcher and quoted arguments.
+	code, out, errOut = run(append(append([]string{}, base...), "--simulate", "--command", "rm -rf ~/"), "")
 	if code != 0 || !strings.Contains(errOut, "decision: deny") || !strings.Contains(errOut, "Codex receives") {
 		t.Fatalf("simulate: code=%d out=%q err=%q", code, out, errOut)
+	}
+	code, out, errOut = run(append(append([]string{}, base...), "--simulate", "--ask", "passthrough", "--command", "git push origin main"), "")
+	if code != 0 || !strings.Contains(errOut, "decision: ask") || !strings.Contains(errOut, "sandboxed without a prompt") {
+		t.Fatalf("simulate passthrough ask must explain the silent run: code=%d out=%q err=%q", code, out, errOut)
 	}
 	code, out, errOut = run([]string{"--install", "--workspace", dir, "--profile", "safe-dev", "--mcp"}, "")
 	if code != 0 || !strings.Contains(out, "registered") {
@@ -355,13 +409,77 @@ func TestCodexHookDecidesBothEventsAndInstalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hooks.json: %v", err)
 	}
-	if !strings.Contains(string(data), "nomos hook codex --profile safe-dev") || !strings.Contains(string(data), "PermissionRequest") || !strings.Contains(string(data), "mcp__.*") {
+	if !strings.Contains(string(data), "nomos hook codex --profile safe-dev") || !strings.Contains(string(data), "PermissionRequest") || !strings.Contains(string(data), `^(Bash|apply_patch|Write|Edit|mcp__.*)$`) {
 		t.Fatalf("hooks.json content: %s", data)
 	}
-	if code, _, _ := run([]string{"-p", bundle, "--ask-in-bypass", "maybe", "--simulate", "--command", "ls"}, ""); code != hookExitError {
-		t.Fatalf("invalid ask-in-bypass must fail closed")
+	spaced := filepath.Join(dir, "ws with space", "policy.yaml")
+	code, out, errOut = run([]string{"--print-hooks", "-p", spaced, "--audit", "logs/it's.jsonl", "--ask", "passthrough"}, "")
+	if code != 0 || !strings.Contains(out, `nomos hook codex -p '`+spaced+`' --ask passthrough --audit 'logs/it'\\''s.jsonl'`) {
+		t.Fatalf("print-hooks must quote arguments for the shell: code=%d out=%q err=%q", code, out, errOut)
 	}
-	if code, _, _ := run([]string{"-p", bundle, "--workspace", dir, "--simulate", "--event", "PostToolUse", "--command", "ls"}, ""); code != hookExitError {
-		t.Fatalf("unsupported simulate event must fail closed")
+	// Invalid settings fail closed.
+	for _, args := range [][]string{
+		{"-p", bundle, "--ask", "maybe", "--simulate", "--command", "ls"},
+		{"-p", bundle, "--workspace", dir, "--simulate", "--event", "PostToolUse", "--command", "ls"},
+		{"-p", bundle, "--workspace", dir, "--simulate", "--permission-mode", "bypass", "--command", "ls"},
+		{"-p", bundle, "--workspace", dir, "--simulate", "--command", "ls", "--tool", "Bash", "--input", `{"command":"ls"}`},
+	} {
+		if code, _, _ := run(args, ""); code != hookExitError {
+			t.Fatalf("%v must fail closed", args)
+		}
+	}
+}
+
+func TestClaudeCodeHookRecordsCompletionsAndSuggestsRules(t *testing.T) {
+	dir := t.TempDir()
+	bundle := writeHookBundle(t, dir)
+	pre := func(id, command string) string {
+		return `{"session_id":"s","cwd":"` + filepath.ToSlash(dir) + `","hook_event_name":"PreToolUse","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"` + command + `"},"tool_use_id":"` + id + `"}`
+	}
+	post := func(id, command string) string {
+		return `{"session_id":"s","cwd":"` + filepath.ToSlash(dir) + `","hook_event_name":"PostToolUse","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"` + command + `"},"tool_response":{"stdout":"ok"},"tool_use_id":"` + id + `"}`
+	}
+	var stdout, stderr bytes.Buffer
+	for _, step := range []string{pre("t1", "make test"), post("t1", "make test"), pre("t2", "make test"), post("t2", "make test"), pre("t3", "ls -la")} {
+		stdout.Reset()
+		stderr.Reset()
+		if code := runClaudeCodeHook([]string{"-p", bundle, "--workspace", dir}, strings.NewReader(step), &stdout, &stderr, noEnv); code != 0 {
+			t.Fatalf("step %s: exit %d stderr=%s", step, code, stderr.String())
+		}
+		if strings.Contains(step, "PostToolUse") && strings.TrimSpace(stdout.String()) != "" {
+			t.Fatalf("PostToolUse must print nothing, got %q", stdout.String())
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".nomos", "claude-code-hook.jsonl"))
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	if strings.Count(string(data), `"hook.completed"`) != 2 {
+		t.Fatalf("expected two completion records:\n%s", data)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runClaudeCodeHook([]string{"--suggest", "--workspace", dir}, strings.NewReader(""), &stdout, &stderr, noEnv); code != 0 {
+		t.Fatalf("suggest: exit %d stderr=%s", code, stderr.String())
+	}
+	for _, want := range []string{"allow-make-test", `["make", "test", "**"]`, "2 were approved and ran, 1 were not run"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("suggest output missing %q:\n%s", want, stdout.String())
+		}
+	}
+	stdout.Reset()
+	if code := runClaudeCodeHook([]string{"--suggest", "--workspace", dir, "--format", "json"}, strings.NewReader(""), &stdout, &stderr, noEnv); code != 0 || !strings.Contains(stdout.String(), `"asked_and_ran": 2`) {
+		t.Fatalf("json suggest: code=%d out=%s", code, stdout.String())
+	}
+	if code := runClaudeCodeHook([]string{"--suggest", "--workspace", dir, "--audit", "none"}, strings.NewReader(""), &stdout, &stderr, noEnv); code != hookExitError {
+		t.Fatalf("suggest without an audit file must fail closed")
+	}
+	stdout.Reset()
+	if code := runClaudeCodeHook([]string{"--print-settings", "--profile", "safe-dev"}, strings.NewReader(""), &stdout, &stderr, noEnv); code != 0 || !strings.Contains(stdout.String(), "PostToolUse") {
+		t.Fatalf("print-settings must register PostToolUse by default: %s", stdout.String())
+	}
+	stdout.Reset()
+	if code := runClaudeCodeHook([]string{"--print-settings", "--profile", "safe-dev", "--post-tool-use=false"}, strings.NewReader(""), &stdout, &stderr, noEnv); code != 0 || strings.Contains(stdout.String(), "PostToolUse") {
+		t.Fatalf("--post-tool-use=false must omit PostToolUse: %s", stdout.String())
 	}
 }

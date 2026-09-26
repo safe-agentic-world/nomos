@@ -312,7 +312,7 @@ Read the [suite format and CI guide](docs/permission-tests.md).
 | --- | --- |
 | CLI | Offline permission regression tests with text/JSON reports |
 | Claude Code hook | Policy decisions for native shell, file, and fetch tools; `deny` holds in every permission mode; hash-linked local audit |
-| Codex hook | The same decisions for Codex's `Bash` and `apply_patch` calls through its `PreToolUse` and `PermissionRequest` hooks; contract verified from source, live run pending |
+| Codex hook | The same decisions for Codex's `Bash` and `apply_patch` calls through its `PreToolUse` and `PermissionRequest` hooks; fails closed where Codex cannot ask; contract verified and reviewed from source, live run pending |
 | Python SDK | Custom-tool authorization and automatic outcome reporting |
 | LangGraph adapter | Checkpointed review pauses and authorization checks on resume |
 | Local inbox example | Account-free allow, deny, approval, and SQLite delivery |

@@ -36,6 +36,9 @@ func TestParseReplayLineAcceptsFourShapes(t *testing.T) {
 	if _, err := ParseReplayLine(`{"unexpected":true}`, "bad:1"); err == nil {
 		t.Fatalf("unrecognized object must error")
 	}
+	if recs, err := ParseReplayLine(`{"type":"summary","summary":"x"}`, "transcript:3"); err != nil || len(recs) != 0 {
+		t.Fatalf("transcript bookkeeping must be skipped silently: %+v err=%v", recs, err)
+	}
 	if _, err := ParseReplayLine(`{"tool_name":""}`, "bad:2"); err == nil {
 		t.Fatalf("empty tool name must error")
 	}

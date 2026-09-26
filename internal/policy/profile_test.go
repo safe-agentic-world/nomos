@@ -82,6 +82,18 @@ func TestDefaultPolicyProfileDecisions(t *testing.T) {
 		{name: "prod locked approves breakglass rollout", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("kubectl", "rollout", "restart", "deployment/api"), want: DecisionRequireApproval},
 		{name: "prod locked denies kubectl delete", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("kubectl", "delete", "pod", "api"), want: DecisionDeny},
 		{name: "prod locked denies unknown egress by default", profile: "prod-locked", actionType: "net.http_request", resource: "url://github.com/api", params: httpParamsForTest("GET", nil), want: DecisionDeny},
+		{name: "safe dev asks before inline python", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "-c", "import os; os.system('cat config/.env')"), want: DecisionRequireApproval},
+		{name: "safe dev asks before inline python after options", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3.12", "-W", "ignore", "-c", "print(1)"), want: DecisionRequireApproval},
+		{name: "safe dev asks before inline node", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("node", "--input-type=module", "-e", "console.log(1)"), want: DecisionRequireApproval},
+		{name: "safe dev asks before a bare shell", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("bash"), want: DecisionRequireApproval},
+		{name: "safe dev asks before a python repl", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3"), want: DecisionRequireApproval},
+		{name: "safe dev allows a python script", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "scripts/build.py", "--fast"), want: DecisionAllow},
+		{name: "safe dev allows a node server with a port flag", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("node", "server.js", "-p", "8080"), want: DecisionAllow},
+		{name: "safe dev allows pytest with a config flag", profile: "safe-dev", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python", "-m", "pytest", "-c", "pytest.ini"), want: DecisionAllow},
+		{name: "ci strict denies inline python", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("python3", "-c", "print(1)"), want: DecisionDeny},
+		{name: "ci strict denies a bare shell", profile: "ci-strict", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("sh"), want: DecisionDeny},
+		{name: "prod locked denies inline node", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("node", "-e", "process.exit()"), want: DecisionDeny},
+		{name: "prod locked denies inline ruby", profile: "prod-locked", actionType: "process.exec", resource: "file://workspace/", params: execParamsForTest("ruby", "-e", "puts 1"), want: DecisionDeny},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

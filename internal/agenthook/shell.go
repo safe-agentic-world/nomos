@@ -254,6 +254,9 @@ var parameterExpansion = regexp.MustCompile(`^\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Z
 // printOnlyPrograms may receive parameter expansions in their arguments:
 // they only print or test their arguments and never run, open, or write
 // anything on their own (a redirection is decided separately).
+// shellKeywords start compound commands the parser does not model.
+var shellKeywords = map[string]bool{"for": true, "while": true, "until": true, "if": true, "then": true, "else": true, "elif": true, "fi": true, "do": true, "done": true, "case": true, "esac": true, "function": true, "select": true, "in": true, "!": true}
+
 var printOnlyPrograms = map[string]bool{"echo": true, "printf": true, "printenv": true, "test": true, "[": true, "true": true, "false": true}
 
 func isShellBlank(r rune) bool {
@@ -573,6 +576,9 @@ func normalizeCommand(words []token, depth int, cwds []string) normalizedCommand
 	}
 	if words[0].expands {
 		return unsupported("variable expansion in the command name", snippet)
+	}
+	if !words[0].quoted && shellKeywords[argv[0]] {
+		return unsupported("shell control flow ("+argv[0]+")", snippet)
 	}
 	// Unwrap transparent wrappers.
 	for guard := 0; guard < 8 && len(argv) > 0; guard++ {

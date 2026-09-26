@@ -131,6 +131,8 @@ func TestSplitShellCommandRefusesUnsafeSyntaxFailClosed(t *testing.T) {
 		{"trap", "trap 'rm -rf x' EXIT", "shell builtin"},
 		{"export", "export PATH=/tmp:$PATH", "variable expansion"},
 		{"export literal", "export FOO=bar", "shell builtin"},
+		{"for loop", "for f in *.go; do gofmt -l $f; done", "shell control flow"},
+		{"if statement", "if test -f x; then cat x; fi", "shell control flow"},
 		{"source", "source ./env.sh", "executes commands"},
 		{"dot source", ". ./env.sh", "executes commands"},
 		{"unterminated quote", "echo 'oops", "unterminated single quote"},

@@ -11,11 +11,19 @@ The format is based on Keep a Changelog and semantic versioning.
 - `nomos hook codex`: a Codex `PreToolUse` and `PermissionRequest` hook
   that decides `Bash` commands and `apply_patch` files with the same
   parser, profiles, and audit as the Claude Code hook. A deny is returned
-  where Codex can act on it; an ask leaves Codex's own prompt in place and
-  becomes a deny when approvals are disabled. `--install` writes
-  `.codex/hooks.json` with only the keys Codex accepts. The contract was
-  verified from the Codex source at a pinned commit; a live end-to-end run
-  is still pending. See `docs/codex-hook.md`.
+  where Codex acts on it. Codex's `PreToolUse` cannot ask and its usual
+  on-request mode runs an unblocked command sandboxed without a prompt, so
+  an ask is a deny by default (`--ask passthrough` to leave it to Codex).
+  An allow prints nothing unless `--permission-request-allow` is set, and
+  even then never for a sandbox or network escalation and never with
+  approvals disabled, where Codex's own reviewer may be asking. Patch
+  headers are matched the way Codex's parser matches them, a patch is
+  decided as a whole, the audit records what Codex received
+  (`wire_decision`) next to the computed permission, and `--install`
+  writes `.codex/hooks.json` with only the keys Codex accepts and refuses
+  a file Codex would drop. The contract was verified from the Codex
+  source at a pinned commit and reviewed adversarially against it; a live
+  end-to-end run is still pending. See `docs/codex-hook.md`.
 - `nomos hook claude-code --replay <file>` and `--replay-transcripts`: replay
   recorded tool calls (a corpus JSONL, hook input JSON, Claude Code
   transcript lines, or plain commands) through a profile or bundle and
@@ -48,6 +56,18 @@ The format is based on Keep a Changelog and semantic versioning.
   corpus, `safe-dev` allows went from 157 to 578 of 1,526 commands and
   denies from 13 to 2, with every incident case still denied or reviewed.
 - A bare `env` is treated as the read-only command it is, not as a wrapper.
+- Default profiles: inline interpreter code (`python -c`, `node -e`,
+  `ruby -e`, `perl -e`, `php -r`, `deno eval`) and bare interpreters or
+  shells (`python`, `node`, `bash`, `sh`, ...) now ask for confirmation in
+  `safe-dev` and are denied in `ci-strict` and `prod-locked`, because the
+  policy cannot see what they run and Codex can feed a running interpreter
+  without a hook event. On the corpus this moves 6 `safe-dev` allows to
+  asks (675 to 669) and adds 7 denies to `ci-strict` (38 to 45) and
+  `prod-locked` (92 to 99), among them `curl ... | sh`.
+- Hook installers (`--install`, `--print-settings`, `--print-hooks`) quote
+  the generated command's arguments for the shell the harness runs hooks
+  through, so a bundle or audit path with a space works, and the Codex
+  `--mcp` matcher is anchored so `Edit` cannot match an unrelated tool.
 - The shell parser now maps file redirections (`> out.txt`, `>> log`,
   `2> err`, `&> all`, `< input`) to `fs.write` and `fs.read` actions the
   policy decides, instead of refusing them, and accepts simple parameter

@@ -13,7 +13,7 @@ func TestInstallHookCreatesMergesAndIsIdempotent(t *testing.T) {
 	path := filepath.Join(dir, ".claude", "settings.json")
 	cmd := "nomos hook claude-code --profile safe-dev"
 
-	changed, err := InstallHook(path, cmd, "", 0)
+	changed, err := InstallHook(path, cmd, "", 0, true)
 	if err != nil || !changed {
 		t.Fatalf("first install: changed=%v err=%v", changed, err)
 	}
@@ -38,7 +38,7 @@ func TestInstallHookCreatesMergesAndIsIdempotent(t *testing.T) {
 		t.Fatalf("inner hook: %v", inner)
 	}
 
-	changed, err = InstallHook(path, cmd, "", 0)
+	changed, err = InstallHook(path, cmd, "", 0, true)
 	if err != nil || changed {
 		t.Fatalf("second install must be a no-op: changed=%v err=%v", changed, err)
 	}
@@ -60,7 +60,7 @@ func TestInstallHookPreservesExistingSettings(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	changed, err := InstallHook(path, "nomos hook claude-code -p policy.yaml", "Bash", 5)
+	changed, err := InstallHook(path, "nomos hook claude-code -p policy.yaml", "Bash", 5, false)
 	if err != nil || !changed {
 		t.Fatalf("install: changed=%v err=%v", changed, err)
 	}
@@ -83,14 +83,14 @@ func TestInstallHookPreservesExistingSettings(t *testing.T) {
 
 func TestInstallHookRejectsForeignCommandsAndBadShapes(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := InstallHook(filepath.Join(dir, "s.json"), "rm -rf /", "", 0); err == nil {
+	if _, err := InstallHook(filepath.Join(dir, "s.json"), "rm -rf /", "", 0, true); err == nil {
 		t.Fatal("expected rejection of a command that is not the nomos hook")
 	}
 	bad := filepath.Join(dir, "bad.json")
 	if err := os.WriteFile(bad, []byte(`{"hooks": []}`), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	if _, err := InstallHook(bad, "nomos hook claude-code", "", 0); err == nil {
+	if _, err := InstallHook(bad, "nomos hook claude-code", "", 0, true); err == nil {
 		t.Fatal("expected error when hooks is not an object")
 	}
 }

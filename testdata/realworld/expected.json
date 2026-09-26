@@ -3,18 +3,21 @@
     "records": 1526,
     "permissions": {
       "allow": 96,
-      "ask": 1385,
-      "deny": 38,
+      "ask": 1378,
+      "deny": 45,
       "passthrough": 7
     },
     "ask_classes": {
-      "no_matching_rule": 815,
+      "no_matching_rule": 801,
       "outside_workspace": 54,
-      "unsupported_shell": 516
+      "unsupported_shell": 523
     },
     "denies": [
       "cat /sysroot/.env",
       "curl https://apt.llvm.org/llvm-snapshot.gpg.key",
+      "curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh",
+      "deno eval \"console.log('global npm install works')\"",
+      "deno eval \"console.log('global pnpm install works')\"",
       "git checkout .",
       "git clean -d -x -e node_modules -e packages -f",
       "git clean -xdf \u0026\u0026 rm -rf /tmp/next-repo-*; rm -rf /tmp/next-install-* /tmp/yarn-* /tmp/ncc-cache target",
@@ -24,6 +27,8 @@
       "npm install",
       "npm install --global pnpm",
       "npm install -g pnpm",
+      "python -c \"from django.contrib.gis import gdal, geos; print(f'GDAL: {gdal.gdal_version()}'); print(f'GEOS: {geos.geos_version()}')\"",
+      "python -c \"import sys; print('GIL enabled:', sys._is_gil_enabled())\"",
       "python -m pip install \"pytest\u003e=8.3.4\" pytest-cov",
       "python -m pip install 'coverage[toml]' diff-cover",
       "python -m pip install --no-cache-dir --no-build-isolation -e . -Csetup-args=\"--werror\"",
@@ -50,21 +55,23 @@
       "python -m pip install numpy -Csetup-args=\"-Dallow-noblas=true\"",
       "python -m pip install pyodide-build",
       "python -m pip install versioneer[toml] python-dateutil tzdata cython \"pytest\u003e=8.3.4\" pytest-xdist\u003e=3.6.1 pytest-cov",
-      "python -m pip install wheel"
+      "python -m pip install wheel",
+      "target/debug/deno eval \"console.log(1+2)\" | grep 3",
+      "target/release/deno eval \"console.log(1+2)\" | grep 3"
     ]
   },
   "prod-locked": {
     "records": 1526,
     "permissions": {
       "allow": 14,
-      "ask": 1413,
-      "deny": 92,
+      "ask": 1406,
+      "deny": 99,
       "passthrough": 7
     },
     "ask_classes": {
-      "no_matching_rule": 844,
+      "no_matching_rule": 830,
       "outside_workspace": 53,
-      "unsupported_shell": 516
+      "unsupported_shell": 523
     },
     "denies": [
       "./deno types \u003e lib.deno.d.ts",
@@ -76,6 +83,9 @@
       "cd web/ui/mantine-ui/src/promql/tools \u0026\u0026 go run ./gen_functions_docs ./docs/querying/functions.md \u003e ../functionDocs.tsx",
       "cd web/ui/mantine-ui/src/promql/tools \u0026\u0026 go run ./gen_functions_list \u003e ../functionSignatures.ts",
       "curl https://apt.llvm.org/llvm-snapshot.gpg.key",
+      "curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh",
+      "deno eval \"console.log('global npm install works')\"",
+      "deno eval \"console.log('global pnpm install works')\"",
       "diff-cover tests/coverage.xml --compare-branch=origin/main --fail-under=0 \u003e diff-cover-report.md",
       "echo \"No coverage data available.\" \u003e diff-cover-report.md",
       "echo '[patch.crates-io]' \u003e\u003eCargo.toml",
@@ -106,6 +116,8 @@
       "npm install -g pnpm",
       "pixi update --json | pixi exec pixi-diff-to-markdown \u003e\u003e diff.md",
       "printf 'allowBuilds:\\n  deno: true\\n' \u003e pnpm-workspace.yaml",
+      "python -c \"from django.contrib.gis import gdal, geos; print(f'GDAL: {gdal.gdal_version()}'); print(f'GEOS: {geos.geos_version()}')\"",
+      "python -c \"import sys; print('GIL enabled:', sys._is_gil_enabled())\"",
       "python -m pip install \"pytest\u003e=8.3.4\" pytest-cov",
       "python -m pip install 'coverage[toml]' diff-cover",
       "python -m pip install --no-cache-dir --no-build-isolation -e . -Csetup-args=\"--werror\"",
@@ -158,22 +170,24 @@
       "shasum -a 256 libdenort-quickjs-x86_64-unknown-linux-gnu.zip \u003e libdenort-quickjs-x86_64-unknown-linux-gnu.zip.sha256sum",
       "shasum -a 256 libdenort-x86_64-apple-darwin.zip \u003e libdenort-x86_64-apple-darwin.zip.sha256sum",
       "shasum -a 256 libdenort-x86_64-unknown-linux-gnu.zip \u003e libdenort-x86_64-unknown-linux-gnu.zip.sha256sum",
+      "target/debug/deno eval \"console.log(1+2)\" | grep 3",
+      "target/release/deno eval \"console.log(1+2)\" | grep 3",
       "uv run python scripts/prepare_release.py release-notes \u003e draft-release-notes.md"
     ]
   },
   "safe-dev": {
     "records": 1526,
     "permissions": {
-      "allow": 675,
-      "ask": 842,
+      "allow": 669,
+      "ask": 848,
       "deny": 2,
       "passthrough": 7
     },
     "ask_classes": {
-      "approval_required": 18,
-      "no_matching_rule": 253,
+      "approval_required": 25,
+      "no_matching_rule": 245,
       "outside_workspace": 55,
-      "unsupported_shell": 516
+      "unsupported_shell": 523
     },
     "denies": [
       "cat /sysroot/.env",

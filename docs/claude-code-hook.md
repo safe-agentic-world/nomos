@@ -249,7 +249,11 @@ installed, in default and bypass permission modes.
   code by construction (`python3 -c`, a Makefile recipe, an npm script);
   the argv the policy sees is exactly what runs, but what runs is a
   program. Allow interpreters only for workspaces you trust, and prefer
-  patterns that name the script or subcommand.
+  patterns that name the script or subcommand. The default profiles ask
+  (`safe-dev`) or deny (`ci-strict`, `prod-locked`) before the common
+  inline forms (`python -c`, `node -e`, `ruby -e`, `perl -e`, `php -r`,
+  `deno eval`) and before a bare interpreter or shell; flag clusters and
+  glued forms (`-Bc`, `-c'code'`) are not recognized.
 - **Opaque wrappers stay opaque.** `timeout 5 cmd`, `docker run ...`,
   `busybox sh -c ...`, and similar are evaluated as `timeout`, `docker`,
   or `busybox` commands; the hook does not look inside them. With the
