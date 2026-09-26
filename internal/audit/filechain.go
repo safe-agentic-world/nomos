@@ -238,12 +238,17 @@ func acquireFileLock(lockPath string, timeout time.Duration) (func(), error) {
 		if !os.IsExist(err) {
 			return nil, fmt.Errorf("create audit lock: %w", err)
 		}
-		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) > fileChainLockStale {
-			_ = os.Remove(lockPath)
-			continue
-		}
+		// The deadline bounds every path through the loop, so the caller
+		// fails closed instead of spinning. Only a regular file left by a
+		// crashed writer is reclaimed; anything else at the lock path (a
+		// directory, a symlink) waits out the deadline like a live lock.
 		if time.Now().After(deadline) {
 			return nil, errors.New("audit file is locked by another process")
+		}
+		if info, statErr := os.Lstat(lockPath); statErr == nil && info.Mode().IsRegular() && time.Since(info.ModTime()) > fileChainLockStale {
+			if os.Remove(lockPath) == nil {
+				continue
+			}
 		}
 		time.Sleep(fileChainLockInterval)
 	}
