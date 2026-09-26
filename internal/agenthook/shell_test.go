@@ -304,3 +304,60 @@ func TestSplitShellCommandMapsRedirectionsAndPrintOnlyExpansions(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitShellCommandRecordsRelativeProgramPaths(t *testing.T) {
+	cases := map[string]string{
+		"./scripts/test.sh --fast":   "scripts/test.sh",
+		"scripts/test.sh":            "scripts/test.sh",
+		"scripts/../tools/gen.py":    "tools/gen.py",
+		"../outside/evil.sh":         "../outside/evil.sh",
+		"scripts/../../outside/x.sh": "../outside/x.sh",
+		`'.\\scripts\\build.cmd'`:    "scripts/build.cmd",
+		"/usr/bin/git status":        "",
+		"git status":                 "",
+		"~/bin/tool":                 "",
+		"C:\\tools\\x.exe":           "",
+		"./rm -rf build":             "rm",
+		"cd scripts && ./test.sh":    "test.sh",
+	}
+	for cmd, want := range cases {
+		list := SplitShellCommand(cmd)
+		if len(list.Unsupported) > 0 {
+			t.Fatalf("%q: unexpected findings %+v", cmd, list.Unsupported)
+		}
+		if len(list.Commands) != 1 {
+			t.Fatalf("%q: commands %+v", cmd, list.Commands)
+		}
+		got := list.Commands[0].Program
+		if want == "rm" || want == "test.sh" {
+			// The program path is cleaned relative to the command's cwd
+			// spelling; the argv keeps the base name.
+			if list.Commands[0].Argv[0] != want {
+				t.Fatalf("%q: argv[0] = %q", cmd, list.Commands[0].Argv[0])
+			}
+			continue
+		}
+		if got != want {
+			t.Fatalf("%q: program = %q, want %q", cmd, got, want)
+		}
+	}
+	if list := SplitShellCommand("./rm -rf build"); list.Commands[0].Program != "rm" {
+		t.Fatalf("./rm program = %q", list.Commands[0].Program)
+	}
+	if list := SplitShellCommand("cd scripts && ./test.sh"); list.Commands[0].Program != "test.sh" || list.Commands[0].Cwd != "scripts" {
+		t.Fatalf("cd then script: %+v", list.Commands[0])
+	}
+}
+
+func TestSplitShellCommandRefusesQuotedAssignments(t *testing.T) {
+	for _, cmd := range []string{`DIST_DIR="tools/release/npm/dist"`, `FOO='bar' make test`, `X="1" ./scripts/run.sh`, `A=b`} {
+		list := SplitShellCommand(cmd)
+		if len(list.Unsupported) != 1 || !strings.Contains(list.Unsupported[0].Reason, "assignment") {
+			t.Fatalf("%q must be refused as an assignment: %+v / %+v", cmd, list.Commands, list.Unsupported)
+		}
+	}
+	list := SplitShellCommand(`"FOO=bar" --help`)
+	if len(list.Unsupported) != 0 || len(list.Commands) != 1 || list.Commands[0].Argv[0] != "FOO=bar" {
+		t.Fatalf("a word that begins with a quote is a command name: %+v / %+v", list.Commands, list.Unsupported)
+	}
+}

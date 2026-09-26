@@ -89,7 +89,14 @@ git status && cat config/.env    deny   (secret-file argument)
 Normalization before evaluation:
 
 - `/bin/rm`, `/usr/bin/git`, or any path spelling of a command is reduced
-  to its base name; the spelling is kept in the audit record.
+  to its base name; the spelling is kept in the audit record. A program
+  started by a relative path with a directory component
+  (`./scripts/test.sh`, `tools/gen.py`) is also checked against the
+  workspace boundary like an argument and passed to the policy as
+  `program`, which is how `safe-dev` allows the project's own scripts
+  (`exec_match.program_patterns`); the same script outside the workspace
+  asks, and a script started by an absolute path or a bare name has no
+  program path and therefore no such rule.
 - `bash -c "..."`, `sh -lc '...'`, `pwsh -Command "..."`, and `cmd /c ...`
   are unwrapped and the inner command list is parsed the same way.
 - `env`, `command`, `exec`, `nohup`, `time`, and `nice` prefixes are

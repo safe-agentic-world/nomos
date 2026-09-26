@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -745,5 +746,72 @@ func TestPolicyExecMatchLiteralTokensWithoutWildcardsStayExact(t *testing.T) {
 	}
 	if matchArgvToken("?.pem", "ab.pem") {
 		t.Fatal("? must match exactly one character")
+	}
+}
+
+func TestExecMatchProgramPatternsNarrowRulesToWorkspaceScripts(t *testing.T) {
+	bundle := Bundle{
+		Version: "v1",
+		Hash:    "bundle-hash",
+		Rules: []Rule{
+			{
+				ID:         "allow-workspace-scripts",
+				ActionType: "process.exec",
+				Resource:   "file://workspace/",
+				Decision:   DecisionAllow,
+				ExecMatch: &ExecMatch{
+					ArgvPatterns:    [][]string{{"**"}},
+					ProgramPatterns: []string{"scripts/*", "tools/*.py"},
+				},
+			},
+			{
+				ID:         "deny-rm",
+				ActionType: "process.exec",
+				Resource:   "file://workspace/",
+				Decision:   DecisionDeny,
+				ExecMatch:  &ExecMatch{ArgvPatterns: [][]string{{"rm", "**"}}},
+			},
+		},
+	}
+	engine := NewEngine(bundle)
+	eval := func(params string) Decision {
+		return engine.Evaluate(normalize.NormalizedAction{
+			ActionType:  "process.exec",
+			Resource:    "file://workspace/",
+			Principal:   "system",
+			Agent:       "nomos",
+			Environment: "dev",
+			Params:      []byte(params),
+		})
+	}
+	cases := map[string]string{
+		`{"argv":["test.sh","--fast"],"cwd":"","program":"scripts/test.sh"}`: DecisionAllow,
+		`{"argv":["gen.py"],"cwd":"","program":"tools/gen.py"}`:              DecisionAllow,
+		`{"argv":["gen.py"],"cwd":"","program":"tools/nested/gen.py"}`:       DecisionAllow,
+		`{"argv":["gen.py"],"cwd":"","program":"tools/gen.rb"}`:              DecisionDeny,
+		`{"argv":["test.sh","--fast"],"cwd":""}`:                             DecisionDeny,
+		`{"argv":["test.sh"],"cwd":"","program":"other/test.sh"}`:            DecisionDeny,
+		`{"argv":["rm","-rf","x"],"cwd":"","program":"scripts/rm"}`:          DecisionDeny,
+	}
+	for params, want := range cases {
+		if got := eval(params); got.Decision != want {
+			t.Fatalf("%s: decision = %s (%s via %v), want %s", params, got.Decision, got.ReasonCode, got.MatchedRuleIDs, want)
+		}
+	}
+	// A program pattern that is empty or names an absolute or home path is
+	// rejected at load time.
+	for _, bad := range []string{"", " ", "/usr/bin/*", "~/bin/*"} {
+		doc := `{"version":"v1","rules":[{"id":"bad","action_type":"process.exec","resource":"file://workspace/","decision":"ALLOW","exec_match":{"argv_patterns":[["**"]],"program_patterns":[` + strconv.Quote(bad) + `]}}]}`
+		if _, err := LoadBundleBytes([]byte(doc), "bad.json"); err == nil {
+			t.Fatalf("program pattern %q must be rejected", bad)
+		}
+	}
+	// YAML carries the field.
+	yamlBundle, err := LoadBundleBytes([]byte("version: v1\nrules:\n  - id: scripts\n    action_type: process.exec\n    resource: file://workspace/\n    decision: ALLOW\n    exec_match:\n      argv_patterns:\n        - [\"**\"]\n      program_patterns:\n        - \"*\"\n"), "scripts.yaml")
+	if err != nil {
+		t.Fatalf("load yaml: %v", err)
+	}
+	if got := NewEngine(yamlBundle).Evaluate(normalize.NormalizedAction{ActionType: "process.exec", Resource: "file://workspace/", Principal: "system", Agent: "nomos", Environment: "dev", Params: []byte(`{"argv":["x.sh"],"cwd":"","program":"scripts/x.sh"}`)}); got.Decision != DecisionAllow {
+		t.Fatalf("yaml program pattern: %+v", got)
 	}
 }

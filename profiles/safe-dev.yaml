@@ -491,6 +491,8 @@ rules:
         - ["git", "init", "**"]
         - ["git", "submodule", "**"]
         - ["git", "cherry-pick", "**"]
+        - ["git", "config", "user.name", "*"]
+        - ["git", "config", "user.email", "*"]
     obligations:
       sandbox_mode: local
 
@@ -556,6 +558,32 @@ rules:
         - ["shellcheck", "**"]
         - ["yamllint", "**"]
         - ["markdownlint", "**"]
+        - ["tsx", "**"]
+        - ["ts-node", "**"]
+        - ["turbo", "**"]
+        - ["nx", "**"]
+        - ["pixi", "**"]
+        - ["hatch", "**"]
+        - ["nox", "**"]
+        - ["pre-commit", "**"]
+        - ["just", "**"]
+    obligations:
+      sandbox_mode: local
+
+  # The project's own scripts, started by a relative path (./scripts/test.sh, tools/gen.py). They are workspace
+  # content like `python build.py` or `make test` above. The hook resolves the path first: a script outside the
+  # workspace asks through the boundary check, and a script started by an absolute path or a bare name never
+  # carries a program path, so this rule does not apply to it. Deny and approval rules on the program's name
+  # (rm, python -c, ...) still win.
+  - id: safe-dev-allow-workspace-scripts
+    action_type: process.exec
+    resource: file://workspace/
+    decision: ALLOW
+    exec_match:
+      argv_patterns:
+        - ["**"]
+      program_patterns:
+        - "*"
     obligations:
       sandbox_mode: local
 

@@ -8,9 +8,9 @@
       "passthrough": 7
     },
     "ask_classes": {
-      "no_matching_rule": 799,
+      "no_matching_rule": 769,
       "outside_workspace": 54,
-      "unsupported_shell": 523
+      "unsupported_shell": 553
     },
     "denies": [
       "cat /sysroot/.env",
@@ -71,9 +71,9 @@
       "passthrough": 7
     },
     "ask_classes": {
-      "no_matching_rule": 828,
+      "no_matching_rule": 798,
       "outside_workspace": 53,
-      "unsupported_shell": 523
+      "unsupported_shell": 553
     },
     "denies": [
       "./deno types \u003e lib.deno.d.ts",
@@ -182,16 +182,16 @@
   "safe-dev": {
     "records": 1526,
     "permissions": {
-      "allow": 669,
-      "ask": 848,
+      "allow": 777,
+      "ask": 740,
       "deny": 2,
       "passthrough": 7
     },
     "ask_classes": {
       "approval_required": 27,
-      "no_matching_rule": 243,
+      "no_matching_rule": 105,
       "outside_workspace": 55,
-      "unsupported_shell": 523
+      "unsupported_shell": 553
     },
     "denies": [
       "cat /sysroot/.env",

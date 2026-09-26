@@ -307,6 +307,19 @@ func mapShell(command string, in Input, opts Options) Mapping {
 			m.merge(mapRedirect(r, cmd, in, opts))
 		}
 		params := map[string]any{"argv": toAnySlice(cmd.Argv), "cwd": filepath.ToSlash(cmd.Cwd)}
+		if cmd.Program != "" {
+			// A program started by a relative path is a file in some
+			// directory: it is checked against the boundary like any other
+			// path argument, and passed to the policy so a rule can allow
+			// scripts that live inside the workspace.
+			for _, cwd := range cmd.Cwds {
+				if class, resolved := classifyPath(cmd.Program, cwd, in, opts); class == pathOutside {
+					m.Findings = append(m.Findings, Finding{Kind: FindingOutsideWorkspace, Detail: "program " + strconvQuote(cmd.Program) + " resolves to " + strconvQuote(resolved)})
+					break
+				}
+			}
+			params["program"] = cmd.Program
+		}
 		m.Actions = append(m.Actions, MappedAction{
 			ActionType: "process.exec",
 			Resource:   "file://workspace/",
