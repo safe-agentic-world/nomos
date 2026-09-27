@@ -282,13 +282,16 @@ installed, in default and bypass permission modes.
 - **Claude Code runs the hook, so its rules bound it.** Per the hooks
   reference, "A timed-out `command`, `http`, or `mcp_tool` hook doesn't
   block the tool call", and users can set `disableAllHooks`; organizations
-  can restrict which hooks run with managed settings. The hook guards its
-  own settings, policy, and audit log against the agent's tool calls
+  can restrict which hooks run with managed settings. So the hook never
+  relies on the timeout: if it has no decision by `--deadline` (8 seconds
+  by default, inside the 10-second timeout `--install` registers), it
+  blocks the call itself, and an audit path that is not a regular file
+  fails the write rather than stalling it. The hook guards its own
+  settings, policy, and audit log against the agent's tool calls
   ([above](#the-hook-protects-its-own-files)), not against a program that
-  writes them without naming them. The hook does no
-  network I/O and evaluates in milliseconds; keep the timeout short and
-  treat the hook as policy enforcement inside the harness, not as a
-  sandbox around it.
+  writes them without naming them. The hook does no network I/O and
+  evaluates in milliseconds; keep the timeout short and treat the hook as
+  policy enforcement inside the harness, not as a sandbox around it.
 - **Argv, not filesystem state.** Rules see normalized tokens. A file
   reached through an unusual spelling, a symlink created after the check,
   or a program that reads files by its own logic
@@ -346,6 +349,7 @@ installed, in default and bypass permission modes.
 | `--on-unsupported` | `ask` | `ask` or `deny` for shell syntax the parser refuses |
 | `--outside-workspace` | `ask` | `ask`, `deny`, or `passthrough` for paths outside the workspace |
 | `--audit` | `.nomos/claude-code-hook.jsonl` | audit file, or `none` |
+| `--deadline` | `8s` | block the call if no decision is ready by then; keep it below the harness timeout (`--install` adds it when `--timeout` is not 10) |
 | `--principal`, `--agent`, `--environment` | `developer`, `claude-code`, `local` | identity recorded on actions |
 | `--install`, `--settings`, `--matcher`, `--mcp`, `--timeout`, `--hook-command` | | register the hook in a settings file |
 | `--print-settings` | | print the settings block instead of writing it |

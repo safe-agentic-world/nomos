@@ -34,6 +34,7 @@ type codexHookFlags struct {
 	matcher           string
 	hookCommand       string
 	timeoutSeconds    int
+	deadline          time.Duration
 	includeMCP        bool
 	permissionRequest bool
 	printHooks        bool
@@ -77,6 +78,7 @@ func runCodexHook(args []string, stdin io.Reader, stdout, stderr io.Writer, gete
 	fs.StringVar(&f.matcher, "matcher", agenthook.CodexDefaultMatcher, "tool matcher for --install/--print-hooks")
 	fs.StringVar(&f.hookCommand, "hook-command", "", "command to register (default: nomos hook codex with the same policy flags)")
 	fs.IntVar(&f.timeoutSeconds, "timeout", agenthook.DefaultTimeoutSeconds, "hook timeout in seconds for --install/--print-hooks")
+	fs.DurationVar(&f.deadline, "deadline", defaultHookDeadline, "block the tool call if no decision is ready by then (keep it below the harness timeout; 0 disables)")
 	fs.BoolVar(&f.includeMCP, "mcp", false, "also match MCP tools (mcp__*) in --install/--print-hooks")
 	fs.BoolVar(&f.permissionRequest, "permission-request", true, "also register a PermissionRequest hook so denies hold in the approval path")
 	fs.BoolVar(&f.printHooks, "print-hooks", false, "print the hooks.json document and exit")
@@ -130,6 +132,9 @@ func runCodexHook(args []string, stdin io.Reader, stdout, stderr io.Writer, gete
 		return hookExitOK
 	}
 
+	// A live decision: loading the policy, parsing the call, and writing the
+	// audit all happen inside the deadline.
+	defer startHookWatchdog(f.deadline, stderr)()
 	engine, label, err := resolveHookEngine(f.bundlePath, f.profile)
 	if err != nil {
 		fmt.Fprintf(stderr, "hook: load policy: %v\n", err)
@@ -266,6 +271,7 @@ func runCodexHookSetup(f codexHookFlags, stdout, stderr io.Writer) int {
 		if f.auditPath != "" {
 			command += " --audit " + shellQuote(f.auditPath)
 		}
+		command += deadlineFlag(f.timeoutSeconds)
 	}
 	matcher := agenthook.CodexMatcher(f.matcher, f.includeMCP)
 	if f.printHooks {
@@ -375,6 +381,7 @@ func codexHookHelpText() string {
 		"                               path resolves outside the workspace (default ask)\n" +
 		"      --ask deny|passthrough   what an ask means in PreToolUse, which cannot ask (default deny)\n" +
 		"      --audit <path|none>      hash-chained JSONL log (default .nomos/" + defaultCodexAuditFile + ")\n" +
+		"      --deadline <duration>    block the call if no decision is ready by then (default 8s; keep it below the harness timeout)\n" +
 		"      --principal/--agent/--environment\n" +
 		"                               identity recorded on actions (default developer/codex/local)\n\n" +
 		"setup:\n" +

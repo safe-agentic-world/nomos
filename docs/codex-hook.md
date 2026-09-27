@@ -134,8 +134,10 @@ disables the log; `--audit <path>` moves it.
   source at the pinned commit; behavior in released Codex builds may
   differ until an end-to-end run like the Claude Code one is recorded.
 - **A hook is bounded by the harness.** Codex treats a hook that times out
-  or crashes as failed and does not block; `async` hooks cannot block; an
-  organization can restrict hooks to managed ones. Keep the timeout short
+  or crashes as failed and does not block, so the hook blocks the call
+  itself when it has no decision by `--deadline` (8 seconds by default);
+  `async` hooks cannot block; an organization can restrict hooks to
+  managed ones. Keep the timeout short
   and the hook local, and treat it as policy enforcement inside Codex, not
   as a sandbox around it.
 - **The hook guards its own files, not everything that writes them.** A
@@ -190,6 +192,7 @@ disables the log; `--audit <path>` moves it.
 | `--outside-workspace` | `ask` | `ask`, `deny`, or `passthrough` for paths outside the workspace |
 | `--ask` | `deny` | what an `ask` becomes in `PreToolUse`, which cannot ask: `deny` or `passthrough` |
 | `--audit` | `.nomos/codex-hook.jsonl` | audit file, or `none` |
+| `--deadline` | `8s` | block the call if no decision is ready by then; keep it below the hook timeout (`--install` adds it when `--timeout` is not 10) |
 | `--principal`, `--agent`, `--environment` | `developer`, `codex`, `local` | identity recorded on actions |
 | `--install`, `--hooks-file`, `--matcher`, `--mcp`, `--timeout`, `--hook-command`, `--permission-request` | | register the hook in a `hooks.json` file |
 | `--print-hooks` | | print the `hooks.json` document instead of writing it |

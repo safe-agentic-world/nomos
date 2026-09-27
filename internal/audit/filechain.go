@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/safe-agentic-world/nomos/internal/canonicaljson"
@@ -72,7 +73,7 @@ func (r *FileChainRecorder) WriteEvent(event Event) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(r.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	f, err := openAuditFile(r.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND)
 	if err != nil {
 		return fmt.Errorf("open audit file: %w", err)
 	}
@@ -141,7 +142,12 @@ func redactStrings(value any, redactor *redact.Redactor) any {
 // FileChainRecorder and returns the number of verified events. It fails on the
 // first event whose stored hash does not match its content and predecessor.
 func VerifyFileChain(path string) (int, error) {
-	data, err := os.ReadFile(path)
+	f, err := openAuditFile(path, os.O_RDONLY)
+	if err != nil {
+		return 0, err
+	}
+	data, err := io.ReadAll(f)
+	_ = f.Close()
 	if err != nil {
 		return 0, err
 	}
@@ -173,7 +179,7 @@ func VerifyFileChain(path string) (int, error) {
 }
 
 func lastEventHash(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := openAuditFile(path, os.O_RDONLY)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
@@ -223,6 +229,28 @@ func lastEventHash(path string) (string, error) {
 		return stored.EventHash, nil
 	}
 	return "", nil
+}
+
+// openAuditFile opens the log without blocking and accepts only a regular
+// file. A FIFO or device planted at the path would otherwise stall the
+// open, and a stalled hook is one the harness gives up on and lets the call
+// through; O_NONBLOCK makes such an open return at once so the type check
+// can refuse it.
+func openAuditFile(path string, flag int) (*os.File, error) {
+	f, err := os.OpenFile(path, flag|syscall.O_NONBLOCK, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	return f, nil
 }
 
 // acquireFileLock creates lockPath exclusively, waiting up to timeout. A lock

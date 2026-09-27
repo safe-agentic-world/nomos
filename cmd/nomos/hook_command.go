@@ -61,6 +61,7 @@ type claudeHookFlags struct {
 	matcher          string
 	hookCommand      string
 	timeoutSeconds   int
+	deadline         time.Duration
 	includeMCP       bool
 	printSettings    bool
 	simulate         bool
@@ -101,6 +102,7 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 	fs.StringVar(&f.matcher, "matcher", agenthook.DefaultMatcher, "tool matcher for --install/--print-settings")
 	fs.StringVar(&f.hookCommand, "hook-command", "", "command to register (default: nomos hook claude-code with the same policy flags)")
 	fs.IntVar(&f.timeoutSeconds, "timeout", agenthook.DefaultTimeoutSeconds, "hook timeout in seconds for --install/--print-settings")
+	fs.DurationVar(&f.deadline, "deadline", defaultHookDeadline, "block the tool call if no decision is ready by then (keep it below the harness timeout; 0 disables)")
 	fs.BoolVar(&f.includeMCP, "mcp", false, "also match MCP tools (mcp__*) in --install/--print-settings")
 	fs.BoolVar(&f.printSettings, "print-settings", false, "print the settings.json hooks block and exit")
 	fs.BoolVar(&f.simulate, "simulate", false, "evaluate --tool/--input or --command instead of reading hook JSON from stdin")
@@ -158,6 +160,11 @@ func runClaudeCodeHook(args []string, stdin io.Reader, stdout, stderr io.Writer,
 
 	if f.suggest {
 		return runClaudeCodeHookSuggest(f, stdout, stderr, getenv)
+	}
+	if f.replayPath == "" && !f.replayTranscript {
+		// A live decision: loading the policy, parsing the call, and writing
+		// the audit all happen inside the deadline.
+		defer startHookWatchdog(f.deadline, stderr)()
 	}
 	engine, label, err := resolveHookEngine(f.bundlePath, f.profile)
 	if err != nil {
@@ -395,6 +402,7 @@ func runClaudeCodeHookSetup(f claudeHookFlags, stdout, stderr io.Writer, getenv 
 		if f.auditPath != "" {
 			command += " --audit " + shellQuote(f.auditPath)
 		}
+		command += deadlineFlag(f.timeoutSeconds)
 	}
 	matcher := f.matcher
 	if f.includeMCP && !strings.Contains(matcher, "mcp__") {
@@ -433,6 +441,11 @@ func runClaudeCodeHookSetup(f claudeHookFlags, stdout, stderr io.Writer, getenv 
 
 func resolveHookEngine(bundlePath, profile string) (*policy.Engine, string, error) {
 	if bundlePath != "" {
+		// Refuse a pipe or device before reading it; the watchdog covers a
+		// swap between this check and the read.
+		if info, err := os.Stat(bundlePath); err == nil && !info.Mode().IsRegular() {
+			return nil, "", fmt.Errorf("%s is not a regular file", bundlePath)
+		}
 		bundle, err := policy.LoadBundles([]string{bundlePath})
 		if err != nil {
 			return nil, "", err
@@ -597,6 +610,7 @@ func hookHelpText() string {
 		"      --outside-workspace ask|deny|passthrough\n" +
 		"                               path resolves outside the workspace (default ask)\n" +
 		"      --audit <path|none>      hash-chained JSONL log (default .nomos/" + defaultHookAuditFile + ")\n" +
+		"      --deadline <duration>    block the call if no decision is ready by then (default 8s; keep it below the harness timeout)\n" +
 		"      --principal/--agent/--environment\n" +
 		"                               identity recorded on actions (default developer/claude-code/local)\n\n" +
 		"setup:\n" +
