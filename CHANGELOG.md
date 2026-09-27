@@ -6,6 +6,23 @@ The format is based on Keep a Changelog and semantic versioning.
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-09-27
+
+### Fixed
+
+- The hooks no longer rely on the harness timeout. Claude Code and Codex
+  let a tool call through when a hook times out, so a stall anywhere was a
+  silent allow. The hook now blocks the call itself (exit 2 with a reason
+  on stderr) when it has no decision by `--deadline`, 8 seconds by default,
+  inside the 10-second timeout `--install` registers; `--install` adds a
+  matching `--deadline` for a custom `--timeout`, and replay is exempt.
+- A FIFO or device at the audit path no longer stalls the hook. The audit
+  file is opened without blocking and must be a regular file, so a planted
+  pipe fails the write in milliseconds and the hook blocks the call, where
+  before it hung until the harness timed it out. The same check guards
+  `--verify-audit`, and a `-p` bundle that is not a regular file is refused
+  before it is read.
+
 ## [0.19.2] - 2026-09-26
 
 ### Fixed
